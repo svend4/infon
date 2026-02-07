@@ -11,7 +11,8 @@ type AudioPacket struct {
 	SampleRate uint16  // Sample rate (e.g., 16000, 48000)
 	Channels   uint8   // Number of channels (1=mono, 2=stereo)
 	Codec      uint8   // Codec type (0=PCM, 1=Opus, etc.)
-	Samples    []int16 // Audio samples
+	Samples    []int16 // Audio samples (PCM only)
+	Data       []byte  // Compressed data (Opus, etc.)
 }
 
 // Audio codec types
@@ -22,28 +23,60 @@ const (
 
 // EncodeAudioPacket encodes an audio packet to bytes
 func EncodeAudioPacket(ap *AudioPacket) ([]byte, error) {
-	// Calculate size
 	headerSize := 14 // timestamp(8) + samplerate(2) + channels(1) + codec(1) + length(2)
-	dataSize := len(ap.Samples) * 2 // 16-bit samples
-	totalSize := headerSize + dataSize
 
-	if totalSize > MaxPacketSize-PacketHeaderSize {
-		return nil, fmt.Errorf("audio packet too large: %d bytes", totalSize)
-	}
+	var dataSize int
+	var buf []byte
 
-	buf := make([]byte, totalSize)
+	// Handle different codecs
+	switch ap.Codec {
+	case AudioCodecPCM:
+		// PCM: encode samples as int16
+		dataSize = len(ap.Samples) * 2
+		totalSize := headerSize + dataSize
 
-	// Write header
-	binary.BigEndian.PutUint64(buf[0:8], ap.Timestamp)
-	binary.BigEndian.PutUint16(buf[8:10], ap.SampleRate)
-	buf[10] = ap.Channels
-	buf[11] = ap.Codec
-	binary.BigEndian.PutUint16(buf[12:14], uint16(len(ap.Samples)))
+		if totalSize > MaxPacketSize-PacketHeaderSize {
+			return nil, fmt.Errorf("audio packet too large: %d bytes", totalSize)
+		}
 
-	// Write samples
-	for i, sample := range ap.Samples {
-		offset := 14 + i*2
-		binary.BigEndian.PutUint16(buf[offset:offset+2], uint16(sample))
+		buf = make([]byte, totalSize)
+
+		// Write header
+		binary.BigEndian.PutUint64(buf[0:8], ap.Timestamp)
+		binary.BigEndian.PutUint16(buf[8:10], ap.SampleRate)
+		buf[10] = ap.Channels
+		buf[11] = ap.Codec
+		binary.BigEndian.PutUint16(buf[12:14], uint16(len(ap.Samples)))
+
+		// Write samples
+		for i, sample := range ap.Samples {
+			offset := 14 + i*2
+			binary.BigEndian.PutUint16(buf[offset:offset+2], uint16(sample))
+		}
+
+	case AudioCodecOpus:
+		// Opus: encode compressed data
+		dataSize = len(ap.Data)
+		totalSize := headerSize + dataSize
+
+		if totalSize > MaxPacketSize-PacketHeaderSize {
+			return nil, fmt.Errorf("audio packet too large: %d bytes", totalSize)
+		}
+
+		buf = make([]byte, totalSize)
+
+		// Write header
+		binary.BigEndian.PutUint64(buf[0:8], ap.Timestamp)
+		binary.BigEndian.PutUint16(buf[8:10], ap.SampleRate)
+		buf[10] = ap.Channels
+		buf[11] = ap.Codec
+		binary.BigEndian.PutUint16(buf[12:14], uint16(len(ap.Data)))
+
+		// Write compressed data
+		copy(buf[14:], ap.Data)
+
+	default:
+		return nil, fmt.Errorf("unsupported audio codec: %d", ap.Codec)
 	}
 
 	return buf, nil
@@ -62,18 +95,40 @@ func DecodeAudioPacket(data []byte) (*AudioPacket, error) {
 		Codec:      data[11],
 	}
 
-	sampleCount := binary.BigEndian.Uint16(data[12:14])
-	expectedSize := 14 + int(sampleCount)*2
+	dataLength := binary.BigEndian.Uint16(data[12:14])
 
-	if len(data) < expectedSize {
-		return nil, fmt.Errorf("audio packet truncated: expected %d, got %d", expectedSize, len(data))
-	}
+	switch ap.Codec {
+	case AudioCodecPCM:
+		// PCM: decode int16 samples
+		sampleCount := dataLength
+		expectedSize := 14 + int(sampleCount)*2
 
-	// Read samples
-	ap.Samples = make([]int16, sampleCount)
-	for i := 0; i < int(sampleCount); i++ {
-		offset := 14 + i*2
-		ap.Samples[i] = int16(binary.BigEndian.Uint16(data[offset : offset+2]))
+		if len(data) < expectedSize {
+			return nil, fmt.Errorf("audio packet truncated: expected %d, got %d", expectedSize, len(data))
+		}
+
+		// Read samples
+		ap.Samples = make([]int16, sampleCount)
+		for i := 0; i < int(sampleCount); i++ {
+			offset := 14 + i*2
+			ap.Samples[i] = int16(binary.BigEndian.Uint16(data[offset : offset+2]))
+		}
+
+	case AudioCodecOpus:
+		// Opus: decode compressed data
+		dataSize := int(dataLength)
+		expectedSize := 14 + dataSize
+
+		if len(data) < expectedSize {
+			return nil, fmt.Errorf("audio packet truncated: expected %d, got %d", expectedSize, len(data))
+		}
+
+		// Read compressed data
+		ap.Data = make([]byte, dataSize)
+		copy(ap.Data, data[14:14+dataSize])
+
+	default:
+		return nil, fmt.Errorf("unsupported audio codec: %d", ap.Codec)
 	}
 
 	return ap, nil
@@ -89,5 +144,12 @@ func (ap *AudioPacket) GetDuration() int {
 
 // GetSize returns the size of this audio packet in bytes
 func (ap *AudioPacket) GetSize() int {
-	return 14 + len(ap.Samples)*2
+	switch ap.Codec {
+	case AudioCodecPCM:
+		return 14 + len(ap.Samples)*2
+	case AudioCodecOpus:
+		return 14 + len(ap.Data)
+	default:
+		return 14
+	}
 }

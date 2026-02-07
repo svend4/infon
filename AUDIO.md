@@ -170,12 +170,55 @@ tvcp call <address>
 | Zoom Audio | 16 kHz | ~15 KB/s | Voice |
 | Skype | 16 kHz | ~10 KB/s | Voice |
 
-TVCP currently uses uncompressed PCM. Future Opus integration will reduce bandwidth by 60%.
+TVCP currently uses uncompressed PCM by default. Opus support is available for 62% bandwidth reduction.
+
+## Opus Codec Support
+
+TVCP includes **optional Opus codec support** for compressed audio transmission:
+
+### Benefits
+- **62% bandwidth reduction**: 32 KB/s → 12 KB/s
+- **Better quality at low bitrate**: Opus is optimized for voice
+- **Forward Error Correction (FEC)**: Built-in packet loss recovery
+- **Variable Bitrate (VBR)**: Adapts to content complexity
+
+### Building with Opus
+
+Opus requires the libopus C library:
+
+```bash
+# Install libopus (Linux)
+sudo apt-get install libopus-dev
+
+# Install libopus (macOS)
+brew install opus
+
+# Build TVCP with Opus support
+go build -tags opus -o bin/tvcp ./cmd/tvcp
+```
+
+### Usage
+
+When built with Opus support, the codec is automatically used for calls:
+
+```bash
+# Call with Opus compression
+./bin/tvcp call <address>
+```
+
+### Codec Selection
+
+| Build | Codec | Bandwidth | Quality |
+|-------|-------|-----------|---------|
+| Default | PCM | 32 KB/s | Uncompressed |
+| With `-tags opus` | Opus | 12 KB/s | High (VoIP optimized) |
+
+**Note:** If Opus is not available, TVCP falls back to PCM automatically.
 
 ## Future Enhancements
 
-- [ ] **ALSA Support** (Linux microphone/speaker)
-- [ ] **Opus Codec** (60% bandwidth reduction)
+- [x] **ALSA Support** (Linux microphone/speaker) ✅
+- [x] **Opus Codec** (62% bandwidth reduction) ✅ Optional
 - [ ] **Noise Suppression** (WebRTC NS)
 - [ ] **Automatic Gain Control** (WebRTC AGC)
 - [ ] **Echo Cancellation** (WebRTC AEC)
