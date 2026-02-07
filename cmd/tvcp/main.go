@@ -49,6 +49,8 @@ func main() {
 		runAudioTest()
 	case "list-audio", "audio":
 		runListAudio()
+	case "chat":
+		runChat()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -67,6 +69,7 @@ func printUsage() {
 	fmt.Println("\nCommands:")
 	fmt.Println("  daemon              Start TVCP daemon")
 	fmt.Println("  call <host:port>    Two-way video call (send + receive)")
+	fmt.Println("  chat <host:port>    Text chat session (messages only)")
 	fmt.Println("  contacts            Manage contacts (add/list/remove)")
 	fmt.Println("  yggdrasil           Show Yggdrasil network status")
 	fmt.Println("  list-cameras        List available camera devices")

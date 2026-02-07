@@ -13,6 +13,7 @@ const (
 	PacketTypeControl   uint8 = 0x03 // Control message
 	PacketTypeHandshake uint8 = 0x04 // Connection handshake
 	PacketTypeKeepAlive uint8 = 0x05 // Keep-alive ping
+	PacketTypeTextChat  uint8 = 0x06 // Text chat message
 )
 
 // Packet represents a network packet

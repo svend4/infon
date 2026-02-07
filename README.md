@@ -162,7 +162,8 @@ Each block = 2×2 pixels encoded as:
 
 ### Core Features
 - 📹 [**Camera Support**](CAMERAS.md) — Real webcams + test cameras (V4L2)
-- 🔊 [**Audio Support**](AUDIO.md) — Voice transmission with PCM encoding
+- 🔊 [**Audio Support**](AUDIO.md) — Voice transmission with PCM/Opus encoding
+- 💬 [**Text Chat**](TEXT_CHAT.md) — Real-time messaging during calls
 - 🌐 [**Yggdrasil P2P Integration**](YGGDRASIL.md) — Mesh networking and contacts
 - 🛡️ [**Packet Loss Recovery**](LOSS_RECOVERY.md) — Automatic retransmission and network resilience
 

@@ -401,6 +401,20 @@ func runCall() {
 					audioRecvCount++
 					mu.Unlock()
 				}
+
+			case network.PacketTypeTextChat:
+				// Decode text message
+				textMsg, err := network.DecodeTextMessage(packet.Payload)
+				if err != nil {
+					continue
+				}
+
+				// Display message (will appear in terminal output)
+				sender := textMsg.Sender
+				if sender == "" {
+					sender = "Remote"
+				}
+				fmt.Printf("\n💬 [%s] %s: %s\n", textMsg.FormatTime(), sender, textMsg.Message)
 			}
 
 			// Show stats
