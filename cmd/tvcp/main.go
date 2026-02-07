@@ -56,11 +56,11 @@ func printUsage() {
 	fmt.Println("Usage: tvcp <command> [options]")
 	fmt.Println("\nCommands:")
 	fmt.Println("  daemon              Start TVCP daemon")
-	fmt.Println("  call <address>      Make a video call")
+	fmt.Println("  call <host:port>    Two-way video call (send + receive)")
 	fmt.Println("  test                Run video/audio test")
 	fmt.Println("  demo <image>        Display image in terminal (proof-of-concept)")
 	fmt.Println("  preview [pattern]   Live camera preview (animated test patterns)")
-	fmt.Println("  send <host:port>    Stream video to remote host")
+	fmt.Println("  send <host:port>    Stream video to remote host (one-way)")
 	fmt.Println("  receive [port]      Receive video stream (default port: 5000)")
 	fmt.Println("  generate <file>     Generate a test image")
 	fmt.Println("  version             Show version information")
@@ -86,19 +86,7 @@ func runDaemon() {
 	os.Exit(0)
 }
 
-func runCall() {
-	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Error: Missing call address")
-		fmt.Fprintln(os.Stderr, "Usage: tvcp call <address>")
-		os.Exit(1)
-	}
-
-	address := os.Args[2]
-	fmt.Printf("🚧 Making call to: %s - Coming Soon\n", address)
-	fmt.Println("\nThis is a pre-alpha version. Call functionality is not yet implemented.")
-	fmt.Println("For updates, check: https://github.com/svend4/infon")
-	os.Exit(0)
-}
+// runCall is now implemented in call.go
 
 func runTest() {
 	fmt.Println("🚧 TVCP Test Mode - Coming Soon")

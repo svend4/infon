@@ -22,7 +22,7 @@ go.work.sum
 /bin/
 /dist/
 /build/
-tvcp
+/tvcp
 *.tar.gz
 *.zip
 
