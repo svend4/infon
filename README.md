@@ -83,6 +83,21 @@ make build
 
 🎥 **[Read the preview guide →](PREVIEW.md)**
 
+### Stream Video Over Network
+
+```bash
+# Terminal 1: Start receiver
+./bin/tvcp receive 5000
+
+# Terminal 2: Send video stream
+./bin/tvcp send localhost:5000 bounce
+
+# Works over LAN too!
+./bin/tvcp send 192.168.1.100:5000 gradient
+```
+
+🌐 **[Read the network guide →](NETWORK.md)**
+
 ### Future: Making Calls (Coming Soon)
 
 ```bash
@@ -117,7 +132,8 @@ Each block = 2×2 pixels encoded as:
 
 ## 📚 Documentation
 
-- 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video streaming! ⭐ NEW
+- 🌐 [**Network Streaming**](NETWORK.md) — Stream video over UDP! ⭐ NEW
+- 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video rendering ⭐
 - 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering ⭐
 - 📖 [Business Plan](tvcp-business-plan.md) — Full market analysis and roadmap
 - 🔬 [Technical Appendix](tvcp-appendix.md) — Deep dive into algorithms and protocols
@@ -137,8 +153,10 @@ Each block = 2×2 pixels encoded as:
 - [x] Video capture interface and simulator
 - [x] Real-time frame encoding (15 FPS)
 - [x] Frame timing and synchronization
+- [x] **Network transport (UDP)** — Video streaming works! 🎉
+- [x] **Frame fragmentation** — Handles MTU limits
+- [ ] Packet loss recovery (ARQ/FEC)
 - [ ] Actual camera capture (ffmpeg/gocv)
-- [ ] Network transport (UDP)
 - [ ] Yggdrasil integration
 - [ ] Audio encoding (G.722)
 - [ ] Two-way video calls

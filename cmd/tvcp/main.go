@@ -35,6 +35,10 @@ func main() {
 		runGenerate()
 	case "preview":
 		runPreview()
+	case "send":
+		runSend()
+	case "receive", "recv":
+		runReceive()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -56,6 +60,8 @@ func printUsage() {
 	fmt.Println("  test                Run video/audio test")
 	fmt.Println("  demo <image>        Display image in terminal (proof-of-concept)")
 	fmt.Println("  preview [pattern]   Live camera preview (animated test patterns)")
+	fmt.Println("  send <host:port>    Stream video to remote host")
+	fmt.Println("  receive [port]      Receive video stream (default port: 5000)")
 	fmt.Println("  generate <file>     Generate a test image")
 	fmt.Println("  version             Show version information")
 	fmt.Println("  help                Show this help message")
