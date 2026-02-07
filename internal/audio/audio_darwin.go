@@ -7,24 +7,71 @@ package audio
 #include <CoreAudio/CoreAudio.h>
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdlib.h>
+#include <string.h>
 
-// Callback function for audio input
-OSStatus inputCallback(
+// External Go callback functions (implemented in Go)
+extern OSStatus goInputCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData, AudioUnit audioUnit);
+extern OSStatus goOutputCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData);
+
+// C wrapper for input callback
+static OSStatus inputCallbackWrapper(
 	void *inRefCon,
 	AudioUnitRenderActionFlags *ioActionFlags,
 	const AudioTimeStamp *inTimeStamp,
 	UInt32 inBusNumber,
 	UInt32 inNumberFrames,
-	AudioBufferList *ioData);
+	AudioBufferList *ioData) {
 
-// Callback function for audio output
-OSStatus outputCallback(
+	// Get audio unit from refcon
+	AudioUnit audioUnit = *(AudioUnit*)inRefCon;
+
+	// Call Go callback
+	return goInputCallback(inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData, audioUnit);
+}
+
+// C wrapper for output callback
+static OSStatus outputCallbackWrapper(
 	void *inRefCon,
 	AudioUnitRenderActionFlags *ioActionFlags,
 	const AudioTimeStamp *inTimeStamp,
 	UInt32 inBusNumber,
 	UInt32 inNumberFrames,
-	AudioBufferList *ioData);
+	AudioBufferList *ioData) {
+
+	return goOutputCallback(inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
+}
+
+// Helper to set input callback
+static OSStatus setInputCallback(AudioUnit audioUnit, void *refCon) {
+	AURenderCallbackStruct callback;
+	callback.inputProc = inputCallbackWrapper;
+	callback.inputProcRefCon = refCon;
+
+	return AudioUnitSetProperty(
+		audioUnit,
+		kAudioOutputUnitProperty_SetInputCallback,
+		kAudioUnitScope_Global,
+		0,
+		&callback,
+		sizeof(callback)
+	);
+}
+
+// Helper to set output callback
+static OSStatus setOutputCallback(AudioUnit audioUnit, void *refCon) {
+	AURenderCallbackStruct callback;
+	callback.inputProc = outputCallbackWrapper;
+	callback.inputProcRefCon = refCon;
+
+	return AudioUnitSetProperty(
+		audioUnit,
+		kAudioUnitProperty_SetRenderCallback,
+		kAudioUnitScope_Input,
+		0,
+		&callback,
+		sizeof(callback)
+	);
+}
 */
 import "C"
 
@@ -34,27 +81,107 @@ import (
 	"unsafe"
 )
 
+// Ring buffer for audio data
+type ringBuffer struct {
+	data     []int16
+	size     int
+	readPos  int
+	writePos int
+	count    int
+	mutex    sync.Mutex
+	cond     *sync.Cond
+}
+
+func newRingBuffer(size int) *ringBuffer {
+	rb := &ringBuffer{
+		data: make([]int16, size),
+		size: size,
+	}
+	rb.cond = sync.NewCond(&rb.mutex)
+	return rb
+}
+
+func (rb *ringBuffer) Write(samples []int16) int {
+	rb.mutex.Lock()
+	defer rb.mutex.Unlock()
+
+	written := 0
+	for _, sample := range samples {
+		if rb.count >= rb.size {
+			break // Buffer full
+		}
+		rb.data[rb.writePos] = sample
+		rb.writePos = (rb.writePos + 1) % rb.size
+		rb.count++
+		written++
+	}
+
+	if written > 0 {
+		rb.cond.Signal()
+	}
+
+	return written
+}
+
+func (rb *ringBuffer) Read(samples []int16) int {
+	rb.mutex.Lock()
+	defer rb.mutex.Unlock()
+
+	read := 0
+	for i := range samples {
+		if rb.count == 0 {
+			break // Buffer empty
+		}
+		samples[i] = rb.data[rb.readPos]
+		rb.readPos = (rb.readPos + 1) % rb.size
+		rb.count--
+		read++
+	}
+
+	return read
+}
+
+func (rb *ringBuffer) Available() int {
+	rb.mutex.Lock()
+	defer rb.mutex.Unlock()
+	return rb.count
+}
+
+func (rb *ringBuffer) WaitForData(minSamples int) {
+	rb.mutex.Lock()
+	defer rb.mutex.Unlock()
+
+	for rb.count < minSamples {
+		rb.cond.Wait()
+	}
+}
+
 // CoreAudioCapture implements AudioCapture using CoreAudio
 type CoreAudioCapture struct {
-	audioUnit C.AudioUnit
-	format    AudioFormat
-	buffer    []int16
-	bufferPos int
-	open      bool
-	mutex     sync.Mutex
-	cond      *sync.Cond
+	audioUnit   C.AudioUnit
+	format      AudioFormat
+	ringBuffer  *ringBuffer
+	bufferList  *C.AudioBufferList
+	open        bool
+	mutex       sync.Mutex
 }
 
 // CoreAudioPlayback implements AudioPlayback using CoreAudio
 type CoreAudioPlayback struct {
-	audioUnit C.AudioUnit
-	format    AudioFormat
-	buffer    []int16
-	bufferPos int
-	open      bool
-	mutex     sync.Mutex
-	cond      *sync.Cond
+	audioUnit  C.AudioUnit
+	format     AudioFormat
+	ringBuffer *ringBuffer
+	open       bool
+	mutex      sync.Mutex
 }
+
+// Global maps to access capture/playback from C callbacks
+var (
+	captureMap  = make(map[uintptr]*CoreAudioCapture)
+	playbackMap = make(map[uintptr]*CoreAudioPlayback)
+	captureMu   sync.RWMutex
+	playbackMu  sync.RWMutex
+)
 
 func listCaptureDevicesImpl() ([]DeviceInfo, error) {
 	var devices []DeviceInfo
@@ -195,11 +322,12 @@ func listPlaybackDevicesImpl() ([]DeviceInfo, error) {
 }
 
 func newCaptureImpl(deviceID int, format AudioFormat) (AudioCapture, error) {
+	// Create ring buffer (1 second capacity)
+	bufferSize := format.SampleRate * format.Channels
 	capture := &CoreAudioCapture{
-		format: format,
-		buffer: make([]int16, format.SampleRate), // 1 second buffer
+		format:     format,
+		ringBuffer: newRingBuffer(bufferSize),
 	}
-	capture.cond = sync.NewCond(&capture.mutex)
 
 	// Create Audio Component Description
 	var desc C.AudioComponentDescription
@@ -275,15 +403,41 @@ func newCaptureImpl(deviceID int, format AudioFormat) (AudioCapture, error) {
 		return nil, fmt.Errorf("failed to set stream format: %d", status)
 	}
 
+	// Allocate buffer list for audio unit render
+	bufferListSize := C.sizeof_AudioBufferList + C.sizeof_AudioBuffer
+	capture.bufferList = (*C.AudioBufferList)(C.malloc(C.size_t(bufferListSize)))
+	capture.bufferList.mNumberBuffers = 1
+	capture.bufferList.mBuffers[0].mNumberChannels = C.UInt32(format.Channels)
+	capture.bufferList.mBuffers[0].mDataByteSize = C.UInt32(4096 * format.FrameSize()) // 4096 frames buffer
+	capture.bufferList.mBuffers[0].mData = C.malloc(C.size_t(capture.bufferList.mBuffers[0].mDataByteSize))
+
+	// Register in global map
+	captureMu.Lock()
+	captureMap[uintptr(unsafe.Pointer(&capture.audioUnit))] = capture
+	captureMu.Unlock()
+
+	// Set input callback
+	status = C.setInputCallback(capture.audioUnit, unsafe.Pointer(&capture.audioUnit))
+	if status != 0 {
+		C.free(capture.bufferList.mBuffers[0].mData)
+		C.free(unsafe.Pointer(capture.bufferList))
+		C.AudioComponentInstanceDispose(capture.audioUnit)
+		captureMu.Lock()
+		delete(captureMap, uintptr(unsafe.Pointer(&capture.audioUnit)))
+		captureMu.Unlock()
+		return nil, fmt.Errorf("failed to set input callback: %d", status)
+	}
+
 	return capture, nil
 }
 
 func newPlaybackImpl(deviceID int, format AudioFormat) (AudioPlayback, error) {
+	// Create ring buffer (1 second capacity)
+	bufferSize := format.SampleRate * format.Channels
 	playback := &CoreAudioPlayback{
-		format: format,
-		buffer: make([]int16, format.SampleRate), // 1 second buffer
+		format:     format,
+		ringBuffer: newRingBuffer(bufferSize),
 	}
-	playback.cond = sync.NewCond(&playback.mutex)
 
 	// Create Audio Component Description
 	var desc C.AudioComponentDescription
@@ -327,6 +481,21 @@ func newPlaybackImpl(deviceID int, format AudioFormat) (AudioPlayback, error) {
 	if status != 0 {
 		C.AudioComponentInstanceDispose(playback.audioUnit)
 		return nil, fmt.Errorf("failed to set stream format: %d", status)
+	}
+
+	// Register in global map
+	playbackMu.Lock()
+	playbackMap[uintptr(unsafe.Pointer(&playback.audioUnit))] = playback
+	playbackMu.Unlock()
+
+	// Set output callback
+	status = C.setOutputCallback(playback.audioUnit, unsafe.Pointer(&playback.audioUnit))
+	if status != 0 {
+		C.AudioComponentInstanceDispose(playback.audioUnit)
+		playbackMu.Lock()
+		delete(playbackMap, uintptr(unsafe.Pointer(&playback.audioUnit)))
+		playbackMu.Unlock()
+		return nil, fmt.Errorf("failed to set output callback: %d", status)
 	}
 
 	return playback, nil
@@ -379,22 +548,42 @@ func (c *CoreAudioCapture) Close() error {
 	C.AudioUnitUninitialize(c.audioUnit)
 	C.AudioComponentInstanceDispose(c.audioUnit)
 
+	// Free buffer list
+	if c.bufferList != nil {
+		if c.bufferList.mBuffers[0].mData != nil {
+			C.free(c.bufferList.mBuffers[0].mData)
+		}
+		C.free(unsafe.Pointer(c.bufferList))
+		c.bufferList = nil
+	}
+
+	// Remove from global map
+	captureMu.Lock()
+	delete(captureMap, uintptr(unsafe.Pointer(&c.audioUnit)))
+	captureMu.Unlock()
+
 	c.open = false
-	c.cond.Broadcast()
+	c.ringBuffer.cond.Broadcast()
 	return nil
 }
 
 func (c *CoreAudioCapture) Read(buffer []int16) (int, error) {
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	open := c.open
+	c.mutex.Unlock()
 
-	if !c.open {
+	if !open {
 		return 0, ErrDeviceNotOpen
 	}
 
-	// For now, return silence - full implementation would use callback
-	// This is a simplified version
-	for i := range buffer {
+	// Wait for enough data in ring buffer
+	c.ringBuffer.WaitForData(len(buffer))
+
+	// Read from ring buffer
+	n := c.ringBuffer.Read(buffer)
+
+	// If not enough data was available, fill rest with silence
+	for i := n; i < len(buffer); i++ {
 		buffer[i] = 0
 	}
 
@@ -450,22 +639,40 @@ func (p *CoreAudioPlayback) Close() error {
 	C.AudioUnitUninitialize(p.audioUnit)
 	C.AudioComponentInstanceDispose(p.audioUnit)
 
+	// Remove from global map
+	playbackMu.Lock()
+	delete(playbackMap, uintptr(unsafe.Pointer(&p.audioUnit)))
+	playbackMu.Unlock()
+
 	p.open = false
-	p.cond.Broadcast()
+	p.ringBuffer.cond.Broadcast()
 	return nil
 }
 
 func (p *CoreAudioPlayback) Write(buffer []int16) (int, error) {
 	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	open := p.open
+	p.mutex.Unlock()
 
-	if !p.open {
+	if !open {
 		return 0, ErrDeviceNotOpen
 	}
 
-	// For now, just consume the buffer - full implementation would use callback
-	// This is a simplified version
-	return len(buffer), nil
+	// Write to ring buffer
+	written := 0
+	for written < len(buffer) {
+		n := p.ringBuffer.Write(buffer[written:])
+		written += n
+
+		// If buffer is full, wait a bit
+		if n == 0 {
+			p.ringBuffer.cond.L.Lock()
+			p.ringBuffer.cond.Wait()
+			p.ringBuffer.cond.L.Unlock()
+		}
+	}
+
+	return written, nil
 }
 
 func (p *CoreAudioPlayback) IsOpen() bool {
@@ -476,4 +683,92 @@ func (p *CoreAudioPlayback) IsOpen() bool {
 
 func (p *CoreAudioPlayback) GetFormat() AudioFormat {
 	return p.format
+}
+
+// Go callbacks exported to C
+
+//export goInputCallback
+func goInputCallback(
+	inRefCon unsafe.Pointer,
+	ioActionFlags *C.AudioUnitRenderActionFlags,
+	inTimeStamp *C.AudioTimeStamp,
+	inBusNumber C.UInt32,
+	inNumberFrames C.UInt32,
+	ioData *C.AudioBufferList,
+	audioUnit C.AudioUnit,
+) C.OSStatus {
+	// Find capture from global map
+	captureMu.RLock()
+	capture, ok := captureMap[uintptr(inRefCon)]
+	captureMu.RUnlock()
+
+	if !ok || capture == nil || capture.bufferList == nil {
+		return C.OSStatus(-1)
+	}
+
+	// Render audio into our buffer
+	status := C.AudioUnitRender(
+		audioUnit,
+		ioActionFlags,
+		inTimeStamp,
+		inBusNumber,
+		inNumberFrames,
+		capture.bufferList,
+	)
+
+	if status != 0 {
+		return status
+	}
+
+	// Copy rendered data to ring buffer
+	buffer := capture.bufferList.mBuffers[0]
+	if buffer.mData != nil && buffer.mDataByteSize > 0 {
+		// Convert to int16 slice
+		numSamples := int(buffer.mDataByteSize) / 2 // 2 bytes per int16
+		samples := (*[1 << 30]int16)(buffer.mData)[:numSamples:numSamples]
+
+		// Write to ring buffer
+		capture.ringBuffer.Write(samples)
+	}
+
+	return 0
+}
+
+//export goOutputCallback
+func goOutputCallback(
+	inRefCon unsafe.Pointer,
+	ioActionFlags *C.AudioUnitRenderActionFlags,
+	inTimeStamp *C.AudioTimeStamp,
+	inBusNumber C.UInt32,
+	inNumberFrames C.UInt32,
+	ioData *C.AudioBufferList,
+) C.OSStatus {
+	// Find playback from global map
+	playbackMu.RLock()
+	playback, ok := playbackMap[uintptr(inRefCon)]
+	playbackMu.RUnlock()
+
+	if !ok || playback == nil || ioData == nil {
+		return C.OSStatus(-1)
+	}
+
+	// Get output buffer
+	buffer := &ioData.mBuffers[0]
+	if buffer.mData == nil || buffer.mDataByteSize == 0 {
+		return C.OSStatus(-1)
+	}
+
+	// Convert to int16 slice
+	numSamples := int(buffer.mDataByteSize) / 2 // 2 bytes per int16
+	outSamples := (*[1 << 30]int16)(buffer.mData)[:numSamples:numSamples]
+
+	// Read from ring buffer
+	n := playback.ringBuffer.Read(outSamples)
+
+	// Fill rest with silence if not enough data
+	for i := n; i < numSamples; i++ {
+		outSamples[i] = 0
+	}
+
+	return 0
 }

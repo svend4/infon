@@ -10,12 +10,29 @@ package audio
 #include <audioclient.h>
 #include <functiondiscoverykeys_devpkey.h>
 
-// WASAPI GUIDs
+// WASAPI GUIDs and constants
 static const GUID CLSID_MMDeviceEnumerator = {0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}};
 static const GUID IID_IMMDeviceEnumerator = {0xA95664D2, 0x9614, 0x4F35, {0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6}};
 static const GUID IID_IAudioClient = {0x1CB9AD4C, 0xDBFA, 0x4c32, {0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2}};
 static const GUID IID_IAudioCaptureClient = {0xC8ADBD64, 0xE71E, 0x48a0, {0xA4, 0xDE, 0x18, 0x5C, 0x39, 0x5C, 0xD3, 0x17}};
 static const GUID IID_IAudioRenderClient = {0xF294ACFC, 0x3146, 0x4483, {0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2}};
+
+// WAVEFORMATEX structure
+typedef struct {
+	WORD  wFormatTag;
+	WORD  nChannels;
+	DWORD nSamplesPerSec;
+	DWORD nAvgBytesPerSec;
+	WORD  nBlockAlign;
+	WORD  wBitsPerSample;
+	WORD  cbSize;
+} WAVEFORMATEX_T;
+
+#define WAVE_FORMAT_PCM 0x0001
+#define AUDCLNT_SHAREMODE_SHARED 0
+#define AUDCLNT_STREAMFLAGS_EVENTCALLBACK 0x00040000
+#define REFTIMES_PER_SEC 10000000
+#define REFTIMES_PER_MILLISEC 10000
 */
 import "C"
 
@@ -27,21 +44,104 @@ import (
 )
 
 var (
-	ole32          = syscall.NewLazyDLL("ole32.dll")
-	coInitializeEx = ole32.NewProc("CoInitializeEx")
+	ole32            = syscall.NewLazyDLL("ole32.dll")
+	coInitializeEx   = ole32.NewProc("CoInitializeEx")
 	coCreateInstance = ole32.NewProc("CoCreateInstance")
-	coUninitialize = ole32.NewProc("CoUninitialize")
+	coUninitialize   = ole32.NewProc("CoUninitialize")
+	coTaskMemFree    = ole32.NewProc("CoTaskMemFree")
 )
+
+// Ring buffer for audio data
+type wasapiRingBuffer struct {
+	data     []int16
+	size     int
+	readPos  int
+	writePos int
+	count    int
+	mutex    sync.Mutex
+	cond     *sync.Cond
+}
+
+func newWASAPIRingBuffer(size int) *wasapiRingBuffer {
+	rb := &wasapiRingBuffer{
+		data: make([]int16, size),
+		size: size,
+	}
+	rb.cond = sync.NewCond(&rb.mutex)
+	return rb
+}
+
+func (rb *wasapiRingBuffer) Write(samples []int16) int {
+	rb.mutex.Lock()
+	defer rb.mutex.Unlock()
+
+	written := 0
+	for _, sample := range samples {
+		if rb.count >= rb.size {
+			break // Buffer full
+		}
+		rb.data[rb.writePos] = sample
+		rb.writePos = (rb.writePos + 1) % rb.size
+		rb.count++
+		written++
+	}
+
+	if written > 0 {
+		rb.cond.Signal()
+	}
+
+	return written
+}
+
+func (rb *wasapiRingBuffer) Read(samples []int16) int {
+	rb.mutex.Lock()
+	defer rb.mutex.Unlock()
+
+	read := 0
+	for i := range samples {
+		if rb.count == 0 {
+			break // Buffer empty
+		}
+		samples[i] = rb.data[rb.readPos]
+		rb.readPos = (rb.readPos + 1) % rb.size
+		rb.count--
+		read++
+	}
+
+	if read > 0 {
+		rb.cond.Signal()
+	}
+
+	return read
+}
+
+func (rb *wasapiRingBuffer) Available() int {
+	rb.mutex.Lock()
+	defer rb.mutex.Unlock()
+	return rb.count
+}
+
+func (rb *wasapiRingBuffer) WaitForData(minSamples int) {
+	rb.mutex.Lock()
+	defer rb.mutex.Unlock()
+
+	for rb.count < minSamples {
+		rb.cond.Wait()
+	}
+}
 
 // WASAPICapture implements AudioCapture using WASAPI
 type WASAPICapture struct {
-	device       unsafe.Pointer
-	audioClient  unsafe.Pointer
+	device        unsafe.Pointer
+	audioClient   unsafe.Pointer
 	captureClient unsafe.Pointer
-	format       AudioFormat
-	bufferFrames uint32
-	open         bool
-	mutex        sync.Mutex
+	format        AudioFormat
+	bufferFrames  uint32
+	ringBuffer    *wasapiRingBuffer
+	stopChan      chan struct{}
+	doneChan      chan struct{}
+	open          bool
+	mutex         sync.Mutex
 }
 
 // WASAPIPlayback implements AudioPlayback using WASAPI
@@ -51,6 +151,9 @@ type WASAPIPlayback struct {
 	renderClient unsafe.Pointer
 	format       AudioFormat
 	bufferFrames uint32
+	ringBuffer   *wasapiRingBuffer
+	stopChan     chan struct{}
+	doneChan     chan struct{}
 	open         bool
 	mutex        sync.Mutex
 }

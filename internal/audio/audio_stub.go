@@ -27,3 +27,11 @@ func newPlaybackImpl(deviceID int, format AudioFormat) (AudioPlayback, error) {
 	// For now, return test audio sink
 	return NewTestAudioSink(format), nil
 }
+
+func newDefaultCaptureImpl() (AudioCapture, error) {
+	return newCaptureImpl(0, DefaultFormat())
+}
+
+func newDefaultPlaybackImpl() (AudioPlayback, error) {
+	return newPlaybackImpl(0, DefaultFormat())
+}
