@@ -203,8 +203,12 @@ func runCall() {
 	// Loss recovery components
 	lossDetector := network.NewLossDetector()
 	retransmitter := network.NewRetransmissionManager()
-	// TODO: Integrate jitter buffer for smoother playback
-	_ = network.NewJitterBuffer(100)
+
+	// Jitter buffer for smooth audio playback
+	audioJitterBuffer := network.NewJitterBuffer(50) // 50 packets = ~1 second @ 50 chunks/s
+
+	// Channel for audio packets from jitter buffer
+	audioPlaybackChan := make(chan *network.AudioPacket, 10)
 
 	// Terminal dimensions for split-screen
 	// Top half: remote video (40 cols × 12 rows)
@@ -214,6 +218,39 @@ func runCall() {
 
 	fmt.Println("Call connected! Press Ctrl+C to hang up")
 	fmt.Print(color.ClearScreen)
+
+	// Goroutine to pull packets from jitter buffer
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond) // Check every 10ms
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// Try to get next packet from jitter buffer
+				if packet := audioJitterBuffer.Get(); packet != nil {
+					// Decode audio packet
+					audioPacket, err := network.DecodeAudioPacket(packet.Payload)
+					if err == nil {
+						audioPlaybackChan <- audioPacket
+					}
+				}
+			}
+		}
+	}()
+
+	// Goroutine to play audio from jitter buffer
+	go func() {
+		for audioPacket := range audioPlaybackChan {
+			if len(audioPacket.Samples) > 0 {
+				audioSink.Write(audioPacket.Samples)
+
+				mu.Lock()
+				audioRecvCount++
+				mu.Unlock()
+			}
+		}
+	}()
 
 	// Initialize recorder if enabled
 	var rec *recorder.Recorder
@@ -365,6 +402,16 @@ func runCall() {
 			fmt.Printf("  Retransmissions: %d\n", retransStats.TotalRetransmits)
 			fmt.Printf("  NACKs sent: %d\n", retransStats.TotalNACKs)
 
+			// Show jitter buffer statistics
+			jitterStats := audioJitterBuffer.GetStatistics()
+			fmt.Printf("\nJitter Buffer:\n")
+			fmt.Printf("  Buffer size: %d packets\n", jitterStats.BufferSize)
+			fmt.Printf("  Total buffered: %d\n", jitterStats.TotalBuffered)
+			fmt.Printf("  Total played: %d\n", jitterStats.TotalOutput)
+			fmt.Printf("  Dropped: %d\n", jitterStats.Dropped)
+			fmt.Printf("  Underruns: %d\n", jitterStats.Underruns)
+			fmt.Printf("  Current delay: %dms\n", jitterStats.CurrentDelay.Milliseconds())
+
 			// Stop and save recording
 			if rec != nil && rec.IsRecording() {
 				fmt.Printf("\n💾 Saving recording...\n")
@@ -469,20 +516,8 @@ func runCall() {
 				}
 
 			case network.PacketTypeAudio:
-				// Decode audio packet
-				audioPacket, err := network.DecodeAudioPacket(packet.Payload)
-				if err != nil {
-					continue
-				}
-
-				// Play audio samples
-				if len(audioPacket.Samples) > 0 {
-					audioSink.Write(audioPacket.Samples)
-
-					mu.Lock()
-					audioRecvCount++
-					mu.Unlock()
-				}
+				// Add audio packet to jitter buffer for smooth playback
+				audioJitterBuffer.Add(packet)
 
 			case network.PacketTypeTextChat:
 				// Decode text message
