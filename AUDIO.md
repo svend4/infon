@@ -120,14 +120,45 @@ Audio has higher packet rate but smaller size compared to video.
 
 ## Platform Support
 
-| Platform | Status | API |
-|----------|--------|-----|
-| Linux | 🚧 Planned | ALSA |
-| macOS | 🚧 Planned | CoreAudio |
-| Windows | 🚧 Planned | WASAPI |
-| Test Mode | ✅ Ready | Synthetic tones |
+| Platform | Status | API | Library |
+|----------|--------|-----|---------|
+| Linux | ✅ **Implemented** | ALSA | github.com/yobert/alsa |
+| macOS | 🚧 Planned | CoreAudio | - |
+| Windows | 🚧 Planned | WASAPI | - |
+| Test Mode | ✅ Ready | Synthetic tones | Built-in |
 
-Currently uses test audio sources. Real microphone/speaker support coming soon.
+### Linux (ALSA)
+
+ALSA (Advanced Linux Sound Architecture) support is fully implemented:
+
+```bash
+# List available audio devices
+tvcp list-audio
+
+# Make a call with real microphone/speakers
+tvcp call <address>
+```
+
+**Features:**
+- ✅ Device enumeration (capture and playback)
+- ✅ Automatic device selection (uses first available)
+- ✅ 16 kHz mono capture/playback
+- ✅ 20ms buffer size (low latency)
+- ✅ Thread-safe operations
+
+**Requirements:**
+- ALSA-compatible sound card
+- `/dev/snd/` devices available
+- Permissions to access audio devices
+
+**Implementation Details:**
+- Pure Go implementation (no CGO required)
+- Uses `github.com/yobert/alsa` library
+- Negotiates format: S16_LE (16-bit little-endian)
+- Buffer: 320 samples period (20ms @ 16kHz)
+- Automatic parameter negotiation
+
+**Note:** On systems without ALSA devices (containers, minimal environments), the system will fall back to test audio sources.
 
 ## Bandwidth Comparison
 

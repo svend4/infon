@@ -1,3 +1,5 @@
+//go:build !linux && !darwin && !windows
+
 package audio
 
 // Default implementation using test audio sources
