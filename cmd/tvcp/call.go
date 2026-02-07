@@ -369,6 +369,10 @@ func runCall() {
 	vad := audio.NewVAD(audioFormat.SampleRate)
 	vad.SetSensitivity(0.7) // 0.7 = balanced sensitivity
 
+	// Noise Suppression
+	noiseSuppressor := audio.NewNoiseSuppressor(audioFormat.SampleRate, audioFormat.SampleRate/50)
+	noiseSuppressor.SetAggressiveness(0.6) // 0.6 = moderate suppression
+
 	// Goroutine for sending audio
 	go func() {
 		// 20ms audio chunks (good balance between latency and efficiency)
@@ -387,25 +391,28 @@ func runCall() {
 					continue
 				}
 
-				// Record audio if recording (always record, even during silence)
+				// Apply noise suppression
+				enhanced := noiseSuppressor.Process(buffer[:n])
+
+				// Record audio if recording (record original, not enhanced)
 				if rec != nil && rec.IsRecording() {
 					rec.RecordAudio(buffer[:n])
 				}
 
 				// Voice Activity Detection - only send if speech detected
-				isSpeaking := vad.Process(buffer[:n])
+				isSpeaking := vad.Process(enhanced)
 				if !isSpeaking {
 					// Skip sending during silence to save bandwidth
 					continue
 				}
 
-				// Create audio packet
+				// Create audio packet with enhanced audio
 				audioPacket := &network.AudioPacket{
 					Timestamp:  uint64(time.Now().UnixMilli()),
 					SampleRate: uint16(audioFormat.SampleRate),
 					Channels:   uint8(audioFormat.Channels),
 					Codec:      network.AudioCodecPCM,
-					Samples:    buffer[:n],
+					Samples:    enhanced,
 				}
 
 				// Encode audio packet
@@ -527,6 +534,14 @@ func runCall() {
 			fmt.Printf("  Speech frames: %d (%.1f%%)\n", vadStats.SpeechFrames, vadStats.ActivityRate)
 			fmt.Printf("  Silence frames: %d (%.1f%%)\n", vadStats.SilenceFrames, 100.0-vadStats.ActivityRate)
 			fmt.Printf("  Bandwidth saved: ~%.1f%%\n", 100.0-vadStats.ActivityRate)
+
+			// Show noise suppression statistics
+			nsStats := noiseSuppressor.GetStatistics()
+			fmt.Printf("\nNoise Suppression:\n")
+			fmt.Printf("  Total frames: %d\n", nsStats.TotalFrames)
+			fmt.Printf("  Clean frames: %d (%.1f%%)\n", nsStats.CleanFrames, nsStats.CleanRatio)
+			fmt.Printf("  Noisy frames: %d (%.1f%%)\n", nsStats.NoisyFrames, 100.0-nsStats.CleanRatio)
+			fmt.Printf("  Calibrated: %v\n", nsStats.Calibrated)
 
 			// Stop and save recording
 			if rec != nil && rec.IsRecording() {
