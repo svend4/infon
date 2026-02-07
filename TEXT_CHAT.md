@@ -54,11 +54,27 @@ tvcp call alice
 ```
 
 **During a call:**
-- Incoming text messages appear at the bottom of the screen
+- **Send messages**: Type your message and press Enter to send
+- **Receive messages**: Incoming messages appear automatically
 - Format: `💬 [HH:MM:SS] Sender: Message`
 - Messages don't interrupt video/audio streaming
+- Your sent messages show as: `📤 You: Message`
 
-**Note:** Interactive chat input during video calls is currently not supported. Use the standalone `chat` command for two-way text communication.
+**Example:**
+```
+[Video call in progress]
+
+Hello from the call!
+📤 You: Hello from the call!
+
+💬 [14:35:42] Alice: Hi! I got your message!
+```
+
+**Features:**
+- ✅ **Two-way messaging**: Send and receive text during video calls
+- ✅ **Non-blocking**: Chat doesn't interrupt video/audio
+- ✅ **Real-time**: Messages delivered instantly via UDP
+- ✅ **Simple interface**: Just type and press Enter
 
 ## Message Format
 

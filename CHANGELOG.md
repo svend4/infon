@@ -24,6 +24,16 @@ This release adds P-frame (delta compression) support for video (50-70% reductio
   - 17-70ms capture latency
   - 640×480 VGA default resolution
 
+#### Interactive Chat During Calls
+- **Two-way text messaging during video calls** - Send and receive messages
+  - Type messages and press Enter to send during calls
+  - Non-blocking: doesn't interrupt video/audio
+  - Real-time message delivery via UDP
+  - Automatic message display with timestamps
+  - Username identification (hostname)
+  - Simple stdin-based input
+  - Background goroutine for message processing
+
 #### P-Frame Delta Compression
 - **Video delta compression** - 50-70% video bandwidth reduction
   - I-frames (full frames) and P-frames (delta frames)

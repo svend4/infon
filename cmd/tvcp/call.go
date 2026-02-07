@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os"
@@ -28,7 +29,8 @@ func runCall() {
 		fmt.Fprintln(os.Stderr, "\nOptions:")
 		fmt.Fprintln(os.Stderr, "  --record              Record the call")
 		fmt.Fprintln(os.Stderr, "  --output <file>       Output file for recording (default: auto-generated)")
-		fmt.Fprintln(os.Stderr, "\nThis starts a two-way video call.")
+		fmt.Fprintln(os.Stderr, "\nThis starts a two-way video call with text chat.")
+		fmt.Fprintln(os.Stderr, "Type messages and press Enter to send text during the call.")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
 		fmt.Fprintln(os.Stderr, "  tvcp call alice                          # Call contact 'alice'")
 		fmt.Fprintln(os.Stderr, "  tvcp call --record alice                 # Record the call")
@@ -137,6 +139,7 @@ func runCall() {
 	defer transport.Close()
 
 	fmt.Printf("Listening on: %s\n", transport.LocalAddr())
+	fmt.Println("💬 Type messages and press Enter to send text during the call")
 	fmt.Println()
 
 	// Create camera for local video
@@ -415,6 +418,51 @@ func runCall() {
 				audioSendCount++
 				mu.Unlock()
 			}
+		}
+	}()
+
+	// Channel for user text messages
+	textMsgChan := make(chan string, 10)
+
+	// Goroutine for sending text messages (user input)
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			message := strings.TrimSpace(scanner.Text())
+			if message != "" {
+				textMsgChan <- message
+			}
+		}
+	}()
+
+	// Goroutine to process and send text messages
+	go func() {
+		username := "User"
+		if hostname, err := os.Hostname(); err == nil {
+			username = hostname
+		}
+
+		for message := range textMsgChan {
+			// Create text message
+			textMsg := network.NewTextMessage(username, message)
+			payload, err := network.EncodeTextMessage(textMsg)
+			if err != nil {
+				continue
+			}
+
+			// Send packet
+			packet := &network.Packet{
+				Type:      network.PacketTypeTextChat,
+				Sequence:  transport.NextSequence(),
+				Timestamp: uint64(time.Now().UnixMilli()),
+				Payload:   payload,
+			}
+
+			transport.SendPacket(packet, udpAddr)
+			retransmitter.OnPacketSent(packet, udpAddr)
+
+			// Display sent message
+			fmt.Printf("\n📤 You: %s\n", message)
 		}
 	}()
 
