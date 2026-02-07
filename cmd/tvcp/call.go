@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/svend4/infon/internal/audio"
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/internal/contacts"
 	"github.com/svend4/infon/internal/device"
@@ -100,6 +101,34 @@ func runCall() {
 	}
 	defer camera.Close()
 
+	// Create audio source for local microphone
+	audioFormat := audio.DefaultFormat()
+	audioSource, err := audio.NewDefaultCapture()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating audio source: %v\n", err)
+		os.Exit(1)
+	}
+	if err := audioSource.Open(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening audio source: %v\n", err)
+		os.Exit(1)
+	}
+	defer audioSource.Close()
+
+	// Create audio sink for remote audio playback
+	audioSink, err := audio.NewDefaultPlayback()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating audio sink: %v\n", err)
+		os.Exit(1)
+	}
+	if err := audioSink.Open(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening audio sink: %v\n", err)
+		os.Exit(1)
+	}
+	defer audioSink.Close()
+
+	fmt.Printf("Audio: %d Hz, %d channels, %d-bit\n",
+		audioFormat.SampleRate, audioFormat.Channels, audioFormat.BitDepth)
+
 	// Send handshake
 	fmt.Println("Sending handshake...")
 	handshake := &network.Packet{
@@ -118,6 +147,8 @@ func runCall() {
 	var mu sync.Mutex
 	sendCount := 0
 	recvCount := 0
+	audioSendCount := 0
+	audioRecvCount := 0
 	startTime := time.Now()
 
 	// Fragment reassembly buffer
@@ -183,7 +214,58 @@ func runCall() {
 		}
 	}()
 
-	// Main loop for receiving (remote video)
+	// Goroutine for sending audio
+	go func() {
+		// 20ms audio chunks (good balance between latency and efficiency)
+		samplesPerChunk := audioFormat.SampleRate / 50 // 50 chunks per second = 20ms each
+		buffer := make([]int16, samplesPerChunk)
+
+		ticker := time.NewTicker(20 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// Read audio samples
+				n, err := audioSource.Read(buffer)
+				if err != nil || n == 0 {
+					continue
+				}
+
+				// Create audio packet
+				audioPacket := &network.AudioPacket{
+					Timestamp:  uint64(time.Now().UnixMilli()),
+					SampleRate: uint16(audioFormat.SampleRate),
+					Channels:   uint8(audioFormat.Channels),
+					Codec:      network.AudioCodecPCM,
+					Samples:    buffer[:n],
+				}
+
+				// Encode audio packet
+				audioData, err := network.EncodeAudioPacket(audioPacket)
+				if err != nil {
+					continue
+				}
+
+				// Send as network packet
+				packet := &network.Packet{
+					Type:      network.PacketTypeAudio,
+					Sequence:  transport.NextSequence(),
+					Timestamp: audioPacket.Timestamp,
+					Payload:   audioData,
+				}
+
+				transport.SendPacket(packet, udpAddr)
+				retransmitter.OnPacketSent(packet, udpAddr)
+
+				mu.Lock()
+				audioSendCount++
+				mu.Unlock()
+			}
+		}
+	}()
+
+	// Main loop for receiving (remote video + audio)
 	lastStatsTime := time.Now()
 
 	for {
@@ -192,6 +274,7 @@ func runCall() {
 			elapsed := time.Since(startTime)
 			mu.Lock()
 			sc, rc := sendCount, recvCount
+			asc, arc := audioSendCount, audioRecvCount
 			mu.Unlock()
 
 			lossStats := lossDetector.GetStatistics()
@@ -204,6 +287,9 @@ func runCall() {
 			fmt.Printf("\nVideo:\n")
 			fmt.Printf("  Sent: %d frames (%.1f FPS)\n", sc, float64(sc)/elapsed.Seconds())
 			fmt.Printf("  Received: %d frames (%.1f FPS)\n", rc, float64(rc)/elapsed.Seconds())
+			fmt.Printf("\nAudio:\n")
+			fmt.Printf("  Sent: %d chunks (%.1f chunks/s)\n", asc, float64(asc)/elapsed.Seconds())
+			fmt.Printf("  Received: %d chunks (%.1f chunks/s)\n", arc, float64(arc)/elapsed.Seconds())
 			fmt.Printf("\nNetwork Quality:\n")
 			fmt.Printf("  Packets received: %d\n", lossStats.TotalReceived)
 			fmt.Printf("  Packets lost: %d (%.2f%%)\n", lossStats.TotalLost, lossStats.LossRate)
@@ -299,6 +385,22 @@ func runCall() {
 
 					delete(fragmentBuffer, frameID)
 				}
+
+			case network.PacketTypeAudio:
+				// Decode audio packet
+				audioPacket, err := network.DecodeAudioPacket(packet.Payload)
+				if err != nil {
+					continue
+				}
+
+				// Play audio samples
+				if len(audioPacket.Samples) > 0 {
+					audioSink.Write(audioPacket.Samples)
+
+					mu.Lock()
+					audioRecvCount++
+					mu.Unlock()
+				}
 			}
 
 			// Show stats
@@ -306,16 +408,15 @@ func runCall() {
 			if now.Sub(lastStatsTime) >= 2*time.Second {
 				mu.Lock()
 				sc, rc := sendCount, recvCount
+				asc, arc := audioSendCount, audioRecvCount
 				mu.Unlock()
 
 				elapsed := now.Sub(startTime)
 				lossStats := lossDetector.GetStatistics()
-				retransStats := retransmitter.GetStatistics()
 
-				fmt.Printf("%s[Call] Sent: %d (%.1f FPS) | Recv: %d (%.1f FPS) | Loss: %.1f%% | Retrans: %d | Time: %.0fs%s\n",
-					color.Reset, sc, float64(sc)/elapsed.Seconds(),
-					rc, float64(rc)/elapsed.Seconds(), lossStats.LossRate,
-					retransStats.TotalRetransmits, elapsed.Seconds(), color.Reset)
+				fmt.Printf("%s[Call] Video: %d/%d (%.1f/%.1f FPS) | Audio: %d/%d | Loss: %.1f%% | Time: %.0fs%s\n",
+					color.Reset, sc, rc, float64(sc)/elapsed.Seconds(), float64(rc)/elapsed.Seconds(),
+					asc, arc, lossStats.LossRate, elapsed.Seconds(), color.Reset)
 				lastStatsTime = now
 			}
 		}

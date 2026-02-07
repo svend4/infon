@@ -23,7 +23,7 @@ const (
 // EncodeAudioPacket encodes an audio packet to bytes
 func EncodeAudioPacket(ap *AudioPacket) ([]byte, error) {
 	// Calculate size
-	headerSize := 13 // timestamp(8) + samplerate(2) + channels(1) + codec(1) + length(2)
+	headerSize := 14 // timestamp(8) + samplerate(2) + channels(1) + codec(1) + length(2)
 	dataSize := len(ap.Samples) * 2 // 16-bit samples
 	totalSize := headerSize + dataSize
 

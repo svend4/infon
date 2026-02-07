@@ -205,3 +205,74 @@ No capture devices found.
 - [LOSS_RECOVERY.md](LOSS_RECOVERY.md) - Packet loss handling
 - [NETWORK.md](NETWORK.md) - Transport protocol
 - [README.md](README.md) - Project overview
+
+## Integration with Video Calls
+
+Audio is now fully integrated with the `call` command for complete voice+video communication.
+
+### Usage
+
+```bash
+# Audio+Video call (automatic)
+tvcp call alice
+tvcp call localhost:5001
+
+# Audio is enabled by default
+```
+
+### How It Works
+
+**Parallel Transmission:**
+- Video: 15 FPS (1 frame every ~67ms)
+- Audio: 50 chunks/s (1 chunk every 20ms)
+
+```
+Time:   0ms    20ms   40ms   60ms   67ms   80ms
+        │      │      │      │      │      │
+Audio:  ▓─────►▓─────►▓─────►▓─────►      ▓─────►
+Video:                        █────────────►
+```
+
+**Bandwidth:**
+- Video: ~350 KB/s (compressed .babe)
+- Audio: 32 KB/s (PCM)
+- Total: ~382 KB/s
+
+**Statistics:**
+```
+✓ Call ended
+Duration: 10.0s
+
+Video:
+  Sent: 151 frames (15.1 FPS)
+  Received: 135 frames (13.5 FPS)
+
+Audio:
+  Sent: 499 chunks (49.9 chunks/s)
+  Received: 482 chunks (48.2 chunks/s)
+
+Network Quality:
+  Packets received: 2150
+  Packets lost: 15 (0.69%)
+  Retransmissions: 8
+```
+
+### Technical Details
+
+**Audio Goroutine:**
+- Runs in parallel with video transmission
+- 20ms chunks (320 samples @ 16 kHz)
+- ~50 packets per second
+- Independent from video timing
+
+**Packet Priority:**
+Audio packets are small (~654 bytes) and sent frequently, ensuring low latency voice transmission even if some packets are lost.
+
+## Current Limitations
+
+- **Test Audio Only**: Currently uses test tone generator (sine wave)
+- **No Real Microphones**: ALSA/CoreAudio not yet implemented
+- **PCM Only**: No compression (Opus coming soon)
+- **No Audio Processing**: No noise suppression, AGC, or AEC
+
+These limitations will be addressed in future releases.
