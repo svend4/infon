@@ -17,6 +17,7 @@ import (
 	"github.com/svend4/infon/internal/device"
 	"github.com/svend4/infon/internal/network"
 	"github.com/svend4/infon/internal/recorder"
+	"github.com/svend4/infon/internal/video"
 	"github.com/svend4/infon/pkg/color"
 	"github.com/svend4/infon/pkg/terminal"
 )
@@ -200,6 +201,9 @@ func runCall() {
 	// Fragment reassembly buffer
 	fragmentBuffer := make(map[uint32][][]byte)
 
+	// P-frame decoder for receiving
+	pframeDecoder := video.NewPFrameDecoder()
+
 	// Loss recovery components
 	lossDetector := network.NewLossDetector()
 	retransmitter := network.NewRetransmissionManager()
@@ -271,6 +275,9 @@ func runCall() {
 		}
 	}
 
+	// Initialize P-frame encoder (I-frame every 30 frames = ~2 seconds @ 15 FPS)
+	pframeEncoder := video.NewPFrameEncoder(30)
+
 	// Goroutine for sending (local video)
 	go func() {
 		lastFrameTime := time.Now()
@@ -301,8 +308,17 @@ func runCall() {
 				rec.RecordFrame(frame)
 			}
 
-			// Fragment frame
-			fragments, err := network.FragmentFrame(frame, uint32(sendCount))
+			// Encode with P-frame compression
+			encodedFrame := pframeEncoder.Encode(frame)
+
+			// Serialize encoded frame
+			encodedData, err := network.EncodeEncodedFrame(encodedFrame)
+			if err != nil {
+				continue
+			}
+
+			// Fragment encoded frame
+			fragments, err := network.FragmentData(encodedData, uint32(sendCount))
 			if err != nil {
 				continue
 			}
@@ -525,15 +541,22 @@ func runCall() {
 				}
 
 				if allReceived {
-					// Assemble remote frame
-					remoteFrame, err := network.AssembleFrame(fragmentBuffer[frameID])
+					// Assemble encoded frame data
+					encodedData, err := network.AssembleData(fragmentBuffer[frameID])
 					if err == nil {
-						// Render split-screen: remote on top, local on bottom
-						renderSplitScreen(camera, remoteFrame, localWidth, localHeight, remoteWidth, remoteHeight)
+						// Decode encoded frame (I-frame or P-frame)
+						encodedFrame, err := network.DecodeEncodedFrame(encodedData)
+						if err == nil {
+							// Decode with P-frame decoder
+							remoteFrame := pframeDecoder.Decode(encodedFrame)
 
-						mu.Lock()
-						recvCount++
-						mu.Unlock()
+							// Render split-screen: remote on top, local on bottom
+							renderSplitScreen(camera, remoteFrame, localWidth, localHeight, remoteWidth, remoteHeight)
+
+							mu.Lock()
+							recvCount++
+							mu.Unlock()
+						}
 					}
 
 					delete(fragmentBuffer, frameID)

@@ -165,3 +165,74 @@ func getUint32(b []byte) uint32 {
 func getUint16(b []byte) uint16 {
 	return uint16(b[0])<<8 | uint16(b[1])
 }
+
+// FragmentData splits arbitrary data into multiple fragments (for P-frames)
+func FragmentData(data []byte, frameID uint32) ([][]byte, error) {
+	// Simple fragmentation: split data into MaxFragmentPayload chunks
+	// Fragment format: frameID(4) + fragID(2) + totalFrags(2) + dataLen(2) + data
+	const headerSize = 4 + 2 + 2 + 2 // 10 bytes
+	maxPayload := MaxPacketSize - PacketHeaderSize - headerSize
+
+	dataLen := len(data)
+	numFragments := (dataLen + maxPayload - 1) / maxPayload
+
+	if numFragments > 65535 {
+		return nil, fmt.Errorf("data too large: requires %d fragments", numFragments)
+	}
+
+	fragments := make([][]byte, 0, numFragments)
+
+	for fragID := 0; fragID < numFragments; fragID++ {
+		start := fragID * maxPayload
+		end := start + maxPayload
+		if end > dataLen {
+			end = dataLen
+		}
+		chunkLen := end - start
+
+		// Encode fragment
+		fragData := make([]byte, headerSize+chunkLen)
+
+		// Header
+		putUint32(fragData[0:4], frameID)
+		putUint16(fragData[4:6], uint16(fragID))
+		putUint16(fragData[6:8], uint16(numFragments))
+		putUint16(fragData[8:10], uint16(chunkLen))
+
+		// Data
+		copy(fragData[10:], data[start:end])
+
+		fragments = append(fragments, fragData)
+	}
+
+	return fragments, nil
+}
+
+// AssembleData reassembles fragments into complete data (for P-frames)
+func AssembleData(fragments [][]byte) ([]byte, error) {
+	if len(fragments) == 0 {
+		return nil, fmt.Errorf("no fragments provided")
+	}
+
+	// Calculate total size
+	totalSize := 0
+	for _, fragData := range fragments {
+		if len(fragData) < 10 {
+			return nil, fmt.Errorf("invalid fragment header")
+		}
+		chunkLen := int(getUint16(fragData[8:10]))
+		totalSize += chunkLen
+	}
+
+	// Assemble data
+	result := make([]byte, totalSize)
+	offset := 0
+
+	for _, fragData := range fragments {
+		chunkLen := int(getUint16(fragData[8:10]))
+		copy(result[offset:], fragData[10:10+chunkLen])
+		offset += chunkLen
+	}
+
+	return result, nil
+}

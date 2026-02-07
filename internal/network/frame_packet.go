@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
+	"github.com/svend4/infon/internal/video"
 	"github.com/svend4/infon/pkg/color"
 	"github.com/svend4/infon/pkg/terminal"
 )
@@ -137,4 +138,18 @@ func DecodeFrame(data []byte) (*terminal.Frame, error) {
 // EstimateFrameSize estimates the encoded size of a frame
 func EstimateFrameSize(width, height int) int {
 	return FrameHeaderSize + (width * height * BlockDataSize)
+}
+
+// EncodeEncodedFrame encodes a video.EncodedFrame (I-frame or P-frame) into bytes
+func EncodeEncodedFrame(encoded *video.EncodedFrame) ([]byte, error) {
+	return video.SerializeEncodedFrame(encoded), nil
+}
+
+// DecodeEncodedFrame decodes bytes into a video.EncodedFrame
+func DecodeEncodedFrame(data []byte) (*video.EncodedFrame, error) {
+	encoded := video.DeserializeEncodedFrame(data)
+	if encoded == nil {
+		return nil, errors.New("failed to deserialize encoded frame")
+	}
+	return encoded, nil
 }
