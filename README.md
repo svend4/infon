@@ -52,8 +52,26 @@ Autonomous mesh network, works without infrastructure.
 
 ## 🚀 Quick Start
 
+### Try the Proof-of-Concept Demo
+
 ```bash
-# Coming soon
+# Clone and build
+git clone https://github.com/svend4/infon.git
+cd infon
+make build
+
+# Generate a test image
+./bin/tvcp generate test.png
+
+# Display it in your terminal!
+./bin/tvcp demo test.png
+```
+
+📖 **[Read the full demo guide →](DEMO.md)**
+
+### Future: Making Calls (Coming Soon)
+
+```bash
 # Start TVCP daemon
 tvcp daemon
 
@@ -85,17 +103,19 @@ Each block = 2×2 pixels encoded as:
 
 ## 📚 Documentation
 
+- 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Try the working prototype! ⭐
 - 📖 [Business Plan](tvcp-business-plan.md) — Full market analysis and roadmap
 - 🔬 [Technical Appendix](tvcp-appendix.md) — Deep dive into algorithms and protocols
 - 📋 [Repository Review](REPOSITORY_REVIEW.md) — Current status and recommendations
 
 ## 🛣️ Roadmap
 
-### Phase 0: Preparation (Weeks 1-2) — **Current**
+### Phase 0: Preparation (Weeks 1-2) — **✓ Complete**
 - [x] Create documentation
 - [x] Repository setup
+- [x] Setup CI/CD (GitHub Actions)
+- [x] **Proof-of-concept demo** — Image-to-terminal renderer working!
 - [ ] Fork [Say](https://github.com/svanichkin/say) project
-- [ ] Setup CI/CD
 
 ### Phase 1: MVP (Weeks 3-8)
 - [ ] Stable 1:1 audio+video calls
