@@ -1,8 +1,9 @@
+// +build !linux
+
 package device
 
-// Default implementation using test camera
+// Stub implementation for non-Linux platforms
 // In production, we would have platform-specific implementations:
-// - camera_linux.go (V4L2)
 // - camera_darwin.go (AVFoundation)
 // - camera_windows.go (DirectShow/Media Foundation)
 

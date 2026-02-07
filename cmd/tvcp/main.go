@@ -39,6 +39,8 @@ func main() {
 		runSend()
 	case "receive", "recv":
 		runReceive()
+	case "list-cameras", "cameras":
+		runListCameras()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -57,6 +59,7 @@ func printUsage() {
 	fmt.Println("\nCommands:")
 	fmt.Println("  daemon              Start TVCP daemon")
 	fmt.Println("  call <host:port>    Two-way video call (send + receive)")
+	fmt.Println("  list-cameras        List available camera devices")
 	fmt.Println("  test                Run video/audio test")
 	fmt.Println("  demo <image>        Display image in terminal (proof-of-concept)")
 	fmt.Println("  preview [pattern]   Live camera preview (animated test patterns)")

@@ -132,7 +132,9 @@ Each block = 2×2 pixels encoded as:
 
 ## 📚 Documentation
 
-- 🛡️ [**Packet Loss Recovery**](LOSS_RECOVERY.md) — Automatic retransmission and network resilience ⭐ NEW
+- 📹 [**Camera Support**](CAMERAS.md) — Real webcams + test cameras (V4L2) ⭐ NEW
+
+- 🛡️ [**Packet Loss Recovery**](LOSS_RECOVERY.md) — Automatic retransmission and network resilience
 - 🌐 [**Network Streaming**](NETWORK.md) — Stream video over UDP!
 - 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video rendering
 - 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering
