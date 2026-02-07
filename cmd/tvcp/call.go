@@ -207,6 +207,14 @@ func runCall() {
 	// Jitter buffer for smooth audio playback
 	audioJitterBuffer := network.NewJitterBuffer(50) // 50 packets = ~1 second @ 50 chunks/s
 
+	// Quality controller for adaptive bitrate
+	qualityController := network.NewQualityController(15) // Start at 15 FPS
+	qualityChanges := 0
+	qualityController.SetQualityChangeCallback(func(fps, width, height int) {
+		qualityChanges++
+		fmt.Printf("\n📊 Quality adjusted: %d FPS (network conditions)\n", fps)
+	})
+
 	// Channel for audio packets from jitter buffer
 	audioPlaybackChan := make(chan *network.AudioPacket, 10)
 
@@ -265,35 +273,43 @@ func runCall() {
 
 	// Goroutine for sending (local video)
 	go func() {
-		ticker := time.NewTicker(time.Duration(1000.0/fps) * time.Millisecond)
-		defer ticker.Stop()
+		lastFrameTime := time.Now()
 
 		for {
-			select {
-			case <-ticker.C:
-				// Capture frame
-				img, err := camera.Read()
-				if err != nil {
-					continue
-				}
+			// Get current FPS from quality controller
+			currentFPS := qualityController.GetCurrentFPS()
+			frameInterval := time.Duration(1000.0/float64(currentFPS)) * time.Millisecond
 
-				// Encode to terminal frame
-				frame := babe.ImageToFrame(img, localWidth, localHeight)
+			// Wait for next frame time
+			elapsed := time.Since(lastFrameTime)
+			if elapsed < frameInterval {
+				time.Sleep(frameInterval - elapsed)
+			}
+			lastFrameTime = time.Now()
 
-				// Record frame if recording
-				if rec != nil && rec.IsRecording() {
-					rec.RecordFrame(frame)
-				}
+			// Capture frame
+			img, err := camera.Read()
+			if err != nil {
+				continue
+			}
 
-				// Fragment frame
-				fragments, err := network.FragmentFrame(frame, uint32(sendCount))
-				if err != nil {
-					continue
-				}
+			// Encode to terminal frame
+			frame := babe.ImageToFrame(img, localWidth, localHeight)
 
-				// Send each fragment
-				timestamp := uint64(time.Now().UnixMilli())
-				for _, fragData := range fragments {
+			// Record frame if recording
+			if rec != nil && rec.IsRecording() {
+				rec.RecordFrame(frame)
+			}
+
+			// Fragment frame
+			fragments, err := network.FragmentFrame(frame, uint32(sendCount))
+			if err != nil {
+				continue
+			}
+
+			// Send each fragment
+			timestamp := uint64(time.Now().UnixMilli())
+			for _, fragData := range fragments {
 					packet := &network.Packet{
 						Type:      network.PacketTypeFrame,
 						Sequence:  transport.NextSequence(),
@@ -309,7 +325,6 @@ func runCall() {
 				mu.Lock()
 				sendCount++
 				mu.Unlock()
-			}
 		}
 	}()
 
@@ -424,6 +439,15 @@ func runCall() {
 					fmt.Printf("  Video frames: %d\n", frameCount)
 					fmt.Printf("  Audio chunks: %d\n", audioCount)
 				}
+			}
+
+			// Show adaptive quality statistics
+			if qualityChanges > 0 {
+				qualityStats := qualityController.GetStatistics()
+				fmt.Printf("\nAdaptive Quality:\n")
+				fmt.Printf("  Quality changes: %d\n", qualityChanges)
+				fmt.Printf("  Final FPS: %d\n", qualityStats.CurrentFPS)
+				fmt.Printf("  Average loss: %.2f%%\n", qualityStats.AverageLoss)
 			}
 
 			return
@@ -544,10 +568,17 @@ func runCall() {
 
 				elapsed := now.Sub(startTime)
 				lossStats := lossDetector.GetStatistics()
+				jitterStats := audioJitterBuffer.GetStatistics()
 
-				fmt.Printf("%s[Call] Video: %d/%d (%.1f/%.1f FPS) | Audio: %d/%d | Loss: %.1f%% | Time: %.0fs%s\n",
+				// Update quality controller with network stats
+				qualityController.UpdateNetworkStats(lossStats.LossRate, jitterStats.CurrentDelay)
+
+				// Get current quality level
+				quality := qualityController.GetCurrentQuality()
+
+				fmt.Printf("%s[Call] Video: %d/%d (%.1f/%.1f FPS → %d FPS) | Audio: %d/%d | Loss: %.1f%% | Time: %.0fs%s\n",
 					color.Reset, sc, rc, float64(sc)/elapsed.Seconds(), float64(rc)/elapsed.Seconds(),
-					asc, arc, lossStats.LossRate, elapsed.Seconds(), color.Reset)
+					quality.FPS, asc, arc, lossStats.LossRate, elapsed.Seconds(), color.Reset)
 				lastStatsTime = now
 			}
 		}
