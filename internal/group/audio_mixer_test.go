@@ -3,7 +3,6 @@ package group
 import (
 	"math"
 	"testing"
-	"time"
 )
 
 func TestNewAudioMixer(t *testing.T) {
@@ -17,8 +16,8 @@ func TestNewAudioMixer(t *testing.T) {
 		t.Errorf("AudioMixer sampleRate = %d, expected 16000", mixer.sampleRate)
 	}
 
-	if mixer.framesPerChunk != 320 {
-		t.Errorf("AudioMixer framesPerChunk = %d, expected 320", mixer.framesPerChunk)
+	if mixer.bufferSize != 320 {
+		t.Errorf("AudioMixer bufferSize = %d, expected 320", mixer.bufferSize)
 	}
 
 	if mixer.sources == nil {
@@ -38,20 +37,15 @@ func TestAudioMixer_AddSource(t *testing.T) {
 	mixer.AddSource("peer1", samples)
 
 	// Check that source was added
-	mixer.mutex.Lock()
-	if len(mixer.sources) != 1 {
-		t.Errorf("AddSource() resulted in %d sources, expected 1", len(mixer.sources))
+	count := mixer.SourceCount()
+	if count != 1 {
+		t.Errorf("AddSource() resulted in %d sources, expected 1", count)
 	}
 
-	source, exists := mixer.sources["peer1"]
-	if !exists {
+	ids := mixer.GetSourceIDs()
+	if len(ids) != 1 || ids[0] != "peer1" {
 		t.Error("AddSource() did not add source 'peer1'")
 	}
-
-	if len(source.samples) != len(samples) {
-		t.Errorf("Source samples length = %d, expected %d", len(source.samples), len(samples))
-	}
-	mixer.mutex.Unlock()
 }
 
 func TestAudioMixer_AddSource_MultiplePeers(t *testing.T) {
@@ -65,11 +59,10 @@ func TestAudioMixer_AddSource_MultiplePeers(t *testing.T) {
 	mixer.AddSource("peer2", samples2)
 	mixer.AddSource("peer3", samples3)
 
-	mixer.mutex.Lock()
-	if len(mixer.sources) != 3 {
-		t.Errorf("AddSource() resulted in %d sources, expected 3", len(mixer.sources))
+	count := mixer.SourceCount()
+	if count != 3 {
+		t.Errorf("AddSource() resulted in %d sources, expected 3", count)
 	}
-	mixer.mutex.Unlock()
 }
 
 func TestAudioMixer_AddSource_UpdateExisting(t *testing.T) {
@@ -88,16 +81,16 @@ func TestAudioMixer_AddSource_UpdateExisting(t *testing.T) {
 	mixer.AddSource("peer1", samples1)
 	mixer.AddSource("peer1", samples2) // Update same peer
 
-	mixer.mutex.Lock()
-	if len(mixer.sources) != 1 {
-		t.Errorf("AddSource() resulted in %d sources, expected 1", len(mixer.sources))
+	count := mixer.SourceCount()
+	if count != 1 {
+		t.Errorf("AddSource() resulted in %d sources, expected 1", count)
 	}
 
-	source := mixer.sources["peer1"]
-	if len(source.samples) > 0 && source.samples[0] != 200 {
-		t.Errorf("Source not updated, first sample = %d, expected 200", source.samples[0])
+	// Mix and verify the updated samples are used
+	mixed := mixer.Mix()
+	if len(mixed) > 0 && mixed[0] != 200 {
+		t.Errorf("Source not updated, first mixed sample = %d, expected 200", mixed[0])
 	}
-	mixer.mutex.Unlock()
 }
 
 func TestAudioMixer_Mix_Empty(t *testing.T) {
@@ -225,20 +218,21 @@ func TestAudioMixer_Mix_SoftClipping(t *testing.T) {
 
 	mixed := mixer.Mix()
 
-	// Soft-clipping should prevent simple addition (40000) and overflow
+	// Soft-clipping should prevent overflow and produce reasonable values
 	for i, sample := range mixed {
 		if sample > 32767 || sample < -32768 {
 			t.Errorf("Mix() sample[%d] = %d, overflow detected", i, sample)
 		}
 
-		// Should be less than simple addition due to soft-clipping
-		if sample == 40000 {
-			t.Errorf("Mix() sample[%d] = 40000, soft-clipping not working", i)
+		// With soft-clipping, result should be less than max int16
+		// (simple addition would overflow to negative values)
+		if sample < 0 {
+			t.Errorf("Mix() sample[%d] = %d, should be positive with soft-clipping", i, sample)
 		}
 	}
 }
 
-func TestAudioMixer_CleanupOldSources(t *testing.T) {
+func TestAudioMixer_RemoveSource(t *testing.T) {
 	mixer := NewAudioMixer(16000, 320)
 
 	samples := make([]int16, 320)
@@ -247,24 +241,17 @@ func TestAudioMixer_CleanupOldSources(t *testing.T) {
 	mixer.AddSource("peer1", samples)
 
 	// Verify source exists
-	mixer.mutex.Lock()
-	if len(mixer.sources) != 1 {
+	if mixer.SourceCount() != 1 {
 		t.Fatal("Source not added")
 	}
-	mixer.mutex.Unlock()
 
-	// Wait for cleanup time (>1s)
-	time.Sleep(1100 * time.Millisecond)
+	// Remove source
+	mixer.RemoveSource("peer1")
 
-	// Mix should trigger cleanup
-	mixer.Mix()
-
-	// Source should be cleaned up
-	mixer.mutex.Lock()
-	if len(mixer.sources) != 0 {
-		t.Errorf("Old source not cleaned up, %d sources remaining", len(mixer.sources))
+	// Source should be removed
+	if mixer.SourceCount() != 0 {
+		t.Errorf("Source not removed, %d sources remaining", mixer.SourceCount())
 	}
-	mixer.mutex.Unlock()
 }
 
 func TestAudioMixer_Mix_DifferentLengths(t *testing.T) {

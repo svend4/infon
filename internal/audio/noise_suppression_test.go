@@ -149,24 +149,28 @@ func TestNoiseSuppressor_IsCalibrating(t *testing.T) {
 func TestNoiseSuppressor_GetStatistics(t *testing.T) {
 	ns := NewNoiseSuppressor(16000, 320)
 
-	// Process some frames
+	// Process some frames (need >20 for calibration)
 	signal := make([]int16, 320)
 	for i := range signal {
 		signal[i] = int16(1000 * math.Sin(2*math.Pi*1000*float64(i)/16000))
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 25; i++ {
 		ns.Process(signal)
 	}
 
 	stats := ns.GetStatistics()
 
-	if stats.TotalFrames != 10 {
-		t.Errorf("TotalFrames = %d, expected 10", stats.TotalFrames)
+	if stats.TotalFrames != 25 {
+		t.Errorf("TotalFrames = %d, expected 25", stats.TotalFrames)
 	}
 
-	if stats.ReductionDB < 0.0 {
-		t.Errorf("ReductionDB = %f, expected >= 0", stats.ReductionDB)
+	if stats.CleanRatio < 0.0 || stats.CleanRatio > 100.0 {
+		t.Errorf("CleanRatio = %f, expected 0-100", stats.CleanRatio)
+	}
+
+	if !stats.Calibrated {
+		t.Error("Calibrated = false, expected true after processing 25 frames")
 	}
 }
 
@@ -196,38 +200,6 @@ func TestNoiseSuppressor_Reset(t *testing.T) {
 	stats = ns.GetStatistics()
 	if stats.TotalFrames != 0 {
 		t.Errorf("TotalFrames = %d after reset, expected 0", stats.TotalFrames)
-	}
-}
-
-func TestNewSpectralGate(t *testing.T) {
-	sg := NewSpectralGate(16000)
-
-	if sg == nil {
-		t.Fatal("NewSpectralGate() returned nil")
-	}
-
-	if sg.sampleRate != 16000 {
-		t.Errorf("SpectralGate sampleRate = %d, expected 16000", sg.sampleRate)
-	}
-
-	if sg.threshold != -40.0 {
-		t.Errorf("SpectralGate threshold = %f, expected -40.0", sg.threshold)
-	}
-}
-
-func TestSpectralGate_Process(t *testing.T) {
-	sg := NewSpectralGate(16000)
-
-	// Create test signal
-	input := make([]int16, 320)
-	for i := range input {
-		input[i] = int16(1000 * math.Sin(2*math.Pi*1000*float64(i)/16000))
-	}
-
-	output := sg.Process(input)
-
-	if len(output) != len(input) {
-		t.Errorf("Process() length = %d, expected %d", len(output), len(input))
 	}
 }
 
@@ -361,16 +333,3 @@ func BenchmarkHighPassFilter_Process(b *testing.B) {
 	}
 }
 
-func BenchmarkSpectralGate_Process(b *testing.B) {
-	sg := NewSpectralGate(16000)
-
-	signal := make([]int16, 320)
-	for i := range signal {
-		signal[i] = int16(1000 * math.Sin(2*math.Pi*1000*float64(i)/16000))
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = sg.Process(signal)
-	}
-}

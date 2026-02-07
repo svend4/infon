@@ -235,6 +235,11 @@ func (ns *NoiseSuppressor) Reset() {
 	for i := range ns.noiseEstimate {
 		ns.noiseEstimate[i] = 0.0
 	}
+
+	// Reset statistics
+	ns.totalFrames = 0
+	ns.noisyFrames = 0
+	ns.cleanFrames = 0
 }
 
 // NoiseSuppressionStatistics contains statistics
