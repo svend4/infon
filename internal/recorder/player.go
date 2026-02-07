@@ -268,3 +268,8 @@ func (p *Player) GetInfo() RecordingMetadata {
 	}
 	return p.recording.Metadata
 }
+
+// GetRecording returns the loaded recording
+func (p *Player) GetRecording() *Recording {
+	return p.recording
+}

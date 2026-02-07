@@ -53,6 +53,8 @@ func main() {
 		runChat()
 	case "playback", "play":
 		runPlayback()
+	case "export":
+		runExport()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -73,6 +75,7 @@ func printUsage() {
 	fmt.Println("  call <host:port>    Two-way video call (send + receive)")
 	fmt.Println("  chat <host:port>    Text chat session (messages only)")
 	fmt.Println("  playback <file>     Play recorded call")
+	fmt.Println("  export <file>       Export recording to MP4/WebM")
 	fmt.Println("  contacts            Manage contacts (add/list/remove)")
 	fmt.Println("  yggdrasil           Show Yggdrasil network status")
 	fmt.Println("  list-cameras        List available camera devices")

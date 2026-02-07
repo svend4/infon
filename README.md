@@ -165,6 +165,7 @@ Each block = 2×2 pixels encoded as:
 - 🔊 [**Audio Support**](AUDIO.md) — Voice transmission with PCM/Opus encoding
 - 💬 [**Text Chat**](TEXT_CHAT.md) — Real-time messaging during calls
 - 🎬 [**Call Recording**](RECORDING.md) — Save and playback video+audio calls
+- 🎥 [**Video Export**](EXPORT.md) — Export recordings to MP4/WebM format
 - 🌐 [**Yggdrasil P2P Integration**](YGGDRASIL.md) — Mesh networking and contacts
 - 🛡️ [**Packet Loss Recovery**](LOSS_RECOVERY.md) — Automatic retransmission and network resilience
 
