@@ -132,9 +132,10 @@ Each block = 2×2 pixels encoded as:
 
 ## 📚 Documentation
 
-- 🌐 [**Network Streaming**](NETWORK.md) — Stream video over UDP! ⭐ NEW
-- 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video rendering ⭐
-- 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering ⭐
+- 🛡️ [**Packet Loss Recovery**](LOSS_RECOVERY.md) — Automatic retransmission and network resilience ⭐ NEW
+- 🌐 [**Network Streaming**](NETWORK.md) — Stream video over UDP!
+- 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video rendering
+- 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering
 - 📖 [Business Plan](tvcp-business-plan.md) — Full market analysis and roadmap
 - 🔬 [Technical Appendix](tvcp-appendix.md) — Deep dive into algorithms and protocols
 - 📋 [Repository Review](REPOSITORY_REVIEW.md) — Current status and recommendations

@@ -92,6 +92,12 @@ func runCall() {
 	// Fragment reassembly buffer
 	fragmentBuffer := make(map[uint32][][]byte)
 
+	// Loss recovery components
+	lossDetector := network.NewLossDetector()
+	retransmitter := network.NewRetransmissionManager()
+	// TODO: Integrate jitter buffer for smoother playback
+	_ = network.NewJitterBuffer(100)
+
 	// Terminal dimensions for split-screen
 	// Top half: remote video (40 cols × 12 rows)
 	// Bottom half: local video (40 cols × 12 rows)
@@ -134,6 +140,9 @@ func runCall() {
 						Payload:   fragData,
 					}
 					transport.SendPacket(packet, udpAddr)
+
+					// Store for potential retransmission
+					retransmitter.OnPacketSent(packet, udpAddr)
 				}
 
 				mu.Lock()
@@ -154,12 +163,23 @@ func runCall() {
 			sc, rc := sendCount, recvCount
 			mu.Unlock()
 
+			lossStats := lossDetector.GetStatistics()
+			retransStats := retransmitter.GetStatistics()
+
 			fmt.Print(color.Reset)
 			fmt.Print(color.ClearScreen)
 			fmt.Printf("\n✓ Call ended\n")
 			fmt.Printf("Duration: %.1fs\n", elapsed.Seconds())
-			fmt.Printf("Sent: %d frames (%.1f FPS)\n", sc, float64(sc)/elapsed.Seconds())
-			fmt.Printf("Received: %d frames (%.1f FPS)\n", rc, float64(rc)/elapsed.Seconds())
+			fmt.Printf("\nVideo:\n")
+			fmt.Printf("  Sent: %d frames (%.1f FPS)\n", sc, float64(sc)/elapsed.Seconds())
+			fmt.Printf("  Received: %d frames (%.1f FPS)\n", rc, float64(rc)/elapsed.Seconds())
+			fmt.Printf("\nNetwork Quality:\n")
+			fmt.Printf("  Packets received: %d\n", lossStats.TotalReceived)
+			fmt.Printf("  Packets lost: %d (%.2f%%)\n", lossStats.TotalLost, lossStats.LossRate)
+			fmt.Printf("  Out of order: %d\n", lossStats.OutOfOrder)
+			fmt.Printf("  Duplicates: %d\n", lossStats.Duplicate)
+			fmt.Printf("  Retransmissions: %d\n", retransStats.TotalRetransmits)
+			fmt.Printf("  NACKs sent: %d\n", retransStats.TotalNACKs)
 			return
 
 		default:
@@ -172,9 +192,40 @@ func runCall() {
 				continue
 			}
 
+			// Track packet for loss detection
+			if packet.Type == network.PacketTypeFrame {
+				isNew := lossDetector.OnPacketReceived(packet.Sequence)
+				if !isNew {
+					// Duplicate packet, skip
+					continue
+				}
+
+				// Check for lost packets and send NACK
+				lostPackets := lossDetector.GetLostPackets()
+				if len(lostPackets) > 0 {
+					nackPacket := network.CreateNACKPacket(lostPackets, transport.NextSequence())
+					transport.SendPacket(nackPacket, udpAddr)
+				}
+			}
+
 			switch packet.Type {
 			case network.PacketTypeHandshake:
 				// Handshake received, connection established
+				continue
+
+			case network.PacketTypeControl:
+				// Handle NACK - retransmit requested packets
+				if len(packet.Payload) > 0 {
+					lostSeqs, err := network.ParseNACKPayload(packet.Payload)
+					if err == nil {
+						for _, seq := range lostSeqs {
+							retransPacket, addr, ok := retransmitter.ProcessNACK(seq)
+							if ok {
+								transport.SendPacket(retransPacket, addr)
+							}
+						}
+					}
+				}
 				continue
 
 			case network.PacketTypeFrame:
@@ -227,9 +278,13 @@ func runCall() {
 				mu.Unlock()
 
 				elapsed := now.Sub(startTime)
-				fmt.Printf("%s[Call] Sent: %d (%.1f FPS) | Recv: %d (%.1f FPS) | Time: %.0fs%s\n",
+				lossStats := lossDetector.GetStatistics()
+				retransStats := retransmitter.GetStatistics()
+
+				fmt.Printf("%s[Call] Sent: %d (%.1f FPS) | Recv: %d (%.1f FPS) | Loss: %.1f%% | Retrans: %d | Time: %.0fs%s\n",
 					color.Reset, sc, float64(sc)/elapsed.Seconds(),
-					rc, float64(rc)/elapsed.Seconds(), elapsed.Seconds(), color.Reset)
+					rc, float64(rc)/elapsed.Seconds(), lossStats.LossRate,
+					retransStats.TotalRetransmits, elapsed.Seconds(), color.Reset)
 				lastStatsTime = now
 			}
 		}
