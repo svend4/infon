@@ -116,3 +116,9 @@ func (t *Transport) Close() error {
 func (t *Transport) LocalAddr() *net.UDPAddr {
 	return t.conn.LocalAddr().(*net.UDPAddr)
 }
+
+// GetConn returns the underlying UDP connection
+// This is used for direct packet receiving in group calls
+func (t *Transport) GetConn() *net.UDPConn {
+	return t.conn
+}

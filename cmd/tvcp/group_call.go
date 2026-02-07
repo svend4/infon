@@ -15,7 +15,6 @@ import (
 	"github.com/svend4/infon/internal/group"
 	"github.com/svend4/infon/internal/network"
 	"github.com/svend4/infon/internal/video"
-	"github.com/svend4/infon/pkg/terminal"
 )
 
 func runGroupCall(peers []string, localPort string) error {
@@ -50,31 +49,40 @@ func runGroupCall(peers []string, localPort string) error {
 
 	fmt.Println()
 
-	// Initialize camera
-	cam := device.NewCamera()
-	if err := cam.Open(40, 30); err != nil {
+	// Initialize camera (device ID 0 = default)
+	cam, err := device.NewCamera(0)
+	if err != nil {
+		return fmt.Errorf("failed to create camera: %w", err)
+	}
+	if err := cam.SetResolution(640, 480); err != nil {
+		return fmt.Errorf("failed to set camera resolution: %w", err)
+	}
+	if err := cam.Open(); err != nil {
 		return fmt.Errorf("failed to open camera: %w", err)
 	}
 	defer cam.Close()
 
-	// Initialize audio
-	audioFormat := audio.Format{
-		SampleRate:   16000,
-		Channels:     1,
-		SampleFormat: audio.SampleFormatS16LE,
-	}
-
-	mic, err := audio.NewMicrophone(audioFormat, 320) // 20ms chunks
+	// Initialize audio using default capture/playback
+	mic, err := audio.NewDefaultCapture()
 	if err != nil {
 		return fmt.Errorf("failed to initialize microphone: %w", err)
 	}
+	if err := mic.Open(); err != nil {
+		return fmt.Errorf("failed to open microphone: %w", err)
+	}
 	defer mic.Close()
 
-	speaker, err := audio.NewSpeaker(audioFormat, 320)
+	speaker, err := audio.NewDefaultPlayback()
 	if err != nil {
 		return fmt.Errorf("failed to initialize speaker: %w", err)
 	}
+	if err := speaker.Open(); err != nil {
+		return fmt.Errorf("failed to open speaker: %w", err)
+	}
 	defer speaker.Close()
+
+	// Get audio format for mixer
+	audioFormat := mic.GetFormat()
 
 	// Initialize audio mixer
 	audioMixer := group.NewAudioMixer(audioFormat.SampleRate, 320)
@@ -153,20 +161,23 @@ func runGroupCall(peers []string, localPort string) error {
 
 	// Audio sending goroutine
 	go func() {
+		// Audio buffer for reading (20ms at 16kHz = 320 samples)
+		audioBuffer := make([]int16, 320)
+
 		for {
 			if !groupCall.IsRunning() {
 				break
 			}
 
 			// Read from microphone
-			samples, err := mic.Read()
+			n, err := mic.Read(audioBuffer)
 			if err != nil {
 				time.Sleep(10 * time.Millisecond)
 				continue
 			}
 
-			// Encode as PCM
-			audioData := audio.EncodePCM(samples)
+			// Encode as PCM (only the samples that were read)
+			audioData := audio.EncodePCM(audioBuffer[:n])
 
 			// Send to all peers
 			packet := &network.Packet{
