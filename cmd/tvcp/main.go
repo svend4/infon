@@ -45,6 +45,10 @@ func main() {
 		runContacts()
 	case "yggdrasil", "ygg":
 		runYggdrasil()
+	case "audio-test":
+		runAudioTest()
+	case "list-audio", "audio":
+		runListAudio()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -66,6 +70,8 @@ func printUsage() {
 	fmt.Println("  contacts            Manage contacts (add/list/remove)")
 	fmt.Println("  yggdrasil           Show Yggdrasil network status")
 	fmt.Println("  list-cameras        List available camera devices")
+	fmt.Println("  list-audio          List available audio devices")
+	fmt.Println("  audio-test          Test audio generation")
 	fmt.Println("  test                Run video/audio test")
 	fmt.Println("  demo <image>        Display image in terminal (proof-of-concept)")
 	fmt.Println("  preview [pattern]   Live camera preview (animated test patterns)")
