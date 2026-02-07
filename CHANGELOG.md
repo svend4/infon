@@ -6,11 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.3.0-alpha] - 2026-02-07
 
-### 🚀 Phase 3 Release - P-Frame Delta Compression
+### 🚀 Phase 3 Release - P-Frame Delta Compression + Real Cameras
 
-This release adds P-frame (delta compression) support for video, reducing bandwidth by 50-70%.
+This release adds P-frame (delta compression) support for video (50-70% reduction) and real webcam capture via V4L2.
 
 ### Added
+
+#### Real Camera Support (V4L2 on Linux)
+- **Webcam capture** - Use real cameras instead of test patterns
+  - V4L2 (Video4Linux2) implementation
+  - Automatic camera detection and enumeration
+  - YUYV 4:2:2 pixel format support
+  - YUV→RGB color conversion
+  - Memory-mapped buffers (zero-copy mmap)
+  - Graceful fallback to test patterns if no camera
+  - ~3% CPU overhead
+  - 17-70ms capture latency
+  - 640×480 VGA default resolution
 
 #### P-Frame Delta Compression
 - **Video delta compression** - 50-70% video bandwidth reduction
@@ -70,6 +82,14 @@ vs Zoom: 72-86% less bandwidth
 ```
 
 ### Documentation (New)
+
+- **V4L2_CAMERAS.md** - Real camera support guide (500+ lines)
+  - V4L2 implementation details
+  - YUYV format and color conversion
+  - Memory-mapped buffers (mmap)
+  - Device enumeration
+  - Troubleshooting guide
+  - Platform comparison
 
 - **PFRAMES.md** - Complete P-frame guide (700+ lines)
   - Technical specifications

@@ -141,8 +141,26 @@ func runCall() {
 
 	// Create camera for local video
 	fps := 15.0
-	camera := device.NewTestCamera(640, 480, fps, pattern)
-	if err := camera.Open(); err != nil {
+	var camera device.Camera
+
+	// Try to use real camera first (V4L2 on Linux)
+	cameras, err := device.ListCameras()
+	if err == nil && len(cameras) > 0 {
+		// Real camera available
+		realCamera, err := device.NewCamera(0) // Use first camera
+		if err == nil {
+			camera = realCamera
+			fmt.Println("📹 Using real camera:", cameras[0].Name)
+		}
+	}
+
+	// Fall back to test camera if no real camera
+	if camera == nil {
+		camera = device.NewTestCamera(640, 480, fps, pattern)
+		fmt.Println("📹 Using test camera (no real camera detected)")
+	}
+
+	if err = camera.Open(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening camera: %v\n", err)
 		os.Exit(1)
 	}
@@ -609,7 +627,7 @@ func runCall() {
 }
 
 // renderSplitScreen renders remote video on top, local video preview on bottom
-func renderSplitScreen(camera *device.TestCamera, remoteFrame *terminal.Frame, localW, localH, remoteW, remoteH int) {
+func renderSplitScreen(camera device.Camera, remoteFrame *terminal.Frame, localW, localH, remoteW, remoteH int) {
 	// Clear screen
 	fmt.Print(color.ClearScreen)
 
