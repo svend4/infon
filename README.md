@@ -132,7 +132,8 @@ Each block = 2×2 pixels encoded as:
 
 ## 📚 Documentation
 
-- 📹 [**Camera Support**](CAMERAS.md) — Real webcams + test cameras (V4L2) ⭐ NEW
+- 📹 [**Camera Support**](CAMERAS.md) — Real webcams + test cameras (V4L2)
+- 🌐 [**Yggdrasil P2P Integration**](YGGDRASIL.md) — Mesh networking and contacts ⭐ NEW
 
 - 🛡️ [**Packet Loss Recovery**](LOSS_RECOVERY.md) — Automatic retransmission and network resilience
 - 🌐 [**Network Streaming**](NETWORK.md) — Stream video over UDP!

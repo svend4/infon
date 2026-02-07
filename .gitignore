@@ -74,4 +74,5 @@ coverage.html
 
 # TVCP specific
 *.babe
-contacts/
+# User contact data
+.tvcp/contacts.json

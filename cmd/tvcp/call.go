@@ -5,11 +5,13 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/svend4/infon/internal/codec/babe"
+	"github.com/svend4/infon/internal/contacts"
 	"github.com/svend4/infon/internal/device"
 	"github.com/svend4/infon/internal/network"
 	"github.com/svend4/infon/pkg/color"
@@ -18,15 +20,16 @@ import (
 
 func runCall() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: tvcp call <host:port> [pattern] [local-port]")
+		fmt.Fprintln(os.Stderr, "Usage: tvcp call <name|host:port> [pattern] [local-port]")
 		fmt.Fprintln(os.Stderr, "\nThis starts a two-way video call.")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
-		fmt.Fprintln(os.Stderr, "  tvcp call localhost:5001 bounce 5000")
-		fmt.Fprintln(os.Stderr, "  tvcp call 192.168.1.100:5001")
+		fmt.Fprintln(os.Stderr, "  tvcp call alice                   # Call contact 'alice'")
+		fmt.Fprintln(os.Stderr, "  tvcp call localhost:5001 bounce   # Local test call")
+		fmt.Fprintln(os.Stderr, "  tvcp call [200:abc::1]:5001       # Yggdrasil call")
 		os.Exit(1)
 	}
 
-	remoteAddr := os.Args[2]
+	nameOrAddr := os.Args[2]
 	pattern := "bounce"
 	localPort := "5000"
 
@@ -35,6 +38,34 @@ func runCall() {
 	}
 	if len(os.Args) >= 5 {
 		localPort = os.Args[4]
+	}
+
+	// Try to resolve from contacts if it's a name (no colons or brackets)
+	remoteAddr := nameOrAddr
+	if !strings.Contains(nameOrAddr, ":") && !strings.Contains(nameOrAddr, "[") {
+		// Looks like a contact name, try to resolve
+		cb, err := contacts.GetDefaultContactBook()
+		if err == nil {
+			if resolvedAddr, err := cb.Resolve(nameOrAddr); err == nil {
+				remoteAddr = resolvedAddr + ":5000" // Default port
+				fmt.Printf("📇 Resolved '%s' to %s\n", nameOrAddr, resolvedAddr)
+
+				// Update last seen
+				cb.UpdateLastSeen(nameOrAddr)
+			}
+		}
+	}
+
+	// Add default port if not specified
+	if !strings.Contains(remoteAddr, "]:") && strings.Count(remoteAddr, ":") == 0 {
+		// No port specified for IPv4/hostname
+		remoteAddr = remoteAddr + ":5000"
+	} else if strings.HasPrefix(remoteAddr, "[") && !strings.Contains(remoteAddr, "]:") {
+		// IPv6 in brackets but no port
+		remoteAddr = remoteAddr + ":5000"
+	} else if strings.Count(remoteAddr, ":") > 1 && !strings.Contains(remoteAddr, "[") {
+		// IPv6 without brackets, add brackets and port
+		remoteAddr = "[" + remoteAddr + "]:5000"
 	}
 
 	fmt.Println("📞 TVCP Call Mode")
