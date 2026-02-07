@@ -61,6 +61,18 @@ This release adds P-frame (delta compression) support for video (50-70% reductio
   - Statistics tracking (clean/noisy frame ratio)
   - Always enabled by default
 
+#### Echo Cancellation (Infrastructure)
+- **Acoustic echo cancellation** - Prepared for speaker loopback integration
+  - Adaptive LMS (Least Mean Squares) filtering
+  - ~100ms filter length (1600 taps @ 16kHz)
+  - Normalized LMS for stability
+  - Double-talk detection
+  - Echo reduction up to 20-30 dB
+  - Filter convergence monitoring
+  - Ready for platform-specific loopback capture
+  - Statistics tracking and reporting
+  - Note: Full integration requires speaker loopback (future enhancement)
+
 #### P-Frame Delta Compression
 - **Video delta compression** - 50-70% video bandwidth reduction
   - I-frames (full frames) and P-frames (delta frames)
@@ -169,18 +181,19 @@ vs Zoom (1.8 Mbps):
 
 ### Development Stats
 
-- **New files**: 5
+- **New files**: 6
   - internal/video/pframe.go (400 lines)
   - internal/audio/vad.go (300 lines)
   - internal/audio/noise_suppression.go (400 lines)
+  - internal/audio/echo_cancellation.go (440 lines)
   - PFRAMES.md (700 lines)
   - VAD.md (600 lines)
   - NOISE_SUPPRESSION.md (500 lines)
   - V4L2_CAMERAS.md (500 lines)
 - **Modified files**: 5 (call.go, frame_packet.go, frame_fragmenter.go, TEXT_CHAT.md, CHANGELOG.md)
-- **New code**: ~1,100 lines (pframe + vad + noise suppression)
+- **New code**: ~1,540 lines (pframe + vad + ns + ec)
 - **Documentation**: ~2,300 lines
-- **Total changes**: ~3,400 lines
+- **Total changes**: ~3,840 lines
 
 ### Known Limitations
 

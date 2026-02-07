@@ -373,6 +373,13 @@ func runCall() {
 	noiseSuppressor := audio.NewNoiseSuppressor(audioFormat.SampleRate, audioFormat.SampleRate/50)
 	noiseSuppressor.SetAggressiveness(0.6) // 0.6 = moderate suppression
 
+	// Echo Cancellation
+	// Note: Full echo cancellation requires speaker loopback capture
+	// This is prepared for future integration when loopback is available
+	echoCanceller := audio.NewEchoCanceller(audioFormat.SampleRate, audioFormat.SampleRate/50)
+	echoCanceller.SetStepSize(0.01) // Conservative adaptation
+	_ = echoCanceller // Prepared for future use
+
 	// Goroutine for sending audio
 	go func() {
 		// 20ms audio chunks (good balance between latency and efficiency)
@@ -542,6 +549,17 @@ func runCall() {
 			fmt.Printf("  Clean frames: %d (%.1f%%)\n", nsStats.CleanFrames, nsStats.CleanRatio)
 			fmt.Printf("  Noisy frames: %d (%.1f%%)\n", nsStats.NoisyFrames, 100.0-nsStats.CleanRatio)
 			fmt.Printf("  Calibrated: %v\n", nsStats.Calibrated)
+
+			// Show echo cancellation statistics (when speaker loopback available)
+			ecStats := echoCanceller.GetStatistics()
+			if ecStats.TotalFrames > 0 {
+				fmt.Printf("\nEcho Cancellation:\n")
+				fmt.Printf("  Total frames: %d\n", ecStats.TotalFrames)
+				fmt.Printf("  Echo detected: %d (%.1f%%)\n", ecStats.EchoDetected, ecStats.DetectionRate)
+				fmt.Printf("  Echo suppressed: %d\n", ecStats.EchoSuppressed)
+				fmt.Printf("  Avg reduction: %.1f%%\n", ecStats.AvgReduction)
+				fmt.Printf("  Filter converged: %v\n", ecStats.FilterConverged)
+			}
 
 			// Stop and save recording
 			if rec != nil && rec.IsRecording() {
