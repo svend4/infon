@@ -14,6 +14,7 @@ const (
 	PacketTypeHandshake uint8 = 0x04 // Connection handshake
 	PacketTypeKeepAlive uint8 = 0x05 // Keep-alive ping
 	PacketTypeTextChat  uint8 = 0x06 // Text chat message
+	PacketTypeScreen    uint8 = 0x07 // Screen sharing (terminal output)
 )
 
 // Packet represents a network packet

@@ -55,6 +55,10 @@ func main() {
 		runPlayback()
 	case "export":
 		runExport()
+	case "share":
+		runShare()
+	case "receive-screen":
+		runReceiveScreen()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -74,6 +78,8 @@ func printUsage() {
 	fmt.Println("  daemon              Start TVCP daemon")
 	fmt.Println("  call <host:port>    Two-way video call (send + receive)")
 	fmt.Println("  chat <host:port>    Text chat session (messages only)")
+	fmt.Println("  share <addr> <cmd>  Share terminal output (screen sharing)")
+	fmt.Println("  receive-screen      Receive shared screen")
 	fmt.Println("  playback <file>     Play recorded call")
 	fmt.Println("  export <file>       Export recording to MP4/WebM")
 	fmt.Println("  contacts            Manage contacts (add/list/remove)")
@@ -122,4 +128,18 @@ func runTest() {
 	fmt.Println("  - Network connectivity test")
 	fmt.Println("\nFor updates, check: https://github.com/svend4/infon")
 	os.Exit(0)
+}
+
+func runShare() {
+	if err := handleShareCommand(os.Args[2:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runReceiveScreen() {
+	if err := handleReceiveScreenCommand(os.Args[2:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }

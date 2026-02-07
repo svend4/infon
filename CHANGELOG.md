@@ -91,6 +91,25 @@ This release adds P-frame (delta compression) support for video (50-70% reductio
   - Universal playback on all devices and platforms
   - Command: `tvcp export recording.tvcp output.mp4`
 
+#### Screen Sharing (Terminal Output)
+- **Terminal output streaming** - Share command output in real-time
+  - Share any command's terminal output with remote peers
+  - Real-time streaming at 15 FPS
+  - Low bandwidth: 50-150 kbps (vs 5+ Mbps traditional screen sharing)
+  - Perfect for log monitoring, system monitoring, and build output
+  - Command execution with output capture
+  - Automatic scrolling buffer management
+  - Simple commands: `tvcp share` and `tvcp receive-screen`
+  - Full terminal color support (RGB foreground/background)
+  - Use cases: tail -f logs, htop, docker logs, build output
+  - P2P encrypted over Yggdrasil network
+  - Live bandwidth and FPS statistics
+  - Minimal latency: 20-100ms
+  - Command examples:
+    - `tvcp share peer:5000 "tail -f /var/log/syslog"`
+    - `tvcp share peer:5000 "htop"`
+    - `tvcp share peer:5000 "npm run build"`
+
 #### P-Frame Delta Compression
 - **Video delta compression** - 50-70% video bandwidth reduction
   - I-frames (full frames) and P-frames (delta frames)
@@ -199,22 +218,25 @@ vs Zoom (1.8 Mbps):
 
 ### Development Stats
 
-- **New files**: 9
+- **New files**: 12
   - internal/video/pframe.go (400 lines)
   - internal/audio/vad.go (300 lines)
   - internal/audio/noise_suppression.go (400 lines)
   - internal/audio/echo_cancellation.go (440 lines)
   - internal/export/video_export.go (374 lines)
+  - internal/screen/screen_share.go (350 lines)
   - cmd/tvcp/export.go (155 lines)
+  - cmd/tvcp/share.go (275 lines)
   - PFRAMES.md (700 lines)
   - VAD.md (600 lines)
   - NOISE_SUPPRESSION.md (577 lines)
   - EXPORT.md (650 lines)
+  - SCREEN_SHARING.md (850 lines)
   - V4L2_CAMERAS.md (500 lines)
-- **Modified files**: 7 (call.go, frame_packet.go, frame_fragmenter.go, player.go, main.go, TEXT_CHAT.md, CHANGELOG.md)
-- **New code**: ~2,069 lines (pframe + vad + ns + ec + export)
-- **Documentation**: ~3,027 lines
-- **Total changes**: ~5,096 lines
+- **Modified files**: 9 (call.go, frame_packet.go, frame_fragmenter.go, player.go, packet.go, main.go, README.md, TEXT_CHAT.md, CHANGELOG.md)
+- **New code**: ~2,694 lines (pframe + vad + ns + ec + export + screen)
+- **Documentation**: ~3,877 lines
+- **Total changes**: ~6,571 lines
 
 ### Known Limitations
 
