@@ -59,6 +59,8 @@ func main() {
 		runShare()
 	case "receive-screen":
 		runReceiveScreen()
+	case "group":
+		runGroup()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -77,6 +79,7 @@ func printUsage() {
 	fmt.Println("\nCommands:")
 	fmt.Println("  daemon              Start TVCP daemon")
 	fmt.Println("  call <host:port>    Two-way video call (send + receive)")
+	fmt.Println("  group <peers...>    Group video call (multiple participants)")
 	fmt.Println("  chat <host:port>    Text chat session (messages only)")
 	fmt.Println("  share <addr> <cmd>  Share terminal output (screen sharing)")
 	fmt.Println("  receive-screen      Receive shared screen")
@@ -139,6 +142,13 @@ func runShare() {
 
 func runReceiveScreen() {
 	if err := handleReceiveScreenCommand(os.Args[2:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runGroup() {
+	if err := handleGroupCallCommand(os.Args[2:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
