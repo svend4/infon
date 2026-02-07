@@ -365,6 +365,10 @@ func runCall() {
 		}
 	}()
 
+	// Voice Activity Detection
+	vad := audio.NewVAD(audioFormat.SampleRate)
+	vad.SetSensitivity(0.7) // 0.7 = balanced sensitivity
+
 	// Goroutine for sending audio
 	go func() {
 		// 20ms audio chunks (good balance between latency and efficiency)
@@ -383,9 +387,16 @@ func runCall() {
 					continue
 				}
 
-				// Record audio if recording
+				// Record audio if recording (always record, even during silence)
 				if rec != nil && rec.IsRecording() {
 					rec.RecordAudio(buffer[:n])
+				}
+
+				// Voice Activity Detection - only send if speech detected
+				isSpeaking := vad.Process(buffer[:n])
+				if !isSpeaking {
+					// Skip sending during silence to save bandwidth
+					continue
 				}
 
 				// Create audio packet
@@ -508,6 +519,14 @@ func runCall() {
 			fmt.Printf("  Dropped: %d\n", jitterStats.Dropped)
 			fmt.Printf("  Underruns: %d\n", jitterStats.Underruns)
 			fmt.Printf("  Current delay: %dms\n", jitterStats.CurrentDelay.Milliseconds())
+
+			// Show VAD statistics
+			vadStats := vad.GetStatistics()
+			fmt.Printf("\nVoice Activity Detection:\n")
+			fmt.Printf("  Total frames: %d\n", vadStats.TotalFrames)
+			fmt.Printf("  Speech frames: %d (%.1f%%)\n", vadStats.SpeechFrames, vadStats.ActivityRate)
+			fmt.Printf("  Silence frames: %d (%.1f%%)\n", vadStats.SilenceFrames, 100.0-vadStats.ActivityRate)
+			fmt.Printf("  Bandwidth saved: ~%.1f%%\n", 100.0-vadStats.ActivityRate)
 
 			// Stop and save recording
 			if rec != nil && rec.IsRecording() {
@@ -658,6 +677,7 @@ func runCall() {
 				elapsed := now.Sub(startTime)
 				lossStats := lossDetector.GetStatistics()
 				jitterStats := audioJitterBuffer.GetStatistics()
+				vadStats := vad.GetStatistics()
 
 				// Update quality controller with network stats
 				qualityController.UpdateNetworkStats(lossStats.LossRate, jitterStats.CurrentDelay)
@@ -665,9 +685,15 @@ func runCall() {
 				// Get current quality level
 				quality := qualityController.GetCurrentQuality()
 
-				fmt.Printf("%s[Call] Video: %d/%d (%.1f/%.1f FPS → %d FPS) | Audio: %d/%d | Loss: %.1f%% | Time: %.0fs%s\n",
+				// Determine VAD indicator
+				vadIndicator := "🔇"
+				if vadStats.IsSpeaking {
+					vadIndicator = "🎤"
+				}
+
+				fmt.Printf("%s[Call] Video: %d/%d (%.1f/%.1f FPS → %d FPS) | Audio: %d/%d %s (VAD: %.1f%%) | Loss: %.1f%% | Time: %.0fs%s\n",
 					color.Reset, sc, rc, float64(sc)/elapsed.Seconds(), float64(rc)/elapsed.Seconds(),
-					quality.FPS, asc, arc, lossStats.LossRate, elapsed.Seconds(), color.Reset)
+					quality.FPS, asc, arc, vadIndicator, vadStats.ActivityRate, lossStats.LossRate, elapsed.Seconds(), color.Reset)
 				lastStatsTime = now
 			}
 		}
