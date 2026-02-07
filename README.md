@@ -69,6 +69,20 @@ make build
 
 📖 **[Read the full demo guide →](DEMO.md)**
 
+### Try Live Video Preview
+
+```bash
+# Watch live animated video in your terminal!
+./bin/tvcp preview
+
+# Try different patterns
+./bin/tvcp preview bounce    # bouncing ball
+./bin/tvcp preview gradient  # flowing colors
+./bin/tvcp preview noise     # TV static
+```
+
+🎥 **[Read the preview guide →](PREVIEW.md)**
+
 ### Future: Making Calls (Coming Soon)
 
 ```bash
@@ -103,7 +117,8 @@ Each block = 2×2 pixels encoded as:
 
 ## 📚 Documentation
 
-- 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Try the working prototype! ⭐
+- 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video streaming! ⭐ NEW
+- 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering ⭐
 - 📖 [Business Plan](tvcp-business-plan.md) — Full market analysis and roadmap
 - 🔬 [Technical Appendix](tvcp-appendix.md) — Deep dive into algorithms and protocols
 - 📋 [Repository Review](REPOSITORY_REVIEW.md) — Current status and recommendations
@@ -115,13 +130,18 @@ Each block = 2×2 pixels encoded as:
 - [x] Repository setup
 - [x] Setup CI/CD (GitHub Actions)
 - [x] **Proof-of-concept demo** — Image-to-terminal renderer working!
+- [x] **Live video preview** — Real-time streaming at 15 FPS! 🎉
 - [ ] Fork [Say](https://github.com/svanichkin/say) project
 
-### Phase 1: MVP (Weeks 3-8)
-- [ ] Stable 1:1 audio+video calls
+### Phase 1: MVP (Weeks 3-8) — **In Progress**
+- [x] Video capture interface and simulator
+- [x] Real-time frame encoding (15 FPS)
+- [x] Frame timing and synchronization
+- [ ] Actual camera capture (ffmpeg/gocv)
+- [ ] Network transport (UDP)
 - [ ] Yggdrasil integration
-- [ ] Adaptive bitrate
-- [ ] Auto-reconnect
+- [ ] Audio encoding (G.722)
+- [ ] Two-way video calls
 
 ### Phase 2: Expansion (Weeks 9-16)
 - [ ] Text chat

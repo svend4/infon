@@ -33,6 +33,8 @@ func main() {
 		runDemo()
 	case "generate":
 		runGenerate()
+	case "preview":
+		runPreview()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -53,6 +55,7 @@ func printUsage() {
 	fmt.Println("  call <address>      Make a video call")
 	fmt.Println("  test                Run video/audio test")
 	fmt.Println("  demo <image>        Display image in terminal (proof-of-concept)")
+	fmt.Println("  preview [pattern]   Live camera preview (animated test patterns)")
 	fmt.Println("  generate <file>     Generate a test image")
 	fmt.Println("  version             Show version information")
 	fmt.Println("  help                Show this help message")
