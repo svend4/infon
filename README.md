@@ -63,7 +63,9 @@ make build
 
 ### Requirements
 - Go 1.21 or higher
-- Linux with V4L2 support (for real cameras)
+- **Linux:** ALSA audio (libasound2-dev), V4L2 for cameras
+- **macOS:** CoreAudio (built-in), cameras via future implementation
+- **Windows:** WASAPI (built-in), cameras via future implementation
 - Terminal with TrueColor support (recommended)
 
 ## 🚀 Quick Start

@@ -110,6 +110,23 @@ This release adds P-frame (delta compression) support for video (50-70% reductio
     - `tvcp share peer:5000 "htop"`
     - `tvcp share peer:5000 "npm run build"`
 
+#### Cross-Platform Audio Support
+- **macOS and Windows audio** - Native audio APIs for all platforms
+  - macOS: CoreAudio framework integration
+  - Windows: WASAPI (Windows Audio Session API)
+  - Linux: ALSA (existing, production-ready)
+  - Unified interface across all platforms
+  - Platform-specific implementations via build tags
+  - Default device support on all platforms
+  - Configurable sample rate, channels, bit depth
+  - Device enumeration (list available audio devices)
+  - Status: Basic implementation (placeholders for callbacks/COM)
+  - Full implementation requires:
+    - macOS: Audio callback integration
+    - Windows: Complete COM interface calls
+  - Enables TVCP to run natively on macOS and Windows
+  - Same audio code works on all platforms
+
 #### P-Frame Delta Compression
 - **Video delta compression** - 50-70% video bandwidth reduction
   - I-frames (full frames) and P-frames (delta frames)
@@ -218,25 +235,32 @@ vs Zoom (1.8 Mbps):
 
 ### Development Stats
 
-- **New files**: 12
+- **New files**: 19
   - internal/video/pframe.go (400 lines)
   - internal/audio/vad.go (300 lines)
   - internal/audio/noise_suppression.go (400 lines)
   - internal/audio/echo_cancellation.go (440 lines)
+  - internal/audio/audio_darwin.go (480 lines) - macOS CoreAudio
+  - internal/audio/audio_windows.go (380 lines) - Windows WASAPI
   - internal/export/video_export.go (374 lines)
   - internal/screen/screen_share.go (350 lines)
+  - internal/group/group_call.go (300 lines) - WIP
+  - internal/group/audio_mixer.go (200 lines) - WIP
+  - internal/group/video_grid.go (350 lines) - WIP
   - cmd/tvcp/export.go (155 lines)
   - cmd/tvcp/share.go (275 lines)
+  - cmd/tvcp/group_call.go (400 lines) - WIP
   - PFRAMES.md (700 lines)
   - VAD.md (600 lines)
   - NOISE_SUPPRESSION.md (577 lines)
   - EXPORT.md (650 lines)
   - SCREEN_SHARING.md (850 lines)
+  - CROSS_PLATFORM_AUDIO.md (600 lines)
   - V4L2_CAMERAS.md (500 lines)
-- **Modified files**: 9 (call.go, frame_packet.go, frame_fragmenter.go, player.go, packet.go, main.go, README.md, TEXT_CHAT.md, CHANGELOG.md)
-- **New code**: ~2,694 lines (pframe + vad + ns + ec + export + screen)
-- **Documentation**: ~3,877 lines
-- **Total changes**: ~6,571 lines
+- **Modified files**: 10 (call.go, frame_packet.go, frame_fragmenter.go, player.go, packet.go, main.go, README.md, TEXT_CHAT.md, CHANGELOG.md, video_grid.go)
+- **New code**: ~5,554 lines (pframe + vad + ns + ec + export + screen + xplatform audio + group WIP)
+- **Documentation**: ~4,477 lines
+- **Total changes**: ~10,031 lines
 
 ### Known Limitations
 
