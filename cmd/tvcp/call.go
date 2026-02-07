@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -15,30 +16,75 @@ import (
 	"github.com/svend4/infon/internal/contacts"
 	"github.com/svend4/infon/internal/device"
 	"github.com/svend4/infon/internal/network"
+	"github.com/svend4/infon/internal/recorder"
 	"github.com/svend4/infon/pkg/color"
 	"github.com/svend4/infon/pkg/terminal"
 )
 
 func runCall() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: tvcp call <name|host:port> [pattern] [local-port]")
+		fmt.Fprintln(os.Stderr, "Usage: tvcp call [options] <name|host:port> [pattern] [local-port]")
+		fmt.Fprintln(os.Stderr, "\nOptions:")
+		fmt.Fprintln(os.Stderr, "  --record              Record the call")
+		fmt.Fprintln(os.Stderr, "  --output <file>       Output file for recording (default: auto-generated)")
 		fmt.Fprintln(os.Stderr, "\nThis starts a two-way video call.")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
-		fmt.Fprintln(os.Stderr, "  tvcp call alice                   # Call contact 'alice'")
-		fmt.Fprintln(os.Stderr, "  tvcp call localhost:5001 bounce   # Local test call")
-		fmt.Fprintln(os.Stderr, "  tvcp call [200:abc::1]:5001       # Yggdrasil call")
+		fmt.Fprintln(os.Stderr, "  tvcp call alice                          # Call contact 'alice'")
+		fmt.Fprintln(os.Stderr, "  tvcp call --record alice                 # Record the call")
+		fmt.Fprintln(os.Stderr, "  tvcp call --record --output my-call.tvcp alice")
+		fmt.Fprintln(os.Stderr, "  tvcp call localhost:5001 bounce          # Local test call")
+		fmt.Fprintln(os.Stderr, "  tvcp call [200:abc::1]:5001              # Yggdrasil call")
 		os.Exit(1)
 	}
 
-	nameOrAddr := os.Args[2]
+	// Parse flags
+	var enableRecording bool
+	var outputFile string
+	args := os.Args[2:]
+	var positionalArgs []string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--record" {
+			enableRecording = true
+		} else if arg == "--output" {
+			if i+1 < len(args) {
+				outputFile = args[i+1]
+				i++ // Skip next arg
+			} else {
+				fmt.Fprintln(os.Stderr, "Error: --output requires a filename")
+				os.Exit(1)
+			}
+		} else if !strings.HasPrefix(arg, "--") {
+			positionalArgs = append(positionalArgs, arg)
+		}
+	}
+
+	if len(positionalArgs) < 1 {
+		fmt.Fprintln(os.Stderr, "Error: missing address argument")
+		os.Exit(1)
+	}
+
+	nameOrAddr := positionalArgs[0]
 	pattern := "bounce"
 	localPort := "5000"
 
-	if len(os.Args) >= 4 {
-		pattern = os.Args[3]
+	if len(positionalArgs) >= 2 {
+		pattern = positionalArgs[1]
 	}
-	if len(os.Args) >= 5 {
-		localPort = os.Args[4]
+	if len(positionalArgs) >= 3 {
+		localPort = positionalArgs[2]
+	}
+
+	// Generate default output file if recording but no output specified
+	if enableRecording && outputFile == "" {
+		// Create recordings directory
+		recordingsDir := filepath.Join(os.Getenv("HOME"), ".tvcp", "recordings")
+		os.MkdirAll(recordingsDir, 0755)
+
+		// Generate filename: call-YYYYMMDD-HHMMSS.tvcp
+		timestamp := time.Now().Format("20060102-150405")
+		outputFile = filepath.Join(recordingsDir, fmt.Sprintf("call-%s.tvcp", timestamp))
 	}
 
 	// Try to resolve from contacts if it's a name (no colons or brackets)
@@ -169,6 +215,17 @@ func runCall() {
 	fmt.Println("Call connected! Press Ctrl+C to hang up")
 	fmt.Print(color.ClearScreen)
 
+	// Initialize recorder if enabled
+	var rec *recorder.Recorder
+	if enableRecording {
+		rec = recorder.NewRecorder(localWidth, localHeight, audioFormat.SampleRate)
+		if err := rec.Start(outputFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting recording: %v\n", err)
+		} else {
+			fmt.Printf("🔴 Recording to: %s\n", outputFile)
+		}
+	}
+
 	// Goroutine for sending (local video)
 	go func() {
 		ticker := time.NewTicker(time.Duration(1000.0/fps) * time.Millisecond)
@@ -185,6 +242,11 @@ func runCall() {
 
 				// Encode to terminal frame
 				frame := babe.ImageToFrame(img, localWidth, localHeight)
+
+				// Record frame if recording
+				if rec != nil && rec.IsRecording() {
+					rec.RecordFrame(frame)
+				}
 
 				// Fragment frame
 				fragments, err := network.FragmentFrame(frame, uint32(sendCount))
@@ -230,6 +292,11 @@ func runCall() {
 				n, err := audioSource.Read(buffer)
 				if err != nil || n == 0 {
 					continue
+				}
+
+				// Record audio if recording
+				if rec != nil && rec.IsRecording() {
+					rec.RecordAudio(buffer[:n])
 				}
 
 				// Create audio packet
@@ -297,6 +364,21 @@ func runCall() {
 			fmt.Printf("  Duplicates: %d\n", lossStats.Duplicate)
 			fmt.Printf("  Retransmissions: %d\n", retransStats.TotalRetransmits)
 			fmt.Printf("  NACKs sent: %d\n", retransStats.TotalNACKs)
+
+			// Stop and save recording
+			if rec != nil && rec.IsRecording() {
+				fmt.Printf("\n💾 Saving recording...\n")
+				if err := rec.Stop(); err != nil {
+					fmt.Fprintf(os.Stderr, "Error saving recording: %v\n", err)
+				} else {
+					frameCount, audioCount, duration := rec.GetStats()
+					fmt.Printf("✓ Recording saved: %s\n", outputFile)
+					fmt.Printf("  Duration: %.1fs\n", duration.Seconds())
+					fmt.Printf("  Video frames: %d\n", frameCount)
+					fmt.Printf("  Audio chunks: %d\n", audioCount)
+				}
+			}
+
 			return
 
 		default:
