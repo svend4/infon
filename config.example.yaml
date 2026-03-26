@@ -1,0 +1,220 @@
+# Конфигурация TVCP
+# Копируйте в config.yaml и настройте под свои нужды
+
+# ═══════════════════════════════════════════════════════════════
+# Core - Основные настройки (стабильные)
+# ═══════════════════════════════════════════════════════════════
+core:
+  # Аудио настройки
+  audio:
+    sample_rate: 16000          # Частота дискретизации (8000, 16000, 48000)
+    channels: 1                 # Количество каналов (1=mono, 2=stereo)
+    frame_size: 160             # Размер фрейма в сэмплах
+    buffer_size: 1024           # Размер буфера
+
+  # Видео настройки
+  video:
+    width: 640                  # Ширина видео
+    height: 480                 # Высота видео
+    fps: 30                     # Кадров в секунду
+    codec: "h264"               # Кодек (h264, vp8, vp9)
+
+  # Сеть
+  network:
+    port: 8080                  # Порт для подключения
+    protocol: "udp"             # Протокол (udp, tcp)
+    max_packet_size: 1500       # Максимальный размер пакета
+
+# ═══════════════════════════════════════════════════════════════
+# Experimental - Экспериментальные функции
+# ⚠️  Могут быть нестабильными, используйте на свой риск
+# ═══════════════════════════════════════════════════════════════
+experimental:
+  # Глобальное включение/выключение всех experimental функций
+  enabled: true
+
+  # WebRTC Audio Processing [Beta]
+  # Высококачественная обработка аудио
+  webrtc_processing:
+    enabled: true
+
+    # Acoustic Echo Cancellation v3
+    aec:
+      enabled: true
+      filter_length: 512        # Длина адаптивного фильтра
+
+    # Noise Suppression
+    noise_suppression:
+      enabled: true
+      level: 2                  # Уровень подавления (0-3)
+
+    # Automatic Gain Control
+    agc:
+      enabled: true
+      target_gain_db: 0         # Целевое усиление в dB
+
+    # Voice Activity Detection
+    vad:
+      enabled: true
+      threshold: 500000         # Порог детекции речи
+
+  # FFT Bandpass Filters [Beta]
+  # Частотная фильтрация
+  fft_filters:
+    enabled: false              # ⚠️ Отключено по умолчанию (высокая нагрузка)
+    fft_size: 512               # Размер FFT (power of 2: 256-2048)
+
+    # Preset: voice, music, broadcast, telephone
+    preset: "voice"
+
+    # Или кастомные частоты
+    custom:
+      low_cutoff_hz: 300        # Нижняя частота среза
+      high_cutoff_hz: 3400      # Верхняя частота среза
+      noise_suppression: true
+      suppression_gain: 0.7     # Сила подавления (0-1)
+
+  # Advanced AEC Algorithms [Alpha]
+  # ⚠️  Экспериментально! RLS не для real-time
+  advanced_aec:
+    enabled: false              # ⚠️ Отключено по умолчанию
+
+    # Алгоритм: nlms или rls
+    algorithm: "nlms"           # NLMS рекомендуется для real-time
+
+    filter_length: 512          # Длина фильтра (64-2048)
+
+    # NLMS параметры
+    nlms:
+      step_size: 0.5            # Скорость обучения (0.1-0.9)
+      delta: 0.01               # Регуляризация
+
+    # RLS параметры (только для offline обработки!)
+    rls:
+      forgetting_factor: 0.99   # Фактор забывания (0.98-0.9999)
+      delta: 1.0                # Инициализация P матрицы
+
+  # Hardware Acceleration [Alpha]
+  # GPU-ускорение видео кодеков
+  hardware_accel:
+    enabled: true
+
+    # Автоопределение доступного ускорителя
+    auto_detect: true
+
+    # Или явно указать: nvidia, intel_qsv, amd, apple_vt, vaapi, none
+    type: ""
+
+    # GPU device ID (для multi-GPU систем)
+    device_id: 0
+
+    # Фолбэк на CPU если GPU недоступен
+    fallback_to_cpu: true
+
+    # Конкретные платформы
+    nvidia:
+      enabled: true
+      max_instances: 32
+
+    intel_qsv:
+      enabled: true
+      max_instances: 16
+
+    amd:
+      enabled: true
+      max_instances: 16
+
+# ═══════════════════════════════════════════════════════════════
+# Server - Серверные компоненты
+# ═══════════════════════════════════════════════════════════════
+server:
+  # SFU Server для групповых звонков
+  sfu:
+    enabled: true
+    listen_addr: "0.0.0.0:9000"
+
+    # Настройки комнат
+    rooms:
+      max_participants: 50      # Максимум участников в комнате
+      timeout_seconds: 30       # Таймаут неактивных участников
+
+  # Signaling Server
+  signaling:
+    enabled: false
+    listen_addr: "0.0.0.0:8081"
+
+  # TURN/STUN Server
+  turn:
+    enabled: false
+    listen_addr: "0.0.0.0:3478"
+
+# ═══════════════════════════════════════════════════════════════
+# Logging - Логирование
+# ═══════════════════════════════════════════════════════════════
+logging:
+  level: "info"                 # debug, info, warn, error
+  format: "text"                # text, json
+  output: "stdout"              # stdout, stderr, file
+  file: "tvcp.log"              # Если output=file
+
+# ═══════════════════════════════════════════════════════════════
+# Metrics - Метрики и мониторинг
+# ═══════════════════════════════════════════════════════════════
+metrics:
+  enabled: true
+  prometheus:
+    enabled: false
+    port: 9090
+
+  # Сбор статистики производительности
+  performance:
+    enabled: true
+    interval_seconds: 10
+
+# ═══════════════════════════════════════════════════════════════
+# Profiles - Готовые профили настроек
+# ═══════════════════════════════════════════════════════════════
+# Раскомментируйте нужный профиль и адаптируйте под себя
+
+# profiles:
+#   # Минимальные требования (экономия ресурсов)
+#   low_latency:
+#     core:
+#       audio:
+#         sample_rate: 8000
+#         frame_size: 80
+#     experimental:
+#       enabled: false
+#
+#   # Максимальное качество
+#   high_quality:
+#     core:
+#       audio:
+#         sample_rate: 48000
+#         channels: 2
+#       video:
+#         width: 1920
+#         height: 1080
+#         fps: 60
+#     experimental:
+#       webrtc_processing:
+#         enabled: true
+#       fft_filters:
+#         enabled: true
+#         preset: "broadcast"
+#       hardware_accel:
+#         enabled: true
+#
+#   # Экспериментальный (все функции включены)
+#   bleeding_edge:
+#     experimental:
+#       enabled: true
+#       webrtc_processing:
+#         enabled: true
+#       fft_filters:
+#         enabled: true
+#       advanced_aec:
+#         enabled: true
+#         algorithm: "nlms"
+#       hardware_accel:
+#         enabled: true
