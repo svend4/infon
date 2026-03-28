@@ -8,6 +8,7 @@ Technical documentation for TVCP development.
 - `protocol-spec.md` — Network protocol specification
 - `babe-format-spec.md` — .babe codec format specification
 - `yggdrasil-integration.md` — Yggdrasil mesh network integration
+- `dns-peer-discovery.md` — DNS-based peer discovery (inspired by «Doom Over DNS»): using DNS TXT records for human-readable addressing (`user@domain`)
 - `terminal-compatibility.md` — Terminal compatibility matrix
 - `api.md` — Public API documentation
 - `contributing.md` — Contribution guidelines
