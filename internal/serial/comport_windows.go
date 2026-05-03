@@ -5,7 +5,6 @@ package serial
 import (
 	"fmt"
 	"syscall"
-	"time"
 	"unsafe"
 )
 
