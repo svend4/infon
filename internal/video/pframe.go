@@ -222,8 +222,8 @@ func SerializeEncodedFrame(encoded *EncodedFrame) []byte {
 	// P-frame format:
 	// - Type: 1 byte (1)
 	// - Delta count: 2 bytes
-	// - Delta blocks: count*12 bytes (x:2, y:2, glyph:4, fg:3, bg:3)
-	size := 1 + 2 + len(encoded.DeltaBlocks)*12
+	// - Delta blocks: count*14 bytes (x:2, y:2, glyph:4, fg:3, bg:3)
+	size := 1 + 2 + len(encoded.DeltaBlocks)*14
 	data := make([]byte, size)
 
 	data[0] = byte(FrameTypeP)
