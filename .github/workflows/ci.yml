@@ -43,8 +43,13 @@ jobs:
     - name: Run go vet
       run: go vet ./...
 
+    - name: Create coverage directory
+      run: |
+        if [ ! -d coverage ]; then mkdir coverage; fi
+      shell: bash
+
     - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      run: go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic ./...
 
     - name: Build
       run: go build -v ./cmd/tvcp
@@ -61,7 +66,7 @@ jobs:
       uses: codecov/codecov-action@v4
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.22'
       with:
-        file: ./coverage.out
+        file: ./coverage/coverage.out
         flags: unittests
         name: codecov-umbrella
 
