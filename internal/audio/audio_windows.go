@@ -113,7 +113,7 @@ static HRESULT InitializeAudioClient(void* audioClient, DWORD shareMode, DWORD s
 }
 
 // Specialized helper for IAudioCaptureClient::ReleaseBuffer
-static HRESULT ReleaseBuffer(void* captureClient, UINT32 numFrames) {
+static HRESULT CaptureReleaseBuffer(void* captureClient, UINT32 numFrames) {
 	typedef HRESULT (*Method)(void*, UINT32);
 	Method method = (Method)(((void***)captureClient)[0][4]); // ReleaseBuffer is at index 4
 	return method(captureClient, numFrames);
@@ -541,7 +541,7 @@ func (c *WASAPICapture) captureAudio() {
 	}
 
 	// Release buffer (IAudioCaptureClient::ReleaseBuffer)
-	C.ReleaseBuffer(c.captureClient, numFrames)
+	C.CaptureReleaseBuffer(c.captureClient, numFrames)
 }
 
 func (c *WASAPICapture) Close() error {
