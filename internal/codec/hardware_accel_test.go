@@ -159,7 +159,7 @@ func TestHardwareAcceleratorStatistics(t *testing.T) {
 	// Encode some frames
 	input := make([]byte, 640*480*3/2)
 	for i := 0; i < 10; i++ {
-		accel.EncodeFrame(input, 640, 480)
+		_, _ = accel.EncodeFrame(input, 640, 480)
 	}
 
 	stats = accel.GetStatistics()
@@ -183,7 +183,7 @@ func TestHardwareAcceleratorReset(t *testing.T) {
 
 	// Encode a frame
 	input := make([]byte, 640*480*3/2)
-	accel.EncodeFrame(input, 640, 480)
+	_, _ = accel.EncodeFrame(input, 640, 480)
 
 	stats := accel.GetStatistics()
 	if stats.FramesEncoded != 1 {
@@ -562,7 +562,7 @@ func BenchmarkHardwareEncodeH264_640x480(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		accel.EncodeFrame(input, 640, 480)
+		_, _ = accel.EncodeFrame(input, 640, 480)
 	}
 }
 

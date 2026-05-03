@@ -203,7 +203,7 @@ func (ss *ScreenShare) Stop() error {
 
 	// Kill command
 	if ss.cmd != nil && ss.cmd.Process != nil {
-		ss.cmd.Process.Kill()
+		_ = ss.cmd.Process.Kill()
 	}
 
 	close(ss.frameChan)

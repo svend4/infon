@@ -124,7 +124,7 @@ func TestBaseCodec(t *testing.T) {
 	}
 
 	// Test reset
-	bc.Reset()
+	_ = bc.Reset()
 	stats = bc.GetStatistics()
 	if stats.FramesEncoded != 0 {
 		t.Errorf("After reset, FramesEncoded = %d, expected 0", stats.FramesEncoded)
@@ -507,7 +507,7 @@ func BenchmarkH264Encode(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		codec.Encode(yuv)
+		_, _ = codec.Encode(yuv)
 	}
 }
 
@@ -520,7 +520,7 @@ func BenchmarkOpusEncode(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		codec.Encode(pcm)
+		_, _ = codec.Encode(pcm)
 	}
 }
 
@@ -533,6 +533,6 @@ func BenchmarkPCMEncode(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		codec.Encode(pcm)
+		_, _ = codec.Encode(pcm)
 	}
 }
