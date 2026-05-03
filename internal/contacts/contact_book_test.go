@@ -385,9 +385,9 @@ func TestContactBook_GetFrequent(t *testing.T) {
 
 	cb, _ := NewContactBook()
 
-	cb.Add(&Contact{Name: "Alice", Address: "addr1", TotalCalls: 10})
-	cb.Add(&Contact{Name: "Bob", Address: "addr2", TotalCalls: 25})
-	cb.Add(&Contact{Name: "Charlie", Address: "addr3", TotalCalls: 15})
+	_ = cb.Add(&Contact{Name: "Alice", Address: "addr1", TotalCalls: 10})
+	_ = cb.Add(&Contact{Name: "Bob", Address: "addr2", TotalCalls: 25})
+	_ = cb.Add(&Contact{Name: "Charlie", Address: "addr3", TotalCalls: 15})
 
 	frequent := cb.GetFrequent(2)
 

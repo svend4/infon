@@ -494,7 +494,7 @@ func BenchmarkBackgroundProcessor_Process_Image(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bp.Process(img)
+		_, _ = bp.Process(img)
 	}
 }
 
