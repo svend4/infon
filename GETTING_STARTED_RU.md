@@ -85,6 +85,28 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 tvcp version
 ```
 
+**Android (Termux):**
+
+См. подробное руководство: [TERMUX_ANDROID.md](TERMUX_ANDROID.md)
+
+Краткая установка:
+```bash
+# Установить зависимости в Termux
+pkg install git golang make
+
+# Клонировать и собрать
+git clone https://github.com/svend4/infon
+cd infon
+make build
+
+# Установить в PATH
+mkdir -p ~/.local/bin
+cp ./bin/tvcp ~/.local/bin/
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+```
+
+**Примечание:** На Android работает без камеры/микрофона, но может использоваться как relay-сервер или для просмотра видео.
+
 ### Обновление зависимостей
 
 Если вы клонировали репозиторий давно и пакеты устарели:

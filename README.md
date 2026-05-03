@@ -79,12 +79,14 @@ go build -o bin/tvcp.exe ./cmd/tvcp
 📖 **Platform-specific guides:**
 - **Windows:** [BUILD_WINDOWS.md](BUILD_WINDOWS.md)
 - **Linux/macOS:** [GETTING_STARTED.md](GETTING_STARTED.md)
+- **Android (Termux):** [TERMUX_ANDROID.md](TERMUX_ANDROID.md) 📱
 
 ### Requirements
 - Go 1.21 or higher
 - **Linux:** ALSA audio (libasound2-dev), V4L2 for cameras
 - **macOS:** CoreAudio (built-in), cameras via future implementation
 - **Windows:** WASAPI (built-in), cameras via future implementation
+- **Android (Termux):** Works as relay server (no camera/audio)
 - Terminal with TrueColor support (recommended)
 
 ## 🚀 Quick Start
