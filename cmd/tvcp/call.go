@@ -100,8 +100,8 @@ func runCall() {
 				remoteAddr = resolvedAddr + ":5000" // Default port
 				fmt.Printf("📇 Resolved '%s' to %s\n", nameOrAddr, resolvedAddr)
 
-				// Update last seen
-				cb.UpdateLastSeen(nameOrAddr)
+				// Update last seen (ignore error as it's not critical)
+				_ = cb.UpdateLastSeen(nameOrAddr)
 			}
 		}
 	}
@@ -371,7 +371,9 @@ func runCall() {
 
 	// Noise Suppression
 	noiseSuppressor := audio.NewNoiseSuppressor(audioFormat.SampleRate, audioFormat.Channels)
-	noiseSuppressor.SetLevel(2) // 0=off, 1=low, 2=medium, 3=high
+	if err := noiseSuppressor.SetLevel(2); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to set noise suppression level: %v\n", err)
+	}
 
 	// Echo Cancellation
 	// Note: Full echo cancellation requires speaker loopback capture
