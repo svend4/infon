@@ -1,11 +1,12 @@
-//go:build !linux && !darwin && !windows
+//go:build !linux
 
 package audio
 
 // Default implementation using test audio sources
+// Used on unsupported platforms or when CGO is not available
 // TODO: Platform-specific implementations:
 // - audio_linux.go (ALSA)
-// - audio_darwin.go (CoreAudio)
+// - audio_darwin.go (CoreAudio with CGO)
 // - audio_windows.go (WASAPI)
 
 func listCaptureDevicesImpl() ([]DeviceInfo, error) {

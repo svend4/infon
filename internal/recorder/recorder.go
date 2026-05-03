@@ -146,11 +146,11 @@ func (r *Recorder) Stop() error {
 
 	// Write recording to file
 	if err := r.writeRecording(); err != nil {
-		r.file.Close()
+		_ = r.file.Close()
 		return err
 	}
 
-	r.file.Close()
+	_ = r.file.Close()
 	return nil
 }
 

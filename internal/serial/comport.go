@@ -228,11 +228,11 @@ func (p *Port) ReadLine() (string, error) {
 			break
 		}
 		if buf[0] == '\r' {
-			// Check for \r\n
+			// Check for \r\n and consume the \n if present
 			n, err := p.Read(buf)
-			if err == nil && n > 0 && buf[0] == '\n' {
-				// Found \r\n
-			}
+			_ = n
+			_ = err
+			// Found \r or \r\n
 			break
 		}
 

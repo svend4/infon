@@ -97,7 +97,7 @@ func (ve *VideoExporter) Export(options ExportOptions) error {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	ve.tempDir = tempDir
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	fmt.Println("🎬 Exporting recording to video...")
 	fmt.Printf("   Format: %s\n", options.Format)
@@ -213,7 +213,7 @@ func (ve *VideoExporter) saveImage(img image.Image, path string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return png.Encode(file, img)
 }
@@ -225,7 +225,7 @@ func (ve *VideoExporter) exportAudio(outputPath string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Write WAV header
 	sampleRate := ve.recording.Metadata.AudioRate
@@ -241,12 +241,12 @@ func (ve *VideoExporter) exportAudio(outputPath string) error {
 	dataSize := totalSamples * channels * (bitsPerSample / 8)
 
 	// Write RIFF header
-	file.Write([]byte("RIFF"))
+	_, _ = file.Write([]byte("RIFF"))
 	ve.writeUint32(file, uint32(36+dataSize)) // File size - 8
-	file.Write([]byte("WAVE"))
+	_, _ = file.Write([]byte("WAVE"))
 
 	// Write fmt chunk
-	file.Write([]byte("fmt "))
+	_, _ = file.Write([]byte("fmt "))
 	ve.writeUint32(file, 16) // Chunk size
 	ve.writeUint16(file, 1)  // Audio format (PCM)
 	ve.writeUint16(file, uint16(channels))
@@ -256,7 +256,7 @@ func (ve *VideoExporter) exportAudio(outputPath string) error {
 	ve.writeUint16(file, uint16(bitsPerSample))
 
 	// Write data chunk
-	file.Write([]byte("data"))
+	_, _ = file.Write([]byte("data"))
 	ve.writeUint32(file, uint32(dataSize))
 
 	// Write audio samples
@@ -277,7 +277,7 @@ func (ve *VideoExporter) writeUint32(file *os.File, val uint32) {
 		byte(val >> 16),
 		byte(val >> 24),
 	}
-	file.Write(buf)
+	_, _ = file.Write(buf)
 }
 
 // writeUint16 writes uint16 in little-endian
@@ -286,7 +286,7 @@ func (ve *VideoExporter) writeUint16(file *os.File, val uint16) {
 		byte(val),
 		byte(val >> 8),
 	}
-	file.Write(buf)
+	_, _ = file.Write(buf)
 }
 
 // writeInt16 writes int16 in little-endian
@@ -295,7 +295,7 @@ func (ve *VideoExporter) writeInt16(file *os.File, val int16) {
 		byte(val),
 		byte(val >> 8),
 	}
-	file.Write(buf)
+	_, _ = file.Write(buf)
 }
 
 // encodeVideo encodes video using FFmpeg

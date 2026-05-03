@@ -125,7 +125,7 @@ func (avs *AVSynchronizer) GetNextAudioFrame() (*Frame, error) {
 
 			// If audio is too far ahead, wait
 			if offset > avs.maxSyncOffset {
-				avs.audioBuffer.Add(frame) // Put it back
+				_ = avs.audioBuffer.Add(frame) // Put it back
 				return nil, fmt.Errorf("audio ahead by %v, waiting", offset)
 			}
 
@@ -159,7 +159,7 @@ func (avs *AVSynchronizer) GetNextVideoFrame() (*Frame, error) {
 
 			// If video is too far ahead, wait
 			if offset > avs.maxSyncOffset {
-				avs.videoBuffer.Add(frame) // Put it back
+				_ = avs.videoBuffer.Add(frame) // Put it back
 				return nil, fmt.Errorf("video ahead by %v, waiting", offset)
 			}
 

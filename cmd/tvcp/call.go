@@ -83,7 +83,7 @@ func runCall() {
 	if enableRecording && outputFile == "" {
 		// Create recordings directory
 		recordingsDir := filepath.Join(os.Getenv("HOME"), ".tvcp", "recordings")
-		os.MkdirAll(recordingsDir, 0755)
+		_ = os.MkdirAll(recordingsDir, 0755)
 
 		// Generate filename: call-YYYYMMDD-HHMMSS.tvcp
 		timestamp := time.Now().Format("20060102-150405")
@@ -100,8 +100,8 @@ func runCall() {
 				remoteAddr = resolvedAddr + ":5000" // Default port
 				fmt.Printf("📇 Resolved '%s' to %s\n", nameOrAddr, resolvedAddr)
 
-				// Update last seen
-				cb.UpdateLastSeen(nameOrAddr)
+				// Update last seen (ignore error as it's not critical)
+				_ = cb.UpdateLastSeen(nameOrAddr)
 			}
 		}
 	}
@@ -136,7 +136,7 @@ func runCall() {
 		fmt.Fprintf(os.Stderr, "Error creating transport: %v\n", err)
 		os.Exit(1)
 	}
-	defer transport.Close()
+	defer func() { _ = transport.Close() }()
 
 	fmt.Printf("Listening on: %s\n", transport.LocalAddr())
 	fmt.Println("💬 Type messages and press Enter to send text during the call")
@@ -167,7 +167,7 @@ func runCall() {
 		fmt.Fprintf(os.Stderr, "Error opening camera: %v\n", err)
 		os.Exit(1)
 	}
-	defer camera.Close()
+	defer func() { _ = camera.Close() }()
 
 	// Create audio source for local microphone
 	audioFormat := audio.DefaultFormat()
@@ -180,7 +180,7 @@ func runCall() {
 		fmt.Fprintf(os.Stderr, "Error opening audio source: %v\n", err)
 		os.Exit(1)
 	}
-	defer audioSource.Close()
+	defer func() { _ = audioSource.Close() }()
 
 	// Create audio sink for remote audio playback
 	audioSink, err := audio.NewDefaultPlayback()
@@ -192,7 +192,7 @@ func runCall() {
 		fmt.Fprintf(os.Stderr, "Error opening audio sink: %v\n", err)
 		os.Exit(1)
 	}
-	defer audioSink.Close()
+	defer func() { _ = audioSink.Close() }()
 
 	fmt.Printf("Audio: %d Hz, %d channels, %d-bit\n",
 		audioFormat.SampleRate, audioFormat.Channels, audioFormat.BitDepth)
@@ -205,7 +205,7 @@ func runCall() {
 		Timestamp: uint64(time.Now().UnixMilli()),
 		Payload:   []byte("TVCP/1.0"),
 	}
-	transport.SendPacket(handshake, udpAddr)
+	_ = transport.SendPacket(handshake, udpAddr)
 
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)
@@ -257,16 +257,13 @@ func runCall() {
 		ticker := time.NewTicker(10 * time.Millisecond) // Check every 10ms
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				// Try to get next packet from jitter buffer
-				if packet := audioJitterBuffer.Get(); packet != nil {
-					// Decode audio packet
-					audioPacket, err := network.DecodeAudioPacket(packet.Payload)
-					if err == nil {
-						audioPlaybackChan <- audioPacket
-					}
+		for range ticker.C {
+			// Try to get next packet from jitter buffer
+			if packet := audioJitterBuffer.Get(); packet != nil {
+				// Decode audio packet
+				audioPacket, err := network.DecodeAudioPacket(packet.Payload)
+				if err == nil {
+					audioPlaybackChan <- audioPacket
 				}
 			}
 		}
@@ -276,7 +273,7 @@ func runCall() {
 	go func() {
 		for audioPacket := range audioPlaybackChan {
 			if len(audioPacket.Samples) > 0 {
-				audioSink.Write(audioPacket.Samples)
+				_, _ = audioSink.Write(audioPacket.Samples)
 
 				mu.Lock()
 				audioRecvCount++
@@ -326,7 +323,7 @@ func runCall() {
 
 			// Record frame if recording
 			if rec != nil && rec.IsRecording() {
-				rec.RecordFrame(frame)
+				_ = rec.RecordFrame(frame)
 			}
 
 			// Encode with P-frame compression
@@ -353,7 +350,7 @@ func runCall() {
 						Timestamp: timestamp,
 						Payload:   fragData,
 					}
-					transport.SendPacket(packet, udpAddr)
+					_ = transport.SendPacket(packet, udpAddr)
 
 					// Store for potential retransmission
 					retransmitter.OnPacketSent(packet, udpAddr)
@@ -370,8 +367,10 @@ func runCall() {
 	vad.SetSensitivity(0.7) // 0.7 = balanced sensitivity
 
 	// Noise Suppression
-	noiseSuppressor := audio.NewNoiseSuppressor(audioFormat.SampleRate, audioFormat.SampleRate/50)
-	noiseSuppressor.SetAggressiveness(0.6) // 0.6 = moderate suppression
+	noiseSuppressor := audio.NewNoiseSuppressor(audioFormat.SampleRate, audioFormat.Channels)
+	if err := noiseSuppressor.SetLevel(2); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to set noise suppression level: %v\n", err)
+	}
 
 	// Echo Cancellation
 	// Note: Full echo cancellation requires speaker loopback capture
@@ -389,60 +388,57 @@ func runCall() {
 		ticker := time.NewTicker(20 * time.Millisecond)
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				// Read audio samples
-				n, err := audioSource.Read(buffer)
-				if err != nil || n == 0 {
-					continue
-				}
-
-				// Apply noise suppression
-				enhanced := noiseSuppressor.Process(buffer[:n])
-
-				// Record audio if recording (record original, not enhanced)
-				if rec != nil && rec.IsRecording() {
-					rec.RecordAudio(buffer[:n])
-				}
-
-				// Voice Activity Detection - only send if speech detected
-				isSpeaking := vad.Process(enhanced)
-				if !isSpeaking {
-					// Skip sending during silence to save bandwidth
-					continue
-				}
-
-				// Create audio packet with enhanced audio
-				audioPacket := &network.AudioPacket{
-					Timestamp:  uint64(time.Now().UnixMilli()),
-					SampleRate: uint16(audioFormat.SampleRate),
-					Channels:   uint8(audioFormat.Channels),
-					Codec:      network.AudioCodecPCM,
-					Samples:    enhanced,
-				}
-
-				// Encode audio packet
-				audioData, err := network.EncodeAudioPacket(audioPacket)
-				if err != nil {
-					continue
-				}
-
-				// Send as network packet
-				packet := &network.Packet{
-					Type:      network.PacketTypeAudio,
-					Sequence:  transport.NextSequence(),
-					Timestamp: audioPacket.Timestamp,
-					Payload:   audioData,
-				}
-
-				transport.SendPacket(packet, udpAddr)
-				retransmitter.OnPacketSent(packet, udpAddr)
-
-				mu.Lock()
-				audioSendCount++
-				mu.Unlock()
+		for range ticker.C {
+			// Read audio samples
+			n, err := audioSource.Read(buffer)
+			if err != nil || n == 0 {
+				continue
 			}
+
+			// Apply noise suppression
+			enhanced, _ := noiseSuppressor.Process(buffer[:n])
+
+			// Record audio if recording (record original, not enhanced)
+			if rec != nil && rec.IsRecording() {
+				_ = rec.RecordAudio(buffer[:n])
+			}
+
+			// Voice Activity Detection - only send if speech detected
+			isSpeaking := vad.Process(enhanced)
+			if !isSpeaking {
+				// Skip sending during silence to save bandwidth
+				continue
+			}
+
+			// Create audio packet with enhanced audio
+			audioPacket := &network.AudioPacket{
+				Timestamp:  uint64(time.Now().UnixMilli()),
+				SampleRate: uint16(audioFormat.SampleRate),
+				Channels:   uint8(audioFormat.Channels),
+				Codec:      network.AudioCodecPCM,
+				Samples:    enhanced,
+			}
+
+			// Encode audio packet
+			audioData, err := network.EncodeAudioPacket(audioPacket)
+			if err != nil {
+				continue
+			}
+
+			// Send as network packet
+			packet := &network.Packet{
+				Type:      network.PacketTypeAudio,
+				Sequence:  transport.NextSequence(),
+				Timestamp: audioPacket.Timestamp,
+				Payload:   audioData,
+			}
+
+			_ = transport.SendPacket(packet, udpAddr)
+			retransmitter.OnPacketSent(packet, udpAddr)
+
+			mu.Lock()
+			audioSendCount++
+			mu.Unlock()
 		}
 	}()
 
@@ -483,7 +479,7 @@ func runCall() {
 				Payload:   payload,
 			}
 
-			transport.SendPacket(packet, udpAddr)
+			_ = transport.SendPacket(packet, udpAddr)
 			retransmitter.OnPacketSent(packet, udpAddr)
 
 			// Display sent message
@@ -543,12 +539,13 @@ func runCall() {
 			fmt.Printf("  Bandwidth saved: ~%.1f%%\n", 100.0-vadStats.ActivityRate)
 
 			// Show noise suppression statistics
-			nsStats := noiseSuppressor.GetStatistics()
-			fmt.Printf("\nNoise Suppression:\n")
-			fmt.Printf("  Total frames: %d\n", nsStats.TotalFrames)
-			fmt.Printf("  Clean frames: %d (%.1f%%)\n", nsStats.CleanFrames, nsStats.CleanRatio)
-			fmt.Printf("  Noisy frames: %d (%.1f%%)\n", nsStats.NoisyFrames, 100.0-nsStats.CleanRatio)
-			fmt.Printf("  Calibrated: %v\n", nsStats.Calibrated)
+			// TODO: Re-enable when NoiseSuppressor has GetStatistics method
+			// nsStats := noiseSuppressor.GetStatistics()
+			// fmt.Printf("\nNoise Suppression:\n")
+			// fmt.Printf("  Total frames: %d\n", nsStats.TotalFrames)
+			// fmt.Printf("  Clean frames: %d (%.1f%%)\n", nsStats.CleanFrames, nsStats.CleanRatio)
+			// fmt.Printf("  Noisy frames: %d (%.1f%%)\n", nsStats.NoisyFrames, 100.0-nsStats.CleanRatio)
+			// fmt.Printf("  Calibrated: %v\n", nsStats.Calibrated)
 
 			// Show echo cancellation statistics (when speaker loopback available)
 			ecStats := echoCanceller.GetStatistics()
@@ -608,7 +605,7 @@ func runCall() {
 				lostPackets := lossDetector.GetLostPackets()
 				if len(lostPackets) > 0 {
 					nackPacket := network.CreateNACKPacket(lostPackets, transport.NextSequence())
-					transport.SendPacket(nackPacket, udpAddr)
+					_ = transport.SendPacket(nackPacket, udpAddr)
 				}
 			}
 
@@ -625,7 +622,7 @@ func runCall() {
 						for _, seq := range lostSeqs {
 							retransPacket, addr, ok := retransmitter.ProcessNACK(seq)
 							if ok {
-								transport.SendPacket(retransPacket, addr)
+								_ = transport.SendPacket(retransPacket, addr)
 							}
 						}
 					}

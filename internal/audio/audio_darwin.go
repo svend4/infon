@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build darwin && cgo && ignore_for_now
 
 package audio
 

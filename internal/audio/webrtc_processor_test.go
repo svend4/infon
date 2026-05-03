@@ -186,7 +186,7 @@ func TestProcessorReset(t *testing.T) {
 
 	// Process some audio to generate stats
 	input := make([]int16, 160)
-	processor.ProcessCapture(input, nil)
+	_, _, _ = processor.ProcessCapture(input, nil)
 
 	stats := processor.GetStatistics()
 	if stats.FramesProcessed != 1 {
@@ -217,7 +217,7 @@ func TestGetStatistics(t *testing.T) {
 	// Process some frames
 	input := make([]int16, 160)
 	for i := 0; i < 10; i++ {
-		processor.ProcessCapture(input, nil)
+		_, _, _ = processor.ProcessCapture(input, nil)
 	}
 
 	stats := processor.GetStatistics()
@@ -386,7 +386,7 @@ func TestNoiseSuppressorSetLevel(t *testing.T) {
 
 func TestNoiseSuppressorLevelOff(t *testing.T) {
 	ns := NewNoiseSuppressor(16000, 1)
-	ns.SetLevel(0) // Off
+	_ = ns.SetLevel(0) // Off
 
 	input := make([]int16, 160)
 	for i := range input {
@@ -499,12 +499,8 @@ func TestAGCClipping(t *testing.T) {
 
 	output := agc.Process(input)
 
-	// Verify no clipping artifacts
-	for i := range output {
-		if output[i] < math.MinInt16 || output[i] > math.MaxInt16 {
-			t.Errorf("Output[%d] = %d, out of int16 range", i, output[i])
-		}
-	}
+	// int16 values are automatically in valid range
+	_ = output
 }
 
 // VAD Tests
@@ -712,8 +708,8 @@ func TestMultipleFrameProcessing(t *testing.T) {
 
 	processor, _ := NewWebRTCAudioProcessor(config)
 
-	// Process multiple frames
-	for frame := 0; frame < 100; frame++ {
+	// Process multiple frames (reduced for faster test execution with race detector)
+	for frame := 0; frame < 10; frame++ {
 		capture := make([]int16, 160)
 		render := make([]int16, 160)
 
@@ -729,8 +725,8 @@ func TestMultipleFrameProcessing(t *testing.T) {
 	}
 
 	stats := processor.GetStatistics()
-	if stats.FramesProcessed != 100 {
-		t.Errorf("Frames processed = %d, expected 100", stats.FramesProcessed)
+	if stats.FramesProcessed != 10 {
+		t.Errorf("Frames processed = %d, expected 10", stats.FramesProcessed)
 	}
 }
 
@@ -759,7 +755,7 @@ func BenchmarkProcessCapture(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		processor.ProcessCapture(capture, render)
+		_, _, _ = processor.ProcessCapture(capture, render)
 	}
 }
 

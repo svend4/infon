@@ -283,7 +283,7 @@ func (ch *CallHistory) Export(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Write CSV header
 	header := "ID,Type,Direction,Remote Address,Remote Name,Start Time,End Time,Duration,Video,Audio,Screen Sharing,Recorded,Participants,Quality,Bandwidth,Packet Loss,Latency\n"

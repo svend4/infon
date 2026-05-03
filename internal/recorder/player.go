@@ -14,7 +14,6 @@ import (
 // Player plays back recorded calls
 type Player struct {
 	recording *Recording
-	position  time.Duration
 	playing   bool
 }
 
@@ -29,7 +28,7 @@ func (p *Player) Load(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open recording: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	recording, err := readRecording(file)
 	if err != nil {
@@ -58,7 +57,7 @@ func (p *Player) Play() error {
 		float64(p.recording.Metadata.Duration)/1000.0,
 		p.recording.Metadata.FrameCount,
 		p.recording.Metadata.AudioChunks)
-	fmt.Println("Press Ctrl+C to stop\n")
+	fmt.Println("Press Ctrl+C to stop")
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -67,39 +66,37 @@ func (p *Player) Play() error {
 	defer ticker.Stop()
 
 	for p.playing {
-		select {
-		case <-ticker.C:
-			elapsed := time.Since(startTime)
-			elapsedMs := uint64(elapsed.Milliseconds())
+		<-ticker.C
+		elapsed := time.Since(startTime)
+		elapsedMs := uint64(elapsed.Milliseconds())
 
-			// Play video frames
-			for frameIndex < len(p.recording.Frames) {
-				frame := p.recording.Frames[frameIndex]
-				if frame.Timestamp > elapsedMs {
-					break
-				}
-
-				// Render frame
-				renderFrame(frame.Frame)
-
-				frameIndex++
+		// Play video frames
+		for frameIndex < len(p.recording.Frames) {
+			frame := p.recording.Frames[frameIndex]
+			if frame.Timestamp > elapsedMs {
+				break
 			}
 
-			// Update progress
-			if frameIndex%15 == 0 { // Every ~1 second
-				progress := float64(elapsedMs) / float64(p.recording.Metadata.Duration) * 100
-				fmt.Printf("\r[Playback] %.1f%% | %d/%d frames | %.1fs    ",
-					progress,
-					frameIndex,
-					p.recording.Metadata.FrameCount,
-					float64(elapsedMs)/1000.0)
-			}
+			// Render frame
+			renderFrame(frame.Frame)
 
-			// Check if done
-			if elapsedMs >= uint64(p.recording.Metadata.Duration) ||
-				(frameIndex >= len(p.recording.Frames) && audioIndex >= len(p.recording.Audio)) {
-				p.playing = false
-			}
+			frameIndex++
+		}
+
+		// Update progress
+		if frameIndex%15 == 0 { // Every ~1 second
+			progress := float64(elapsedMs) / float64(p.recording.Metadata.Duration) * 100
+			fmt.Printf("\r[Playback] %.1f%% | %d/%d frames | %.1fs    ",
+				progress,
+				frameIndex,
+				p.recording.Metadata.FrameCount,
+				float64(elapsedMs)/1000.0)
+		}
+
+		// Check if done
+		if elapsedMs >= uint64(p.recording.Metadata.Duration) ||
+			(frameIndex >= len(p.recording.Frames) && audioIndex >= len(p.recording.Audio)) {
+			p.playing = false
 		}
 	}
 

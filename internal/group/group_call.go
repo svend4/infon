@@ -130,7 +130,7 @@ func (gc *GroupCall) AddPeer(id string, addr *net.UDPAddr) error {
 		Timestamp: uint64(time.Now().UnixMilli()),
 		Payload:   []byte("JOIN"),
 	}
-	gc.transport.SendPacket(joinPacket, addr)
+	_ = gc.transport.SendPacket(joinPacket, addr)
 
 	return nil
 }
@@ -148,7 +148,7 @@ func (gc *GroupCall) RemovePeer(id string) {
 			Timestamp: uint64(time.Now().UnixMilli()),
 			Payload:   []byte("LEAVE"),
 		}
-		gc.transport.SendPacket(leavePacket, peer.Address)
+		_ = gc.transport.SendPacket(leavePacket, peer.Address)
 
 		delete(gc.peers, id)
 	}
@@ -195,7 +195,7 @@ func (gc *GroupCall) BroadcastPacket(packet *network.Packet) {
 
 	for _, peer := range gc.peers {
 		if peer.IsActive() {
-			gc.transport.SendPacket(packet, peer.Address)
+			_ = gc.transport.SendPacket(packet, peer.Address)
 		}
 	}
 }
@@ -230,7 +230,7 @@ func (gc *GroupCall) Stop() error {
 	}
 
 	if gc.transport != nil {
-		gc.transport.Close()
+		_ = gc.transport.Close()
 	}
 
 	return nil

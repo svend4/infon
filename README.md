@@ -47,6 +47,7 @@ Autonomous mesh network, works without infrastructure.
 
 ### Build from Source
 
+**Linux / macOS:**
 ```bash
 # Clone the repository
 git clone https://github.com/svend4/infon.git
@@ -59,7 +60,25 @@ make build
 ./bin/tvcp --help
 ```
 
-📖 **[Complete setup guide →](GETTING_STARTED.md)**
+**Windows (PowerShell):**
+```powershell
+# Clone the repository
+git clone https://github.com/svend4/infon.git
+cd infon
+
+# Run setup script (one-click install)
+.\setup.ps1
+
+# Or build manually
+go build -o bin/tvcp.exe ./cmd/tvcp
+
+# Binary will be available at .\bin\tvcp.exe
+.\bin\tvcp.exe --help
+```
+
+📖 **Platform-specific guides:**
+- **Windows:** [BUILD_WINDOWS.md](BUILD_WINDOWS.md)
+- **Linux/macOS:** [GETTING_STARTED.md](GETTING_STARTED.md)
 
 ### Requirements
 - Go 1.21 or higher
