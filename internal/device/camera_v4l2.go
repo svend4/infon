@@ -241,7 +241,7 @@ func (c *V4L2Camera) Close() error {
 
 	// Stop streaming
 	bufType := uint32(V4L2_BUF_TYPE_VIDEO_CAPTURE)
-	_, _ = c.ioctl(VIDIOC_STREAMOFF, unsafe.Pointer(&bufType))
+	_ = c.ioctl(VIDIOC_STREAMOFF, unsafe.Pointer(&bufType))
 
 	// Unmap buffers
 	for _, buf := range c.buffers {
