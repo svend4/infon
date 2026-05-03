@@ -41,14 +41,26 @@ You should see audio chunks being generated (test tones).
 
 ### 4. Local Video Call
 
-Open two terminals:
+**💡 Testing on One Computer:**
 
-**Terminal 1 (Alice):**
+You **DON'T need 2 computers**! For testing, simply open **2 terminal windows** on one computer:
+
+**Windows:**
+- Open 2 PowerShell windows, OR
+- Use Windows Terminal with two tabs (`Ctrl+Shift+T`)
+
+**Linux/macOS:**
+- Open 2 terminal windows, OR
+- Use tmux/screen for split panes
+
+---
+
+**Terminal 1 (Alice) — first window:**
 ```bash
 ./bin/tvcp call localhost:5001 gradient 5000
 ```
 
-**Terminal 2 (Bob):**
+**Terminal 2 (Bob) — SECOND window:**
 ```bash
 ./bin/tvcp call localhost:5000 bounce 5001
 ```
@@ -59,6 +71,8 @@ You should see:
 - Audio transmission indicators
 
 Press `Ctrl+C` to end the call.
+
+**📝 Note:** `localhost` means "this same computer". For calls between different computers, use an IP address or Yggdrasil address.
 
 ## Next Steps
 
