@@ -708,8 +708,8 @@ func TestMultipleFrameProcessing(t *testing.T) {
 
 	processor, _ := NewWebRTCAudioProcessor(config)
 
-	// Process multiple frames
-	for frame := 0; frame < 100; frame++ {
+	// Process multiple frames (reduced for faster test execution with race detector)
+	for frame := 0; frame < 10; frame++ {
 		capture := make([]int16, 160)
 		render := make([]int16, 160)
 

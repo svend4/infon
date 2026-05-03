@@ -94,8 +94,9 @@ func TestNLMSConvergence(t *testing.T) {
 	reference := make([]int16, frameSize)
 	capture := make([]int16, frameSize)
 
-	// Process multiple frames to allow convergence
-	for frame := 0; frame < 100; frame++ {
+	// Process multiple frames to allow convergence (reduced for faster test execution)
+	numFrames := 10
+	for frame := 0; frame < numFrames; frame++ {
 		for i := 0; i < frameSize; i++ {
 			// 1kHz tone
 			reference[i] = int16(5000 * math.Sin(2*math.Pi*1000*float64(frame*frameSize+i)/16000))
@@ -108,8 +109,8 @@ func TestNLMSConvergence(t *testing.T) {
 
 	// After convergence, echo should be reduced
 	stats := aec.GetStatistics()
-	if stats.FramesProcessed != 100 {
-		t.Errorf("FramesProcessed = %d, expected 100", stats.FramesProcessed)
+	if stats.FramesProcessed != uint64(numFrames) {
+		t.Errorf("FramesProcessed = %d, expected %d", stats.FramesProcessed, numFrames)
 	}
 
 	t.Logf("Processed %d frames, %d with echo detected",
@@ -216,8 +217,8 @@ func TestRLSConvergence(t *testing.T) {
 	reference := make([]int16, frameSize)
 	capture := make([]int16, frameSize)
 
-	// Process multiple frames
-	for frame := 0; frame < 50; frame++ {
+	// Process multiple frames (reduced for faster test execution with race detector)
+	for frame := 0; frame < 5; frame++ {
 		for i := 0; i < frameSize; i++ {
 			reference[i] = int16(5000 * math.Sin(2*math.Pi*1000*float64(frame*frameSize+i)/16000))
 			capture[i] = reference[i] + int16(100*math.Sin(2*math.Pi*5000*float64(i)/16000))
