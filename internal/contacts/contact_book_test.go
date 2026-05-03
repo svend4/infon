@@ -361,9 +361,9 @@ func TestContactBook_GetRecent(t *testing.T) {
 
 	now := time.Now()
 
-	cb.Add(&Contact{Name: "Alice", Address: "addr1", LastCallTime: now.Add(-3 * time.Hour)})
-	cb.Add(&Contact{Name: "Bob", Address: "addr2", LastCallTime: now.Add(-1 * time.Hour)})
-	cb.Add(&Contact{Name: "Charlie", Address: "addr3", LastCallTime: now.Add(-2 * time.Hour)})
+	_ = cb.Add(&Contact{Name: "Alice", Address: "addr1", LastCallTime: now.Add(-3 * time.Hour)})
+	_ = cb.Add(&Contact{Name: "Bob", Address: "addr2", LastCallTime: now.Add(-1 * time.Hour)})
+	_ = cb.Add(&Contact{Name: "Charlie", Address: "addr3", LastCallTime: now.Add(-2 * time.Hour)})
 
 	recent := cb.GetRecent(2)
 
