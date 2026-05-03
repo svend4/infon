@@ -279,6 +279,122 @@ For detailed network analysis, watch the live stats during a call:
 - Loss 3-10%: Fair (may have quality issues)
 - Loss > 10%: Poor (consider switching networks)
 
+## Installation & Updates
+
+### Installing to System PATH
+
+After building, you can install `tvcp` to your system for easy access:
+
+**Linux / macOS:**
+```bash
+# Install to /usr/local/bin
+sudo cp ./bin/tvcp /usr/local/bin/
+
+# Or install to user directory (no sudo needed)
+mkdir -p ~/bin
+cp ./bin/tvcp ~/bin/
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# Verify installation
+tvcp version
+```
+
+**Windows (PowerShell as Administrator):**
+```powershell
+# Copy to Windows directory
+Copy-Item .\bin\tvcp.exe C:\Windows\System32\
+
+# Or add to user PATH
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$userPath;C:\tvcp\bin", "User")
+
+# Verify installation
+tvcp version
+```
+
+### Updating Dependencies
+
+If you cloned the repository long ago and packages are outdated:
+
+```bash
+# Update all Go dependencies to latest versions
+go get -u ./...
+
+# Clean up and verify dependencies
+go mod tidy
+go mod verify
+
+# Rebuild with updated dependencies
+make clean
+make build
+
+# Verify everything works
+go test ./...
+```
+
+**Update specific package:**
+```bash
+# Update a single package
+go get -u github.com/example/package
+
+# Update to specific version
+go get github.com/example/package@v1.2.3
+
+# Rebuild after updating
+make build
+```
+
+### Updating TVCP
+
+To update to the latest version of TVCP:
+
+```bash
+# Navigate to your tvcp directory
+cd infon
+
+# Pull latest changes
+git pull origin main
+
+# Update dependencies
+go mod tidy
+
+# Rebuild
+make clean
+make build
+
+# Reinstall to system (if you installed it)
+sudo cp ./bin/tvcp /usr/local/bin/
+```
+
+### Uninstalling
+
+**Remove from system PATH:**
+
+Linux / macOS:
+```bash
+# If installed to /usr/local/bin
+sudo rm /usr/local/bin/tvcp
+
+# If installed to ~/bin
+rm ~/bin/tvcp
+```
+
+Windows (PowerShell as Administrator):
+```powershell
+# If installed to System32
+Remove-Item C:\Windows\System32\tvcp.exe
+```
+
+**Remove project directory:**
+```bash
+# Navigate to parent directory
+cd ..
+
+# Remove entire project
+rm -rf infon
+```
+
 ## Learning More
 
 ### Documentation
