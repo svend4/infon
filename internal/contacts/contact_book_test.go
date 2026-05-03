@@ -9,8 +9,8 @@ import (
 func TestNewContactBook(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	cb, err := NewContactBook()
 	if err != nil {
@@ -29,8 +29,8 @@ func TestNewContactBook(t *testing.T) {
 func TestContactBook_Add(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	cb, _ := NewContactBook()
 
@@ -141,7 +141,7 @@ func TestContactBook_GetByAddress(t *testing.T) {
 
 	cb, _ := NewContactBook()
 
-	cb.Add(&Contact{Name: "Alice", Address: "192.168.1.100:5000"})
+	_ = cb.Add(&Contact{Name: "Alice", Address: "192.168.1.100:5000"})
 
 	contact, err := cb.GetByAddress("192.168.1.100:5000")
 	if err != nil {
@@ -156,14 +156,14 @@ func TestContactBook_GetByAddress(t *testing.T) {
 func TestContactBook_GetAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	cb, _ := NewContactBook()
 
-	cb.Add(&Contact{Name: "Charlie", Address: "addr1"})
-	cb.Add(&Contact{Name: "Alice", Address: "addr2"})
-	cb.Add(&Contact{Name: "Bob", Address: "addr3"})
+	_ = cb.Add(&Contact{Name: "Charlie", Address: "addr1"})
+	_ = cb.Add(&Contact{Name: "Alice", Address: "addr2"})
+	_ = cb.Add(&Contact{Name: "Bob", Address: "addr3"})
 
 	all := cb.GetAll()
 

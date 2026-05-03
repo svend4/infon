@@ -238,7 +238,7 @@ func TestH264Codec(t *testing.T) {
 func TestH264SetBitrate(t *testing.T) {
 	cfg := DefaultVideoConfig(CodecTypeH264, 640, 480)
 	codec, _ := NewH264Codec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	h264 := codec.(VideoCodec)
 
@@ -257,7 +257,7 @@ func TestH264SetBitrate(t *testing.T) {
 func TestH264SetResolution(t *testing.T) {
 	cfg := DefaultVideoConfig(CodecTypeH264, 640, 480)
 	codec, _ := NewH264Codec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	h264 := codec.(VideoCodec)
 
@@ -282,7 +282,7 @@ func TestVP8Codec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create VP8 codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	// Test encode
 	yuv := make([]byte, 640*480*3/2)
@@ -317,7 +317,7 @@ func TestVP9Codec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create VP9 codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	if codec.Type() != CodecTypeVP9 {
 		t.Errorf("Codec type = %s, expected vp9", codec.Type())
@@ -344,7 +344,7 @@ func TestOpusCodec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create Opus codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	opus := codec.(*OpusCodec)
 
@@ -385,7 +385,7 @@ func TestOpusCodec(t *testing.T) {
 func TestOpusSetSampleRate(t *testing.T) {
 	cfg := DefaultAudioConfig(CodecTypeOpus)
 	codec, _ := NewOpusCodec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	opus := codec.(AudioCodec)
 
@@ -414,7 +414,7 @@ func TestAACCodec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create AAC codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	// Test encode
 	pcm := make([]byte, 2048*2*2) // 2048 samples * 2 bytes * 2 channels
@@ -460,7 +460,7 @@ func TestPCMCodec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create PCM codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	// Test encode (passthrough)
 	pcm := make([]byte, 1024)
@@ -501,7 +501,7 @@ func TestPCMCodec(t *testing.T) {
 func BenchmarkH264Encode(b *testing.B) {
 	cfg := DefaultVideoConfig(CodecTypeH264, 640, 480)
 	codec, _ := NewH264Codec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	yuv := make([]byte, 640*480*3/2)
 
@@ -514,7 +514,7 @@ func BenchmarkH264Encode(b *testing.B) {
 func BenchmarkOpusEncode(b *testing.B) {
 	cfg := DefaultAudioConfig(CodecTypeOpus)
 	codec, _ := NewOpusCodec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	pcm := make([]byte, 960*2*2)
 
@@ -527,7 +527,7 @@ func BenchmarkOpusEncode(b *testing.B) {
 func BenchmarkPCMEncode(b *testing.B) {
 	cfg := DefaultAudioConfig(CodecTypePCM)
 	codec, _ := NewPCMCodec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	pcm := make([]byte, 1024)
 

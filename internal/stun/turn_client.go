@@ -134,7 +134,7 @@ func (tc *TURNClient) Allocate() (*net.UDPAddr, error) {
 
 	// Receive response
 	buffer := make([]byte, 1500)
-	tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
+	_ = tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
 
 	n, _, err := tc.conn.ReadFromUDP(buffer)
 	if err != nil {
@@ -205,7 +205,7 @@ func (tc *TURNClient) Refresh() error {
 
 	// Receive response
 	buffer := make([]byte, 1500)
-	tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
+	_ = tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
 
 	n, _, err := tc.conn.ReadFromUDP(buffer)
 	if err != nil {
@@ -261,7 +261,7 @@ func (tc *TURNClient) CreatePermission(peerAddr *net.UDPAddr) error {
 
 	// Receive response
 	buffer := make([]byte, 1500)
-	tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
+	_ = tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
 
 	n, _, err := tc.conn.ReadFromUDP(buffer)
 	if err != nil {
@@ -326,7 +326,7 @@ func (tc *TURNClient) SendData(peerAddr *net.UDPAddr, data []byte) error {
 func (tc *TURNClient) ReceiveData() ([]byte, *net.UDPAddr, error) {
 	buffer := make([]byte, 1500)
 
-	tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
+	_ = tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
 
 	n, _, err := tc.conn.ReadFromUDP(buffer)
 	if err != nil {

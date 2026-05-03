@@ -167,7 +167,7 @@ func (s *SFUServer) Stop() error {
 	close(s.stopChan)
 
 	if s.conn != nil {
-		s.conn.Close()
+		_ = s.conn.Close()
 	}
 
 	return nil

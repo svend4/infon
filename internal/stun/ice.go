@@ -303,11 +303,11 @@ func (ia *ICEAgent) Close() error {
 	ia.state = ICEStateClosed
 
 	if ia.stunClient != nil {
-		ia.stunClient.Close()
+		_ = ia.stunClient.Close()
 	}
 
 	if ia.turnClient != nil {
-		ia.turnClient.Close()
+		_ = ia.turnClient.Close()
 	}
 
 	return nil
@@ -433,7 +433,7 @@ func (ia *ICEAgent) performConnectivityCheck(pair *CandidatePair) error {
 
 	// Create STUN binding request
 	stunClient := NewSTUNClient(pair.Remote.Address.String())
-	defer stunClient.Close()
+	defer func() { _ = stunClient.Close() }()
 
 	start := time.Now()
 

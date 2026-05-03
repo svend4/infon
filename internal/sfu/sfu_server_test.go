@@ -106,7 +106,7 @@ func TestDeleteRoom(t *testing.T) {
 	server, _ := NewSFUServer("127.0.0.1:0")
 
 	// Create and delete room
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	err := server.DeleteRoom("room1")
 	if err != nil {

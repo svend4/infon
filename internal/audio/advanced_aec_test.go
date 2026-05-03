@@ -103,7 +103,7 @@ func TestNLMSConvergence(t *testing.T) {
 			capture[i] = reference[i] + int16(100*math.Sin(2*math.Pi*5000*float64(i)/16000))
 		}
 
-		aec.Process(capture, reference)
+		_, _, _ = aec.Process(capture, reference)
 	}
 
 	// After convergence, echo should be reduced
@@ -223,7 +223,7 @@ func TestRLSConvergence(t *testing.T) {
 			capture[i] = reference[i] + int16(100*math.Sin(2*math.Pi*5000*float64(i)/16000))
 		}
 
-		aec.Process(capture, reference)
+		_, _, _ = aec.Process(capture, reference)
 	}
 
 	// RLS should converge faster than NLMS
@@ -304,7 +304,7 @@ func TestAdvancedAECReset(t *testing.T) {
 	// Process a frame
 	capture := make([]int16, 160)
 	reference := make([]int16, 160)
-	aec.Process(capture, reference)
+	_, _, _ = aec.Process(capture, reference)
 
 	stats := aec.GetStatistics()
 	if stats.FramesProcessed != 1 {
@@ -329,7 +329,7 @@ func TestAdvancedAECStatistics(t *testing.T) {
 
 	// Process multiple frames
 	for i := 0; i < 10; i++ {
-		aec.Process(capture, reference)
+		_, _, _ = aec.Process(capture, reference)
 	}
 
 	stats := aec.GetStatistics()
@@ -483,8 +483,8 @@ func TestNLMSvsRLS(t *testing.T) {
 			capture[i] = reference[i]
 		}
 
-		nlmsAEC.Process(capture, reference)
-		rlsAEC.Process(capture, reference)
+		_, _, _ = nlmsAEC.Process(capture, reference)
+		_, _, _ = rlsAEC.Process(capture, reference)
 	}
 
 	nlmsStats := nlmsAEC.GetStatistics()
@@ -517,7 +517,7 @@ func BenchmarkNLMSProcess(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		aec.Process(capture, reference)
+		_, _, _ = aec.Process(capture, reference)
 	}
 }
 
@@ -534,7 +534,7 @@ func BenchmarkRLSProcess(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		aec.Process(capture, reference)
+		_, _, _ = aec.Process(capture, reference)
 	}
 }
 

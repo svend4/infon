@@ -199,7 +199,7 @@ func (c *V4L2Camera) Open() error {
 	// Start streaming
 	bufType := uint32(V4L2_BUF_TYPE_VIDEO_CAPTURE)
 	if err := c.ioctl(VIDIOC_STREAMON, unsafe.Pointer(&bufType)); err != nil {
-		c.Close()
+		_ = c.Close()
 		return fmt.Errorf("failed to start streaming: %w", err)
 	}
 
@@ -386,7 +386,7 @@ func ListV4L2Cameras() ([]string, error) {
 
 		var cap v4l2Capability
 		_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), VIDIOC_QUERYCAP, uintptr(unsafe.Pointer(&cap)))
-		syscall.Close(fd)
+		_ = syscall.Close(fd)
 
 		if errno == 0 {
 			// Device is a valid V4L2 device

@@ -166,10 +166,10 @@ func TestCallHistory_GetByType(t *testing.T) {
 	ch, _ := NewCallHistory()
 
 	// Add different types
-	ch.Add(&CallEntry{Type: CallTypeOutgoing, StartTime: time.Now(), Duration: time.Minute})
-	ch.Add(&CallEntry{Type: CallTypeIncoming, StartTime: time.Now(), Duration: time.Minute})
-	ch.Add(&CallEntry{Type: CallTypeMissed, StartTime: time.Now(), Duration: 0})
-	ch.Add(&CallEntry{Type: CallTypeOutgoing, StartTime: time.Now(), Duration: time.Minute})
+	_ = ch.Add(&CallEntry{Type: CallTypeOutgoing, StartTime: time.Now(), Duration: time.Minute})
+	_ = ch.Add(&CallEntry{Type: CallTypeIncoming, StartTime: time.Now(), Duration: time.Minute})
+	_ = ch.Add(&CallEntry{Type: CallTypeMissed, StartTime: time.Now(), Duration: 0})
+	_ = ch.Add(&CallEntry{Type: CallTypeOutgoing, StartTime: time.Now(), Duration: time.Minute})
 
 	outgoing := ch.GetByType(CallTypeOutgoing)
 	if len(outgoing) != 2 {

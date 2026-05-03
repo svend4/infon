@@ -381,7 +381,7 @@ func (a *ALSAPlayback) Write(buffer []int16) (int, error) {
 	// Convert int16 to bytes (little-endian) using bytes.Buffer
 	var buf bytes.Buffer
 	for _, sample := range buffer {
-		binary.Write(&buf, binary.LittleEndian, sample)
+		_ = binary.Write(&buf, binary.LittleEndian, sample)
 	}
 
 	// Write to ALSA device

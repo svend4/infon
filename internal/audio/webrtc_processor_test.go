@@ -186,7 +186,7 @@ func TestProcessorReset(t *testing.T) {
 
 	// Process some audio to generate stats
 	input := make([]int16, 160)
-	processor.ProcessCapture(input, nil)
+	_, _, _ = processor.ProcessCapture(input, nil)
 
 	stats := processor.GetStatistics()
 	if stats.FramesProcessed != 1 {
@@ -217,7 +217,7 @@ func TestGetStatistics(t *testing.T) {
 	// Process some frames
 	input := make([]int16, 160)
 	for i := 0; i < 10; i++ {
-		processor.ProcessCapture(input, nil)
+		_, _, _ = processor.ProcessCapture(input, nil)
 	}
 
 	stats := processor.GetStatistics()
@@ -386,7 +386,7 @@ func TestNoiseSuppressorSetLevel(t *testing.T) {
 
 func TestNoiseSuppressorLevelOff(t *testing.T) {
 	ns := NewNoiseSuppressor(16000, 1)
-	ns.SetLevel(0) // Off
+	_ = ns.SetLevel(0) // Off
 
 	input := make([]int16, 160)
 	for i := range input {
@@ -759,7 +759,7 @@ func BenchmarkProcessCapture(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		processor.ProcessCapture(capture, render)
+		_, _, _ = processor.ProcessCapture(capture, render)
 	}
 }
 

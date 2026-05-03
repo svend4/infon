@@ -253,6 +253,6 @@ func BenchmarkConfigString(b *testing.B) {
 func BenchmarkListPorts(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ListPorts()
+		_, _ = ListPorts()
 	}
 }

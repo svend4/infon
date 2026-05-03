@@ -213,7 +213,7 @@ func (ve *VideoExporter) saveImage(img image.Image, path string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return png.Encode(file, img)
 }
@@ -225,7 +225,7 @@ func (ve *VideoExporter) exportAudio(outputPath string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Write WAV header
 	sampleRate := ve.recording.Metadata.AudioRate
@@ -241,12 +241,12 @@ func (ve *VideoExporter) exportAudio(outputPath string) error {
 	dataSize := totalSamples * channels * (bitsPerSample / 8)
 
 	// Write RIFF header
-	file.Write([]byte("RIFF"))
+	_, _ = file.Write([]byte("RIFF"))
 	ve.writeUint32(file, uint32(36+dataSize)) // File size - 8
-	file.Write([]byte("WAVE"))
+	_, _ = file.Write([]byte("WAVE"))
 
 	// Write fmt chunk
-	file.Write([]byte("fmt "))
+	_, _ = file.Write([]byte("fmt "))
 	ve.writeUint32(file, 16) // Chunk size
 	ve.writeUint16(file, 1)  // Audio format (PCM)
 	ve.writeUint16(file, uint16(channels))

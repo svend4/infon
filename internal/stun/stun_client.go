@@ -120,7 +120,7 @@ func (sc *STUNClient) Connect() error {
 	// Set server as remote address
 	err = conn.SetReadDeadline(time.Now().Add(sc.timeout))
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("failed to set deadline: %w", err)
 	}
 
@@ -162,7 +162,7 @@ func (sc *STUNClient) GetMappedAddress() (*net.UDPAddr, error) {
 
 	// Receive response
 	buffer := make([]byte, 1500)
-	sc.conn.SetReadDeadline(time.Now().Add(sc.timeout))
+	_ = sc.conn.SetReadDeadline(time.Now().Add(sc.timeout))
 
 	n, _, err := sc.conn.ReadFromUDP(buffer)
 	if err != nil {
@@ -274,7 +274,7 @@ func (sc *STUNClient) createBindingRequest() *Message {
 	}
 
 	// Generate random transaction ID
-	rand.Read(msg.TransactionID[:])
+	_, _ = rand.Read(msg.TransactionID[:])
 
 	return msg
 }
