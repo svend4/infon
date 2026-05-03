@@ -66,39 +66,37 @@ func (p *Player) Play() error {
 	defer ticker.Stop()
 
 	for p.playing {
-		select {
-		case <-ticker.C:
-			elapsed := time.Since(startTime)
-			elapsedMs := uint64(elapsed.Milliseconds())
+		<-ticker.C
+		elapsed := time.Since(startTime)
+		elapsedMs := uint64(elapsed.Milliseconds())
 
-			// Play video frames
-			for frameIndex < len(p.recording.Frames) {
-				frame := p.recording.Frames[frameIndex]
-				if frame.Timestamp > elapsedMs {
-					break
-				}
-
-				// Render frame
-				renderFrame(frame.Frame)
-
-				frameIndex++
+		// Play video frames
+		for frameIndex < len(p.recording.Frames) {
+			frame := p.recording.Frames[frameIndex]
+			if frame.Timestamp > elapsedMs {
+				break
 			}
 
-			// Update progress
-			if frameIndex%15 == 0 { // Every ~1 second
-				progress := float64(elapsedMs) / float64(p.recording.Metadata.Duration) * 100
-				fmt.Printf("\r[Playback] %.1f%% | %d/%d frames | %.1fs    ",
-					progress,
-					frameIndex,
-					p.recording.Metadata.FrameCount,
-					float64(elapsedMs)/1000.0)
-			}
+			// Render frame
+			renderFrame(frame.Frame)
 
-			// Check if done
-			if elapsedMs >= uint64(p.recording.Metadata.Duration) ||
-				(frameIndex >= len(p.recording.Frames) && audioIndex >= len(p.recording.Audio)) {
-				p.playing = false
-			}
+			frameIndex++
+		}
+
+		// Update progress
+		if frameIndex%15 == 0 { // Every ~1 second
+			progress := float64(elapsedMs) / float64(p.recording.Metadata.Duration) * 100
+			fmt.Printf("\r[Playback] %.1f%% | %d/%d frames | %.1fs    ",
+				progress,
+				frameIndex,
+				p.recording.Metadata.FrameCount,
+				float64(elapsedMs)/1000.0)
+		}
+
+		// Check if done
+		if elapsedMs >= uint64(p.recording.Metadata.Duration) ||
+			(frameIndex >= len(p.recording.Frames) && audioIndex >= len(p.recording.Audio)) {
+			p.playing = false
 		}
 	}
 

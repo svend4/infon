@@ -257,16 +257,13 @@ func runCall() {
 		ticker := time.NewTicker(10 * time.Millisecond) // Check every 10ms
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				// Try to get next packet from jitter buffer
-				if packet := audioJitterBuffer.Get(); packet != nil {
-					// Decode audio packet
-					audioPacket, err := network.DecodeAudioPacket(packet.Payload)
-					if err == nil {
-						audioPlaybackChan <- audioPacket
-					}
+		for range ticker.C {
+			// Try to get next packet from jitter buffer
+			if packet := audioJitterBuffer.Get(); packet != nil {
+				// Decode audio packet
+				audioPacket, err := network.DecodeAudioPacket(packet.Payload)
+				if err == nil {
+					audioPlaybackChan <- audioPacket
 				}
 			}
 		}
@@ -391,60 +388,57 @@ func runCall() {
 		ticker := time.NewTicker(20 * time.Millisecond)
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				// Read audio samples
-				n, err := audioSource.Read(buffer)
-				if err != nil || n == 0 {
-					continue
-				}
-
-				// Apply noise suppression
-				enhanced, _ := noiseSuppressor.Process(buffer[:n])
-
-				// Record audio if recording (record original, not enhanced)
-				if rec != nil && rec.IsRecording() {
-					_ = rec.RecordAudio(buffer[:n])
-				}
-
-				// Voice Activity Detection - only send if speech detected
-				isSpeaking := vad.Process(enhanced)
-				if !isSpeaking {
-					// Skip sending during silence to save bandwidth
-					continue
-				}
-
-				// Create audio packet with enhanced audio
-				audioPacket := &network.AudioPacket{
-					Timestamp:  uint64(time.Now().UnixMilli()),
-					SampleRate: uint16(audioFormat.SampleRate),
-					Channels:   uint8(audioFormat.Channels),
-					Codec:      network.AudioCodecPCM,
-					Samples:    enhanced,
-				}
-
-				// Encode audio packet
-				audioData, err := network.EncodeAudioPacket(audioPacket)
-				if err != nil {
-					continue
-				}
-
-				// Send as network packet
-				packet := &network.Packet{
-					Type:      network.PacketTypeAudio,
-					Sequence:  transport.NextSequence(),
-					Timestamp: audioPacket.Timestamp,
-					Payload:   audioData,
-				}
-
-				_ = transport.SendPacket(packet, udpAddr)
-				retransmitter.OnPacketSent(packet, udpAddr)
-
-				mu.Lock()
-				audioSendCount++
-				mu.Unlock()
+		for range ticker.C {
+			// Read audio samples
+			n, err := audioSource.Read(buffer)
+			if err != nil || n == 0 {
+				continue
 			}
+
+			// Apply noise suppression
+			enhanced, _ := noiseSuppressor.Process(buffer[:n])
+
+			// Record audio if recording (record original, not enhanced)
+			if rec != nil && rec.IsRecording() {
+				_ = rec.RecordAudio(buffer[:n])
+			}
+
+			// Voice Activity Detection - only send if speech detected
+			isSpeaking := vad.Process(enhanced)
+			if !isSpeaking {
+				// Skip sending during silence to save bandwidth
+				continue
+			}
+
+			// Create audio packet with enhanced audio
+			audioPacket := &network.AudioPacket{
+				Timestamp:  uint64(time.Now().UnixMilli()),
+				SampleRate: uint16(audioFormat.SampleRate),
+				Channels:   uint8(audioFormat.Channels),
+				Codec:      network.AudioCodecPCM,
+				Samples:    enhanced,
+			}
+
+			// Encode audio packet
+			audioData, err := network.EncodeAudioPacket(audioPacket)
+			if err != nil {
+				continue
+			}
+
+			// Send as network packet
+			packet := &network.Packet{
+				Type:      network.PacketTypeAudio,
+				Sequence:  transport.NextSequence(),
+				Timestamp: audioPacket.Timestamp,
+				Payload:   audioData,
+			}
+
+			_ = transport.SendPacket(packet, udpAddr)
+			retransmitter.OnPacketSent(packet, udpAddr)
+
+			mu.Lock()
+			audioSendCount++
+			mu.Unlock()
 		}
 	}()
 
