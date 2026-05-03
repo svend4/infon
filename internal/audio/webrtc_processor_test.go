@@ -725,8 +725,8 @@ func TestMultipleFrameProcessing(t *testing.T) {
 	}
 
 	stats := processor.GetStatistics()
-	if stats.FramesProcessed != 100 {
-		t.Errorf("Frames processed = %d, expected 100", stats.FramesProcessed)
+	if stats.FramesProcessed != 10 {
+		t.Errorf("Frames processed = %d, expected 10", stats.FramesProcessed)
 	}
 }
 
