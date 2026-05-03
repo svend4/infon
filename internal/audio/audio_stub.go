@@ -1,4 +1,4 @@
-//go:build (!linux && !darwin && !windows) || (darwin && !cgo)
+//go:build !linux && !windows
 
 package audio
 
