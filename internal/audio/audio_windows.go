@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows && ignore_for_now
 
 package audio
 
