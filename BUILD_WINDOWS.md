@@ -91,14 +91,26 @@ go build -ldflags "-X main.version=0.0.1-alpha" -o bin/tvcp.exe ./cmd/tvcp
 2. Создайте новую вкладку (`Ctrl+Shift+T`)
 3. В первой вкладке запустите приёмник, во второй — отправитель
 
-**Terminal 1 (Receiver):**
+**Окно 1 (приёмник):**
 ```powershell
-.\bin\tvcp.exe listen 5000
+.\bin\tvcp.exe receive 5000
 ```
 
-**Terminal 2 (Caller) — В ДРУГОМ окне/вкладке:**
+**Окно 2 (отправитель) — В ДРУГОМ окне/вкладке:**
 ```powershell
-.\bin\tvcp.exe call localhost:5000
+.\bin\tvcp.exe send localhost:5000 bounce
+```
+
+**Или для двустороннего звонка:**
+
+**Окно 1:**
+```powershell
+.\bin\tvcp.exe call localhost:5001 gradient 5000
+```
+
+**Окно 2:**
+```powershell
+.\bin\tvcp.exe call localhost:5000 bounce 5001
 ```
 
 **Для реальных P2P звонков** между разными компьютерами используйте Yggdrasil адреса или IP в локальной сети.
