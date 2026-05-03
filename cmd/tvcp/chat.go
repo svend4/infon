@@ -48,7 +48,7 @@ func runChat() {
 		fmt.Fprintf(os.Stderr, "Error creating transport: %v\n", err)
 		os.Exit(1)
 	}
-	defer transport.Close()
+	defer func() { _ = transport.Close() }()
 
 	fmt.Println("Type your messages and press Enter to send.")
 	fmt.Println("Press Ctrl+C to exit.")

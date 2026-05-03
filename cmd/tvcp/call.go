@@ -83,7 +83,7 @@ func runCall() {
 	if enableRecording && outputFile == "" {
 		// Create recordings directory
 		recordingsDir := filepath.Join(os.Getenv("HOME"), ".tvcp", "recordings")
-		os.MkdirAll(recordingsDir, 0755)
+		_ = os.MkdirAll(recordingsDir, 0755)
 
 		// Generate filename: call-YYYYMMDD-HHMMSS.tvcp
 		timestamp := time.Now().Format("20060102-150405")
@@ -136,7 +136,7 @@ func runCall() {
 		fmt.Fprintf(os.Stderr, "Error creating transport: %v\n", err)
 		os.Exit(1)
 	}
-	defer transport.Close()
+	defer func() { _ = transport.Close() }()
 
 	fmt.Printf("Listening on: %s\n", transport.LocalAddr())
 	fmt.Println("💬 Type messages and press Enter to send text during the call")
@@ -167,7 +167,7 @@ func runCall() {
 		fmt.Fprintf(os.Stderr, "Error opening camera: %v\n", err)
 		os.Exit(1)
 	}
-	defer camera.Close()
+	defer func() { _ = camera.Close() }()
 
 	// Create audio source for local microphone
 	audioFormat := audio.DefaultFormat()
@@ -180,7 +180,7 @@ func runCall() {
 		fmt.Fprintf(os.Stderr, "Error opening audio source: %v\n", err)
 		os.Exit(1)
 	}
-	defer audioSource.Close()
+	defer func() { _ = audioSource.Close() }()
 
 	// Create audio sink for remote audio playback
 	audioSink, err := audio.NewDefaultPlayback()
@@ -192,7 +192,7 @@ func runCall() {
 		fmt.Fprintf(os.Stderr, "Error opening audio sink: %v\n", err)
 		os.Exit(1)
 	}
-	defer audioSink.Close()
+	defer func() { _ = audioSink.Close() }()
 
 	fmt.Printf("Audio: %d Hz, %d channels, %d-bit\n",
 		audioFormat.SampleRate, audioFormat.Channels, audioFormat.BitDepth)
@@ -205,7 +205,7 @@ func runCall() {
 		Timestamp: uint64(time.Now().UnixMilli()),
 		Payload:   []byte("TVCP/1.0"),
 	}
-	transport.SendPacket(handshake, udpAddr)
+	_ = transport.SendPacket(handshake, udpAddr)
 
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)
@@ -276,7 +276,7 @@ func runCall() {
 	go func() {
 		for audioPacket := range audioPlaybackChan {
 			if len(audioPacket.Samples) > 0 {
-				audioSink.Write(audioPacket.Samples)
+				_, _ = audioSink.Write(audioPacket.Samples)
 
 				mu.Lock()
 				audioRecvCount++
@@ -326,7 +326,7 @@ func runCall() {
 
 			// Record frame if recording
 			if rec != nil && rec.IsRecording() {
-				rec.RecordFrame(frame)
+				_ = rec.RecordFrame(frame)
 			}
 
 			// Encode with P-frame compression
@@ -353,7 +353,7 @@ func runCall() {
 						Timestamp: timestamp,
 						Payload:   fragData,
 					}
-					transport.SendPacket(packet, udpAddr)
+					_ = transport.SendPacket(packet, udpAddr)
 
 					// Store for potential retransmission
 					retransmitter.OnPacketSent(packet, udpAddr)
@@ -405,7 +405,7 @@ func runCall() {
 
 				// Record audio if recording (record original, not enhanced)
 				if rec != nil && rec.IsRecording() {
-					rec.RecordAudio(buffer[:n])
+					_ = rec.RecordAudio(buffer[:n])
 				}
 
 				// Voice Activity Detection - only send if speech detected
@@ -438,7 +438,7 @@ func runCall() {
 					Payload:   audioData,
 				}
 
-				transport.SendPacket(packet, udpAddr)
+				_ = transport.SendPacket(packet, udpAddr)
 				retransmitter.OnPacketSent(packet, udpAddr)
 
 				mu.Lock()
@@ -485,7 +485,7 @@ func runCall() {
 				Payload:   payload,
 			}
 
-			transport.SendPacket(packet, udpAddr)
+			_ = transport.SendPacket(packet, udpAddr)
 			retransmitter.OnPacketSent(packet, udpAddr)
 
 			// Display sent message
@@ -611,7 +611,7 @@ func runCall() {
 				lostPackets := lossDetector.GetLostPackets()
 				if len(lostPackets) > 0 {
 					nackPacket := network.CreateNACKPacket(lostPackets, transport.NextSequence())
-					transport.SendPacket(nackPacket, udpAddr)
+					_ = transport.SendPacket(nackPacket, udpAddr)
 				}
 			}
 
@@ -628,7 +628,7 @@ func runCall() {
 						for _, seq := range lostSeqs {
 							retransPacket, addr, ok := retransmitter.ProcessNACK(seq)
 							if ok {
-								transport.SendPacket(retransPacket, addr)
+								_ = transport.SendPacket(retransPacket, addr)
 							}
 						}
 					}

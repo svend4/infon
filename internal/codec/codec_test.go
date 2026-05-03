@@ -159,7 +159,7 @@ func TestCodecFactory(t *testing.T) {
 		t.Errorf("Codec type = %s, expected h264", codec.Type())
 	}
 
-	codec.Close()
+	_ = codec.Close()
 }
 
 func TestGlobalFactory(t *testing.T) {
@@ -180,7 +180,7 @@ func TestGlobalFactory(t *testing.T) {
 		t.Fatal("Created codec is nil")
 	}
 
-	codec.Close()
+	_ = codec.Close()
 }
 
 // H.264 Tests
@@ -192,7 +192,7 @@ func TestH264Codec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create H.264 codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	h264 := codec.(*H264Codec)
 

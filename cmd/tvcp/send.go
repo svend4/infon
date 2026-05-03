@@ -47,7 +47,7 @@ func runSend() {
 		fmt.Fprintf(os.Stderr, "Error creating transport: %v\n", err)
 		os.Exit(1)
 	}
-	defer transport.Close()
+	defer func() { _ = transport.Close() }()
 
 	fmt.Printf("Local: %s\n", transport.LocalAddr())
 	fmt.Println()
@@ -59,7 +59,7 @@ func runSend() {
 		fmt.Fprintf(os.Stderr, "Error opening camera: %v\n", err)
 		os.Exit(1)
 	}
-	defer camera.Close()
+	defer func() { _ = camera.Close() }()
 
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)

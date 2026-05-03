@@ -128,7 +128,7 @@ func (c *V4L2Camera) Open() error {
 	// Query capabilities
 	var cap v4l2Capability
 	if err := c.ioctl(VIDIOC_QUERYCAP, unsafe.Pointer(&cap)); err != nil {
-		syscall.Close(c.fd)
+		_ = syscall.Close(c.fd)
 		return fmt.Errorf("failed to query capabilities: %w", err)
 	}
 
@@ -138,7 +138,7 @@ func (c *V4L2Camera) Open() error {
 
 	// Get current format
 	if err := c.ioctl(VIDIOC_G_FMT, unsafe.Pointer(&v4l2Fmt)); err != nil {
-		syscall.Close(c.fd)
+		_ = syscall.Close(c.fd)
 		return fmt.Errorf("failed to get format: %w", err)
 	}
 
@@ -150,7 +150,7 @@ func (c *V4L2Camera) Open() error {
 	pix.field = V4L2_FIELD_NONE
 
 	if err := c.ioctl(VIDIOC_S_FMT, unsafe.Pointer(&v4l2Fmt)); err != nil {
-		syscall.Close(c.fd)
+		_ = syscall.Close(c.fd)
 		return fmt.Errorf("failed to set format: %w", err)
 	}
 
@@ -163,7 +163,7 @@ func (c *V4L2Camera) Open() error {
 	req.memory = V4L2_MEMORY_MMAP
 
 	if err := c.ioctl(VIDIOC_REQBUFS, unsafe.Pointer(&req)); err != nil {
-		syscall.Close(c.fd)
+		_ = syscall.Close(c.fd)
 		return fmt.Errorf("failed to request buffers: %w", err)
 	}
 
@@ -176,7 +176,7 @@ func (c *V4L2Camera) Open() error {
 		buf.memory = V4L2_MEMORY_MMAP
 
 		if err := c.ioctl(VIDIOC_QUERYBUF, unsafe.Pointer(&buf)); err != nil {
-			c.Close()
+			_ = c.Close()
 			return fmt.Errorf("failed to query buffer %d: %w", i, err)
 		}
 
@@ -184,14 +184,14 @@ func (c *V4L2Camera) Open() error {
 		data, err := syscall.Mmap(c.fd, int64(buf.offset), int(buf.length),
 			syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 		if err != nil {
-			c.Close()
+			_ = c.Close()
 			return fmt.Errorf("failed to mmap buffer %d: %w", i, err)
 		}
 		c.buffers[i] = data
 
 		// Queue buffer
 		if err := c.ioctl(VIDIOC_QBUF, unsafe.Pointer(&buf)); err != nil {
-			c.Close()
+			_ = c.Close()
 			return fmt.Errorf("failed to queue buffer %d: %w", i, err)
 		}
 	}
@@ -253,7 +253,7 @@ func (c *V4L2Camera) Close() error {
 
 	// Close device
 	if c.fd >= 0 {
-		syscall.Close(c.fd)
+		_ = syscall.Close(c.fd)
 		c.fd = -1
 	}
 

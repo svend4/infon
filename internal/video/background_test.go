@@ -311,9 +311,9 @@ func TestBackgroundProcessor_GetStatistics(t *testing.T) {
 	img := createTestImage(320, 240)
 
 	bp.SetMode(BackgroundBlur)
-	bp.Process(img)
-	bp.Process(img)
-	bp.Process(img)
+	_, _ = bp.Process(img)
+	_, _ = bp.Process(img)
+	_, _ = bp.Process(img)
 
 	stats := bp.GetStatistics()
 

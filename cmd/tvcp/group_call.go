@@ -27,7 +27,7 @@ func runGroupCall(peers []string, localPort string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create group call: %w", err)
 	}
-	defer groupCall.Stop()
+	defer func() { _ = groupCall.Stop() }()
 
 	// Add peers
 	for _, peerAddr := range peers {
@@ -60,7 +60,7 @@ func runGroupCall(peers []string, localPort string) error {
 	if err := cam.Open(); err != nil {
 		return fmt.Errorf("failed to open camera: %w", err)
 	}
-	defer cam.Close()
+	defer func() { _ = cam.Close() }()
 
 	// Initialize audio using default capture/playback
 	mic, err := audio.NewDefaultCapture()
@@ -70,7 +70,7 @@ func runGroupCall(peers []string, localPort string) error {
 	if err := mic.Open(); err != nil {
 		return fmt.Errorf("failed to open microphone: %w", err)
 	}
-	defer mic.Close()
+	defer func() { _ = mic.Close() }()
 
 	speaker, err := audio.NewDefaultPlayback()
 	if err != nil {
@@ -79,7 +79,7 @@ func runGroupCall(peers []string, localPort string) error {
 	if err := speaker.Open(); err != nil {
 		return fmt.Errorf("failed to open speaker: %w", err)
 	}
-	defer speaker.Close()
+	defer func() { _ = speaker.Close() }()
 
 	// Get audio format for mixer
 	audioFormat := mic.GetFormat()
@@ -299,7 +299,7 @@ func runGroupCall(peers []string, localPort string) error {
 
 			// Play mixed audio
 			if len(mixed) > 0 {
-				speaker.Write(mixed)
+				_, _ = speaker.Write(mixed)
 			}
 		}
 	}()

@@ -28,7 +28,7 @@ func runAudioTest() {
 		fmt.Fprintf(os.Stderr, "Error opening audio source: %v\n", err)
 		os.Exit(1)
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 
 	// Test different tones
 	tones := []struct {

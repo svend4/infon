@@ -329,7 +329,7 @@ func (cb *ContactBook) Export(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Write CSV header
 	header := "ID,Name,Display Name,Address,Email,Phone,Favorite,Notes,Tags,Last Call,Total Calls,Created,Updated\n"

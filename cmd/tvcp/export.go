@@ -65,7 +65,7 @@ func runExport() {
 				os.Exit(1)
 			}
 			i++
-			fmt.Sscanf(args[i], "%d", &options.FPS)
+			_, _ = fmt.Sscanf(args[i], "%d", &options.FPS)
 
 		case "--scale":
 			if i+1 >= len(args) {
@@ -73,7 +73,7 @@ func runExport() {
 				os.Exit(1)
 			}
 			i++
-			fmt.Sscanf(args[i], "%d", &options.Scale)
+			_, _ = fmt.Sscanf(args[i], "%d", &options.Scale)
 
 		case "--quality":
 			if i+1 >= len(args) {
@@ -81,7 +81,7 @@ func runExport() {
 				os.Exit(1)
 			}
 			i++
-			fmt.Sscanf(args[i], "%d", &options.Quality)
+			_, _ = fmt.Sscanf(args[i], "%d", &options.Quality)
 			if options.Quality < 0 || options.Quality > 100 {
 				fmt.Fprintln(os.Stderr, "Error: quality must be 0-100")
 				os.Exit(1)

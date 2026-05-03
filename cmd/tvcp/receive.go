@@ -29,7 +29,7 @@ func runReceive() {
 		fmt.Fprintf(os.Stderr, "Error creating transport: %v\n", err)
 		os.Exit(1)
 	}
-	defer transport.Close()
+	defer func() { _ = transport.Close() }()
 
 	fmt.Printf("Local: %s\n", transport.LocalAddr())
 	fmt.Println("\nWaiting for video stream... Press Ctrl+C to stop")

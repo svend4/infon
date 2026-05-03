@@ -97,7 +97,7 @@ func (ve *VideoExporter) Export(options ExportOptions) error {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	ve.tempDir = tempDir
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	fmt.Println("🎬 Exporting recording to video...")
 	fmt.Printf("   Format: %s\n", options.Format)

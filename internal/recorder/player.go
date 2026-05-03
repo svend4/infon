@@ -29,7 +29,7 @@ func (p *Player) Load(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open recording: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	recording, err := readRecording(file)
 	if err != nil {

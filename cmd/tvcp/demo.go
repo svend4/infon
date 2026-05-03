@@ -34,7 +34,7 @@ func runDemo() {
 		fmt.Fprintf(os.Stderr, "Error opening image: %v\n", err)
 		os.Exit(1)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Decode the image
 	img, format, err := image.Decode(file)

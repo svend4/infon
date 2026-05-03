@@ -578,7 +578,7 @@ func BenchmarkHardwareEncodeH264_1920x1080(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		accel.EncodeFrame(input, 1920, 1080)
+		_, _ = accel.EncodeFrame(input, 1920, 1080)
 	}
 }
 
@@ -594,7 +594,7 @@ func BenchmarkHardwareDecode(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		accel.DecodeFrame(input)
+		_, _, _, _ = accel.DecodeFrame(input)
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 func TestNewCallHistory(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, err := NewCallHistory()
 	if err != nil {
@@ -29,8 +29,8 @@ func TestNewCallHistory(t *testing.T) {
 func TestCallHistory_Add(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, _ := NewCallHistory()
 
@@ -64,8 +64,8 @@ func TestCallHistory_Add(t *testing.T) {
 func TestCallHistory_GetAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, _ := NewCallHistory()
 
@@ -78,7 +78,7 @@ func TestCallHistory_GetAll(t *testing.T) {
 			StartTime:     now.Add(-time.Duration(i) * time.Hour),
 			Duration:      time.Minute,
 		}
-		ch.Add(entry)
+		_ = ch.Add(entry)
 	}
 
 	all := ch.GetAll()
@@ -98,8 +98,8 @@ func TestCallHistory_GetAll(t *testing.T) {
 func TestCallHistory_GetRecent(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, _ := NewCallHistory()
 
@@ -111,7 +111,7 @@ func TestCallHistory_GetRecent(t *testing.T) {
 			StartTime:     time.Now(),
 			Duration:      time.Minute,
 		}
-		ch.Add(entry)
+		_ = ch.Add(entry)
 	}
 
 	recent := ch.GetRecent(3)
@@ -124,14 +124,14 @@ func TestCallHistory_GetRecent(t *testing.T) {
 func TestCallHistory_GetByPeer(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, _ := NewCallHistory()
 
 	// Add entries for different peers
 	for i := 0; i < 3; i++ {
-		ch.Add(&CallEntry{
+		_ = ch.Add(&CallEntry{
 			RemoteAddress: "peer1",
 			StartTime:     time.Now(),
 			Duration:      time.Minute,
@@ -160,8 +160,8 @@ func TestCallHistory_GetByPeer(t *testing.T) {
 func TestCallHistory_GetByType(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, _ := NewCallHistory()
 
@@ -190,8 +190,8 @@ func TestCallHistory_GetByType(t *testing.T) {
 func TestCallHistory_Delete(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, _ := NewCallHistory()
 
@@ -219,8 +219,8 @@ func TestCallHistory_Delete(t *testing.T) {
 func TestCallHistory_Clear(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, _ := NewCallHistory()
 
@@ -245,8 +245,8 @@ func TestCallHistory_Clear(t *testing.T) {
 func TestCallHistory_GetStatistics(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch, _ := NewCallHistory()
 
@@ -331,8 +331,8 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 func TestCallHistory_SaveAndLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	ch1, _ := NewCallHistory()
 
@@ -344,7 +344,7 @@ func TestCallHistory_SaveAndLoad(t *testing.T) {
 		StartTime:     time.Now(),
 		Duration:      10 * time.Minute,
 	}
-	ch1.Add(entry)
+	_ = ch1.Add(entry)
 
 	// Create new instance and load
 	ch2, err := NewCallHistory()

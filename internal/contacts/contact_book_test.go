@@ -94,7 +94,7 @@ func TestContactBook_Get(t *testing.T) {
 		Name:    "Alice",
 		Address: "192.168.1.100:5000",
 	}
-	cb.Add(contact)
+	_ = cb.Add(contact)
 
 	retrieved, err := cb.Get("alice_123")
 	if err != nil {
@@ -114,8 +114,8 @@ func TestContactBook_GetByName(t *testing.T) {
 
 	cb, _ := NewContactBook()
 
-	cb.Add(&Contact{Name: "Alice", Address: "addr1"})
-	cb.Add(&Contact{Name: "Bob", Address: "addr2"})
+	_ = cb.Add(&Contact{Name: "Alice", Address: "addr1"})
+	_ = cb.Add(&Contact{Name: "Bob", Address: "addr2"})
 
 	contact, err := cb.GetByName("Alice")
 	if err != nil {
@@ -338,7 +338,7 @@ func TestContactBook_UpdateCallStats(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	oldTime := contact.LastCallTime
 
-	cb.UpdateCallStats("192.168.1.100:5000")
+	_ = cb.UpdateCallStats("192.168.1.100:5000")
 
 	contact, _ = cb.GetByAddress("192.168.1.100:5000")
 
@@ -409,7 +409,7 @@ func TestContactBook_SaveAndLoad(t *testing.T) {
 
 	cb1, _ := NewContactBook()
 
-	cb1.Add(&Contact{
+	_ = cb1.Add(&Contact{
 		ID:      "alice_123",
 		Name:    "Alice",
 		Address: "192.168.1.100:5000",
