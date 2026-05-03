@@ -52,7 +52,6 @@ type Participant struct {
 	isPaused  bool
 
 	// Statistics
-	packetsReceived uint64
 	bytesSent       uint64
 }
 
@@ -67,8 +66,6 @@ type Room struct {
 
 	// Room settings
 	maxParticipants int
-	requirePassword bool
-	password        string
 
 	// Statistics
 	totalPackets uint64
@@ -79,9 +76,6 @@ type Room struct {
 type Stream struct {
 	Type       StreamType
 	SSRC       uint32 // Synchronization Source identifier
-	lastPacket time.Time
-	packets    uint64
-	bytes      uint64
 }
 
 type StreamType int

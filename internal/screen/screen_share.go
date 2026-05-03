@@ -28,8 +28,6 @@ type ScreenShare struct {
 	running    bool
 	frameChan  chan *terminal.Frame
 	command    string
-	cursorRow  int
-	cursorCol  int
 	scrollback int // Number of lines in scrollback buffer
 }
 

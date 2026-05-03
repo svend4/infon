@@ -10,7 +10,6 @@ import (
 
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/pkg/color"
-	"github.com/svend4/infon/pkg/terminal"
 )
 
 func runDemo() {
@@ -70,26 +69,3 @@ func runDemo() {
 		termWidth, termHeight, termWidth*2, termHeight*2)
 }
 
-// runDemoPattern demonstrates rendering patterns
-func runDemoPattern() {
-	frame := terminal.NewFrame(40, 20)
-
-	// Draw a gradient
-	for y := 0; y < 20; y++ {
-		for x := 0; x < 40; x++ {
-			intensity := uint8(float64(x) / 40.0 * 255)
-			c := color.RGB{R: intensity, G: intensity, B: intensity}
-			frame.SetBlock(x, y, '█', c, color.Black)
-		}
-	}
-
-	// Draw a box
-	frame.DrawBox(5, 5, 30, 10, color.White, color.Black)
-
-	// Draw text
-	frame.DrawText(10, 8, "TVCP Demo", color.Cyan, color.Black)
-
-	// Render
-	frame.RenderToTerminal()
-	fmt.Println(color.Reset)
-}

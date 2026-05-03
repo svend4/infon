@@ -81,7 +81,6 @@ func NewAdvancedAEC(config AECConfig) (*AdvancedAEC, error) {
 func (aec *AdvancedAEC) Process(capture, reference []int16) ([]int16, bool, error) {
 	start := time.Now()
 
-	output := make([]int16, len(capture))
 	echoDetected := false
 
 	// Convert to float64 for processing
@@ -100,7 +99,7 @@ func (aec *AdvancedAEC) Process(capture, reference []int16) ([]int16, bool, erro
 	}
 
 	// Convert back to int16
-	output = float64ToInt16(outputFloat)
+	output := float64ToInt16(outputFloat)
 
 	// Update statistics
 	processTime := time.Since(start)

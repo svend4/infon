@@ -54,7 +54,6 @@ type STUNClient struct {
 
 	// Discovered addresses
 	mappedAddr    *net.UDPAddr
-	changedAddr   *net.UDPAddr
 	natType       NATType
 
 	// Statistics

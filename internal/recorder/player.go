@@ -14,7 +14,6 @@ import (
 // Player plays back recorded calls
 type Player struct {
 	recording *Recording
-	position  time.Duration
 	playing   bool
 }
 

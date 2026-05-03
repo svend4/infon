@@ -127,7 +127,7 @@ func TestContactBook_GetByName(t *testing.T) {
 	}
 
 	// Case insensitive
-	contact, err = cb.GetByName("alice")
+	_, err = cb.GetByName("alice")
 	if err != nil {
 		t.Error("GetByName() should be case insensitive")
 	}

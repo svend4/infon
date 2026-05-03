@@ -24,11 +24,6 @@ func IsTemporaryError(err error) bool {
 		return false
 	}
 
-	// Check for net.Error with Temporary() method
-	if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
-		return true
-	}
-
 	// Check for specific errno values
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {

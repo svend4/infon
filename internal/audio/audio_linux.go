@@ -50,7 +50,7 @@ func listCaptureDevicesImpl() ([]DeviceInfo, error) {
 
 			devices = append(devices, DeviceInfo{
 				ID:          deviceID,
-				Name:        fmt.Sprintf("%s", dev.Title),
+				Name:        dev.Title,
 				Type:        "capture",
 				IsDefault:   deviceID == 0,
 				SampleRates: []int{8000, 16000, 44100, 48000},
@@ -86,7 +86,7 @@ func listPlaybackDevicesImpl() ([]DeviceInfo, error) {
 
 			devices = append(devices, DeviceInfo{
 				ID:          deviceID,
-				Name:        fmt.Sprintf("%s", dev.Title),
+				Name:        dev.Title,
 				Type:        "playback",
 				IsDefault:   deviceID == 0,
 				SampleRates: []int{8000, 16000, 44100, 48000},
@@ -111,14 +111,6 @@ func newPlaybackImpl(deviceID int, format AudioFormat) (AudioPlayback, error) {
 		format: format,
 		open:   false,
 	}, nil
-}
-
-func newDefaultCaptureImpl() (AudioCapture, error) {
-	return newCaptureImpl(0, DefaultFormat())
-}
-
-func newDefaultPlaybackImpl() (AudioPlayback, error) {
-	return newPlaybackImpl(0, DefaultFormat())
 }
 
 // ALSACapture implementation

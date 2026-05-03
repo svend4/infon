@@ -499,12 +499,8 @@ func TestAGCClipping(t *testing.T) {
 
 	output := agc.Process(input)
 
-	// Verify no clipping artifacts
-	for i := range output {
-		if output[i] < math.MinInt16 || output[i] > math.MaxInt16 {
-			t.Errorf("Output[%d] = %d, out of int16 range", i, output[i])
-		}
-	}
+	// int16 values are automatically in valid range
+	_ = output
 }
 
 // VAD Tests
