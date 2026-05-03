@@ -9,8 +9,13 @@ import (
 func TestNewContactBook(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, err := NewContactBook()
 	if err != nil {
@@ -29,8 +34,13 @@ func TestNewContactBook(t *testing.T) {
 func TestContactBook_Add(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -63,8 +73,13 @@ func TestContactBook_Add(t *testing.T) {
 func TestContactBook_AddInvalid(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -84,8 +99,13 @@ func TestContactBook_AddInvalid(t *testing.T) {
 func TestContactBook_Get(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -109,8 +129,13 @@ func TestContactBook_Get(t *testing.T) {
 func TestContactBook_GetByName(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -136,8 +161,13 @@ func TestContactBook_GetByName(t *testing.T) {
 func TestContactBook_GetByAddress(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -156,8 +186,13 @@ func TestContactBook_GetByAddress(t *testing.T) {
 func TestContactBook_GetAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -180,8 +215,13 @@ func TestContactBook_GetAll(t *testing.T) {
 func TestContactBook_GetFavorites(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -199,8 +239,13 @@ func TestContactBook_GetFavorites(t *testing.T) {
 func TestContactBook_GetByTag(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -218,8 +263,13 @@ func TestContactBook_GetByTag(t *testing.T) {
 func TestContactBook_Search(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -249,8 +299,13 @@ func TestContactBook_Search(t *testing.T) {
 func TestContactBook_Update(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -283,8 +338,13 @@ func TestContactBook_Update(t *testing.T) {
 func TestContactBook_Delete(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -312,8 +372,13 @@ func TestContactBook_Delete(t *testing.T) {
 func TestContactBook_UpdateCallStats(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -354,8 +419,13 @@ func TestContactBook_UpdateCallStats(t *testing.T) {
 func TestContactBook_GetRecent(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -380,8 +450,13 @@ func TestContactBook_GetRecent(t *testing.T) {
 func TestContactBook_GetFrequent(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb, _ := NewContactBook()
 
@@ -404,8 +479,13 @@ func TestContactBook_GetFrequent(t *testing.T) {
 func TestContactBook_SaveAndLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
 	_ = os.Setenv("HOME", tmpDir)
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	cb1, _ := NewContactBook()
 
