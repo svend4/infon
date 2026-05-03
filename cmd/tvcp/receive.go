@@ -32,7 +32,7 @@ func runReceive() {
 	defer transport.Close()
 
 	fmt.Printf("Local: %s\n", transport.LocalAddr())
-	fmt.Println("\nWaiting for video stream... Press Ctrl+C to stop\n")
+	fmt.Println("\nWaiting for video stream... Press Ctrl+C to stop")
 
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)

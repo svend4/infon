@@ -77,7 +77,7 @@ func runSend() {
 	width := 80
 	height := 24
 
-	fmt.Println("Streaming... Press Ctrl+C to stop\n")
+	fmt.Println("Streaming... Press Ctrl+C to stop")
 
 	for {
 		select {

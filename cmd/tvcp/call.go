@@ -370,8 +370,8 @@ func runCall() {
 	vad.SetSensitivity(0.7) // 0.7 = balanced sensitivity
 
 	// Noise Suppression
-	noiseSuppressor := audio.NewNoiseSuppressor(audioFormat.SampleRate, audioFormat.SampleRate/50)
-	noiseSuppressor.SetAggressiveness(0.6) // 0.6 = moderate suppression
+	noiseSuppressor := audio.NewNoiseSuppressor(audioFormat.SampleRate, audioFormat.Channels)
+	noiseSuppressor.SetLevel(2) // 0=off, 1=low, 2=medium, 3=high
 
 	// Echo Cancellation
 	// Note: Full echo cancellation requires speaker loopback capture
@@ -399,7 +399,7 @@ func runCall() {
 				}
 
 				// Apply noise suppression
-				enhanced := noiseSuppressor.Process(buffer[:n])
+				enhanced, _ := noiseSuppressor.Process(buffer[:n])
 
 				// Record audio if recording (record original, not enhanced)
 				if rec != nil && rec.IsRecording() {
@@ -543,12 +543,13 @@ func runCall() {
 			fmt.Printf("  Bandwidth saved: ~%.1f%%\n", 100.0-vadStats.ActivityRate)
 
 			// Show noise suppression statistics
-			nsStats := noiseSuppressor.GetStatistics()
-			fmt.Printf("\nNoise Suppression:\n")
-			fmt.Printf("  Total frames: %d\n", nsStats.TotalFrames)
-			fmt.Printf("  Clean frames: %d (%.1f%%)\n", nsStats.CleanFrames, nsStats.CleanRatio)
-			fmt.Printf("  Noisy frames: %d (%.1f%%)\n", nsStats.NoisyFrames, 100.0-nsStats.CleanRatio)
-			fmt.Printf("  Calibrated: %v\n", nsStats.Calibrated)
+			// TODO: Re-enable when NoiseSuppressor has GetStatistics method
+			// nsStats := noiseSuppressor.GetStatistics()
+			// fmt.Printf("\nNoise Suppression:\n")
+			// fmt.Printf("  Total frames: %d\n", nsStats.TotalFrames)
+			// fmt.Printf("  Clean frames: %d (%.1f%%)\n", nsStats.CleanFrames, nsStats.CleanRatio)
+			// fmt.Printf("  Noisy frames: %d (%.1f%%)\n", nsStats.NoisyFrames, 100.0-nsStats.CleanRatio)
+			// fmt.Printf("  Calibrated: %v\n", nsStats.Calibrated)
 
 			// Show echo cancellation statistics (when speaker loopback available)
 			ecStats := echoCanceller.GetStatistics()

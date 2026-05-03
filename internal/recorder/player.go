@@ -58,7 +58,7 @@ func (p *Player) Play() error {
 		float64(p.recording.Metadata.Duration)/1000.0,
 		p.recording.Metadata.FrameCount,
 		p.recording.Metadata.AudioChunks)
-	fmt.Println("Press Ctrl+C to stop\n")
+	fmt.Println("Press Ctrl+C to stop")
 
 	time.Sleep(500 * time.Millisecond)
 

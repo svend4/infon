@@ -61,6 +61,11 @@ func NewContactBook() (*ContactBook, error) {
 	return cb, nil
 }
 
+// GetDefaultContactBook returns the default contact book (alias for NewContactBook)
+func GetDefaultContactBook() (*ContactBook, error) {
+	return NewContactBook()
+}
+
 // Add adds a new contact
 func (cb *ContactBook) Add(contact *Contact) error {
 	if contact.ID == "" {
@@ -139,6 +144,27 @@ func (cb *ContactBook) GetByAddress(address string) (*Contact, error) {
 		}
 	}
 	return nil, fmt.Errorf("contact not found: %s", address)
+}
+
+// Resolve resolves a contact name to an address
+func (cb *ContactBook) Resolve(name string) (string, error) {
+	contact, err := cb.GetByName(name)
+	if err != nil {
+		return "", err
+	}
+	return contact.Address, nil
+}
+
+// UpdateLastSeen updates the last call time for a contact
+func (cb *ContactBook) UpdateLastSeen(name string) error {
+	contact, err := cb.GetByName(name)
+	if err != nil {
+		return err
+	}
+	contact.LastCallTime = time.Now()
+	contact.TotalCalls++
+	contact.UpdatedAt = time.Now()
+	return cb.Save()
 }
 
 // GetAll returns all contacts, sorted by name

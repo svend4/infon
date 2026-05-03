@@ -53,7 +53,7 @@ func runContactsList() {
 		os.Exit(1)
 	}
 
-	contactsList := cb.List()
+	contactsList := cb.GetAll()
 
 	if len(contactsList) == 0 {
 		fmt.Println("📭 No contacts yet.")
@@ -68,12 +68,12 @@ func runContactsList() {
 
 	for _, contact := range contactsList {
 		fmt.Printf("  %s\n", contact.Name)
-		if contact.Alias != "" {
-			fmt.Printf("    Alias: %s\n", contact.Alias)
+		if contact.DisplayName != "" {
+			fmt.Printf("    Alias: %s\n", contact.DisplayName)
 		}
 		fmt.Printf("    Address: %s\n", contact.Address)
-		if !contact.LastSeen.IsZero() {
-			fmt.Printf("    Last seen: %s\n", formatTime(contact.LastSeen))
+		if !contact.LastCallTime.IsZero() {
+			fmt.Printf("    Last seen: %s\n", formatTime(contact.LastCallTime))
 		}
 		if contact.Notes != "" {
 			fmt.Printf("    Notes: %s\n", contact.Notes)
@@ -113,10 +113,11 @@ func runContactsAdd() {
 		os.Exit(1)
 	}
 
-	contact := contacts.Contact{
-		Name:    name,
-		Address: address,
-		AddedAt: time.Now(),
+	contact := &contacts.Contact{
+		Name:      name,
+		Address:   address,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if err := cb.Add(contact); err != nil {
@@ -144,7 +145,7 @@ func runContactsRemove() {
 		os.Exit(1)
 	}
 
-	if err := cb.Remove(name); err != nil {
+	if err := cb.Delete(name); err != nil {
 		fmt.Fprintf(os.Stderr, "Error removing contact: %v\n", err)
 		os.Exit(1)
 	}
@@ -166,23 +167,24 @@ func runContactsShow() {
 		os.Exit(1)
 	}
 
-	contact := cb.FindByName(name)
-	if contact == nil {
+	contact, err := cb.GetByName(name)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Contact '%s' not found\n", name)
 		os.Exit(1)
 	}
 
 	fmt.Printf("📇 Contact: %s\n\n", contact.Name)
-	if contact.Alias != "" {
-		fmt.Printf("  Alias: %s\n", contact.Alias)
+	if contact.DisplayName != "" {
+		fmt.Printf("  Alias: %s\n", contact.DisplayName)
 	}
 	fmt.Printf("  Address: %s\n", contact.Address)
-	if contact.PublicKey != "" {
-		fmt.Printf("  Public Key: %s\n", contact.PublicKey)
-	}
-	fmt.Printf("  Added: %s\n", formatTime(contact.AddedAt))
-	if !contact.LastSeen.IsZero() {
-		fmt.Printf("  Last Seen: %s\n", formatTime(contact.LastSeen))
+	// TODO: Add PublicKey field to Contact struct
+	// if contact.PublicKey != "" {
+	// 	fmt.Printf("  Public Key: %s\n", contact.PublicKey)
+	// }
+	fmt.Printf("  Added: %s\n", formatTime(contact.CreatedAt))
+	if !contact.LastCallTime.IsZero() {
+		fmt.Printf("  Last Seen: %s\n", formatTime(contact.LastCallTime))
 	}
 	if contact.Notes != "" {
 		fmt.Printf("  Notes: %s\n", contact.Notes)
