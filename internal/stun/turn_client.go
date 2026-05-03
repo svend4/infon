@@ -386,7 +386,7 @@ func (tc *TURNClient) Close() error {
 
 		data, _ := tc.encodeMessage(msg)
 		serverAddr, _ := net.ResolveUDPAddr("udp", tc.serverAddr)
-		tc.conn.WriteToUDP(data, serverAddr)
+		_, _ = tc.conn.WriteToUDP(data, serverAddr)
 	}
 
 	if tc.conn != nil {

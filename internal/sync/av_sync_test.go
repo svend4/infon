@@ -51,8 +51,8 @@ func TestAVSynchronizer_GetFrames(t *testing.T) {
 	avs := NewAVSynchronizer()
 
 	// Add frames with same PTS
-	avs.AddAudioFrame([]byte("audio"), 1000, 1)
-	avs.AddVideoFrame([]byte("video"), 1000, 1)
+	_ = avs.AddAudioFrame([]byte("audio"), 1000, 1)
+	_ = avs.AddVideoFrame([]byte("video"), 1000, 1)
 
 	// Wait for target delay
 	time.Sleep(100 * time.Millisecond)
@@ -78,8 +78,8 @@ func TestAVSynchronizer_SyncOffset(t *testing.T) {
 	avs := NewAVSynchronizer()
 
 	// Add frames with different PTS
-	avs.AddAudioFrame([]byte("audio"), 1000, 1)   // 1ms
-	avs.AddVideoFrame([]byte("video"), 50000, 1) // 50ms
+	_ = avs.AddAudioFrame([]byte("audio"), 1000, 1)   // 1ms
+	_ = avs.AddVideoFrame([]byte("video"), 50000, 1) // 50ms
 
 	offset := avs.GetSyncOffset()
 
@@ -107,8 +107,8 @@ func TestAVSynchronizer_Reset(t *testing.T) {
 	avs := NewAVSynchronizer()
 
 	// Add frames
-	avs.AddAudioFrame([]byte("audio"), 1000, 1)
-	avs.AddVideoFrame([]byte("video"), 1000, 1)
+	_ = avs.AddAudioFrame([]byte("audio"), 1000, 1)
+	_ = avs.AddVideoFrame([]byte("video"), 1000, 1)
 
 	avs.Reset()
 
@@ -148,9 +148,9 @@ func TestJitterBuffer_OrderedInsertion(t *testing.T) {
 	jb := NewJitterBuffer(10, 50*time.Millisecond)
 
 	// Add frames out of order
-	jb.Add(&Frame{PTS: 3000, Sequence: 3})
-	jb.Add(&Frame{PTS: 1000, Sequence: 1})
-	jb.Add(&Frame{PTS: 2000, Sequence: 2})
+	_ = jb.Add(&Frame{PTS: 3000, Sequence: 3})
+	_ = jb.Add(&Frame{PTS: 1000, Sequence: 1})
+	_ = jb.Add(&Frame{PTS: 2000, Sequence: 2})
 
 	// Peek should return lowest PTS
 	frame, err := jb.Peek()
@@ -172,7 +172,7 @@ func TestJitterBuffer_Get(t *testing.T) {
 		PTS:       1000,
 	}
 
-	jb.Add(frame)
+	_ = jb.Add(frame)
 
 	// Should be ready since it's past target delay
 	retrieved, err := jb.Get()
@@ -194,7 +194,7 @@ func TestJitterBuffer_BufferFull(t *testing.T) {
 
 	// Fill buffer
 	for i := 0; i < 3; i++ {
-		jb.Add(&Frame{PTS: int64(i * 1000)})
+		_ = jb.Add(&Frame{PTS: int64(i * 1000)})
 	}
 
 	// Try to add one more
@@ -207,8 +207,8 @@ func TestJitterBuffer_BufferFull(t *testing.T) {
 func TestJitterBuffer_Clear(t *testing.T) {
 	jb := NewJitterBuffer(10, 50*time.Millisecond)
 
-	jb.Add(&Frame{PTS: 1000})
-	jb.Add(&Frame{PTS: 2000})
+	_ = jb.Add(&Frame{PTS: 1000})
+	_ = jb.Add(&Frame{PTS: 2000})
 
 	jb.Clear()
 
@@ -223,7 +223,7 @@ func BenchmarkAVSynchronizer_AddAudioFrame(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		avs.AddAudioFrame(data, int64(i*1000), uint32(i))
+		_ = avs.AddAudioFrame(data, int64(i*1000), uint32(i))
 	}
 }
 
@@ -232,6 +232,6 @@ func BenchmarkJitterBuffer_Add(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		jb.Add(&Frame{PTS: int64(i * 1000), Sequence: uint32(i)})
+		_ = jb.Add(&Frame{PTS: int64(i * 1000), Sequence: uint32(i)})
 	}
 }

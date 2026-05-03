@@ -256,7 +256,7 @@ func (ve *VideoExporter) exportAudio(outputPath string) error {
 	ve.writeUint16(file, uint16(bitsPerSample))
 
 	// Write data chunk
-	file.Write([]byte("data"))
+	_, _ = file.Write([]byte("data"))
 	ve.writeUint32(file, uint32(dataSize))
 
 	// Write audio samples
@@ -277,7 +277,7 @@ func (ve *VideoExporter) writeUint32(file *os.File, val uint32) {
 		byte(val >> 16),
 		byte(val >> 24),
 	}
-	file.Write(buf)
+	_, _ = file.Write(buf)
 }
 
 // writeUint16 writes uint16 in little-endian
@@ -286,7 +286,7 @@ func (ve *VideoExporter) writeUint16(file *os.File, val uint16) {
 		byte(val),
 		byte(val >> 8),
 	}
-	file.Write(buf)
+	_, _ = file.Write(buf)
 }
 
 // writeInt16 writes int16 in little-endian
@@ -295,7 +295,7 @@ func (ve *VideoExporter) writeInt16(file *os.File, val int16) {
 		byte(val),
 		byte(val >> 8),
 	}
-	file.Write(buf)
+	_, _ = file.Write(buf)
 }
 
 // encodeVideo encodes video using FFmpeg

@@ -139,7 +139,7 @@ func TestCallHistory_GetByPeer(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ {
-		ch.Add(&CallEntry{
+		_ = ch.Add(&CallEntry{
 			RemoteAddress: "peer2",
 			StartTime:     time.Now(),
 			Duration:      time.Minute,
@@ -200,7 +200,7 @@ func TestCallHistory_Delete(t *testing.T) {
 		StartTime: time.Now(),
 		Duration:  time.Minute,
 	}
-	ch.Add(entry)
+	_ = ch.Add(entry)
 
 	if len(ch.entries) != 1 {
 		t.Fatal("Failed to add entry")
@@ -226,7 +226,7 @@ func TestCallHistory_Clear(t *testing.T) {
 
 	// Add multiple entries
 	for i := 0; i < 5; i++ {
-		ch.Add(&CallEntry{
+		_ = ch.Add(&CallEntry{
 			StartTime: time.Now(),
 			Duration:  time.Minute,
 		})
@@ -251,7 +251,7 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 	ch, _ := NewCallHistory()
 
 	// Add various types of calls
-	ch.Add(&CallEntry{
+	_ = ch.Add(&CallEntry{
 		Type:         CallTypeOutgoing,
 		Direction:    CallDirectionP2P,
 		StartTime:    time.Now(),
@@ -260,7 +260,7 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 		AudioEnabled: true,
 	})
 
-	ch.Add(&CallEntry{
+	_ = ch.Add(&CallEntry{
 		Type:         CallTypeIncoming,
 		Direction:    CallDirectionP2P,
 		StartTime:    time.Now(),
@@ -269,7 +269,7 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 		AudioEnabled: true,
 	})
 
-	ch.Add(&CallEntry{
+	_ = ch.Add(&CallEntry{
 		Type:         CallTypeMissed,
 		Direction:    CallDirectionP2P,
 		StartTime:    time.Now(),
@@ -278,7 +278,7 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 		AudioEnabled: false,
 	})
 
-	ch.Add(&CallEntry{
+	_ = ch.Add(&CallEntry{
 		Type:         CallTypeOutgoing,
 		Direction:    CallDirectionGroup,
 		StartTime:    time.Now(),

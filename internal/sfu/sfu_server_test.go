@@ -136,9 +136,9 @@ func TestGetRooms(t *testing.T) {
 	}
 
 	// Create some rooms
-	server.CreateRoom("room1", "Room 1", 10)
-	server.CreateRoom("room2", "Room 2", 20)
-	server.CreateRoom("room3", "Room 3", 30)
+	_ = server.CreateRoom("room1", "Room 1", 10)
+	_ = server.CreateRoom("room2", "Room 2", 20)
+	_ = server.CreateRoom("room3", "Room 3", 30)
 
 	rooms = server.GetRooms()
 	if len(rooms) != 3 {
@@ -229,7 +229,7 @@ func TestGetParticipantsInRoom(t *testing.T) {
 	server, _ := NewSFUServer("127.0.0.1:0")
 
 	// Create room
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	// Add participants
 	server.mu.Lock()
@@ -273,7 +273,7 @@ func TestStatistics(t *testing.T) {
 	}
 
 	// Create room and add participants
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	server.mu.Lock()
 	room := server.rooms["room1"]
@@ -385,7 +385,7 @@ func TestCleanupStaleParticipants(t *testing.T) {
 	server, _ := NewSFUServer("127.0.0.1:0")
 
 	// Create room
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	// Add participants with different lastSeen times
 	server.mu.Lock()
@@ -432,7 +432,7 @@ func TestCleanupEmptyRoom(t *testing.T) {
 	server, _ := NewSFUServer("127.0.0.1:0")
 
 	// Create room with one stale participant
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	server.mu.Lock()
 	room := server.rooms["room1"]
@@ -460,11 +460,11 @@ func TestCleanupEmptyRoom(t *testing.T) {
 
 func TestForwardAudioPacket(t *testing.T) {
 	server, _ := NewSFUServer("127.0.0.1:0")
-	server.Start()
-	defer server.Stop()
+	_ = server.Start()
+	defer func() { _ = server.Stop() }()
 
 	// Create room with participants
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12345")
 	addr2, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12346")
@@ -513,11 +513,11 @@ func TestForwardAudioPacket(t *testing.T) {
 
 func TestForwardAudioPacketMuted(t *testing.T) {
 	server, _ := NewSFUServer("127.0.0.1:0")
-	server.Start()
-	defer server.Stop()
+	_ = server.Start()
+	defer func() { _ = server.Stop() }()
 
 	// Create room with muted participant
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12345")
 	addr2, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12346")
@@ -564,11 +564,11 @@ func TestForwardAudioPacketMuted(t *testing.T) {
 
 func TestForwardVideoPacket(t *testing.T) {
 	server, _ := NewSFUServer("127.0.0.1:0")
-	server.Start()
-	defer server.Stop()
+	_ = server.Start()
+	defer func() { _ = server.Stop() }()
 
 	// Create room with participants
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12345")
 	addr2, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12346")
@@ -616,11 +616,11 @@ func TestForwardVideoPacket(t *testing.T) {
 
 func TestForwardVideoPacketPaused(t *testing.T) {
 	server, _ := NewSFUServer("127.0.0.1:0")
-	server.Start()
-	defer server.Stop()
+	_ = server.Start()
+	defer func() { _ = server.Stop() }()
 
 	// Create room with paused participant
-	server.CreateRoom("room1", "Test Room", 10)
+	_ = server.CreateRoom("room1", "Test Room", 10)
 
 	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12345")
 	addr2, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12346")
@@ -669,11 +669,11 @@ func TestForwardVideoPacketPaused(t *testing.T) {
 
 func BenchmarkForwardAudioPacket(b *testing.B) {
 	server, _ := NewSFUServer("127.0.0.1:0")
-	server.Start()
-	defer server.Stop()
+	_ = server.Start()
+	defer func() { _ = server.Stop() }()
 
 	// Create room with 10 participants
-	server.CreateRoom("room1", "Test Room", 100)
+	_ = server.CreateRoom("room1", "Test Room", 100)
 
 	server.mu.Lock()
 	room := server.rooms["room1"]
