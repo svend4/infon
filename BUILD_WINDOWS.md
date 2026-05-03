@@ -79,15 +79,29 @@ go build -ldflags "-X main.version=0.0.1-alpha" -o bin/tvcp.exe ./cmd/tvcp
 
 ### Making a Call
 
+**⚠️ Важно для тестирования:**
+Вам **НЕ нужны 2 компьютера**! Можно тестировать на одном компьютере, открыв 2 окна PowerShell или 2 вкладки в Windows Terminal.
+
+#### Вариант 1: Два окна PowerShell
+1. Откройте первое окно PowerShell → запустите приёмник
+2. Откройте второе окно PowerShell → запустите отправитель
+
+#### Вариант 2: Windows Terminal (рекомендуется)
+1. Откройте Windows Terminal
+2. Создайте новую вкладку (`Ctrl+Shift+T`)
+3. В первой вкладке запустите приёмник, во второй — отправитель
+
 **Terminal 1 (Receiver):**
 ```powershell
 .\bin\tvcp.exe listen 5000
 ```
 
-**Terminal 2 (Caller):**
+**Terminal 2 (Caller) — В ДРУГОМ окне/вкладке:**
 ```powershell
 .\bin\tvcp.exe call localhost:5000
 ```
+
+**Для реальных P2P звонков** между разными компьютерами используйте Yggdrasil адреса или IP в локальной сети.
 
 ---
 

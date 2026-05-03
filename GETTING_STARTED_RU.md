@@ -32,14 +32,26 @@ make build
 
 ### 3. Локальный видеозвонок
 
-Откройте два терминала:
+**💡 Тестирование на одном компьютере:**
 
-**Терминал 1 (Алиса):**
+Вам **НЕ нужны 2 компьютера**! Для тестирования откройте **2 окна терминала** на одном компьютере:
+
+**Windows:**
+- Откройте 2 окна PowerShell, ИЛИ
+- Используйте Windows Terminal с двумя вкладками (`Ctrl+Shift+T`)
+
+**Linux/macOS:**
+- Откройте 2 окна терминала, ИЛИ
+- Используйте tmux/screen для разделения экрана
+
+---
+
+**Терминал 1 (Алиса) — первое окно:**
 ```bash
 ./bin/tvcp call localhost:5001 gradient 5000
 ```
 
-**Терминал 2 (Боб):**
+**Терминал 2 (Боб) — ВТОРОЕ окно:**
 ```bash
 ./bin/tvcp call localhost:5000 bounce 5001
 ```
@@ -50,6 +62,8 @@ make build
 - Индикаторы передачи аудио
 
 Нажмите `Ctrl+C` для завершения звонка.
+
+**📝 Примечание:** `localhost` означает "этот же компьютер". Для звонков между разными компьютерами используйте IP-адрес или Yggdrasil адрес.
 
 ## Установка и обновления
 
@@ -84,6 +98,28 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 # Проверить установку
 tvcp version
 ```
+
+**Android (Termux):**
+
+См. подробное руководство: [TERMUX_ANDROID.md](TERMUX_ANDROID.md)
+
+Краткая установка:
+```bash
+# Установить зависимости в Termux
+pkg install git golang make
+
+# Клонировать и собрать
+git clone https://github.com/svend4/infon
+cd infon
+make build
+
+# Установить в PATH
+mkdir -p ~/.local/bin
+cp ./bin/tvcp ~/.local/bin/
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+```
+
+**Примечание:** На Android работает без камеры/микрофона, но может использоваться как relay-сервер или для просмотра видео.
 
 ### Обновление зависимостей
 
