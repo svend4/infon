@@ -1,3 +1,5 @@
+//go:build experimental
+
 // Command aiplayf is a LIVE tic-tac-toe driven over a shared folder, so an
 // external brain (Claude) can play move-by-move while the repo engine + renderer
 // run for real. X = the brain (reads assets/ttt/mvK.txt); O = repo engine
@@ -94,7 +96,11 @@ func main() {
 	ff, _ := os.Create("assets/aiplayf.frames.txt")
 	defer ff.Close()
 	moveNo := 0
-	emit := func() { ff.WriteString(renderBoard(g, moveNo).Render()); ff.WriteString("\n@@@FRAME@@@\n"); _ = ff.Sync() }
+	emit := func() {
+		ff.WriteString(renderBoard(g, moveNo).Render())
+		ff.WriteString("\n@@@FRAME@@@\n")
+		_ = ff.Sync()
+	}
 	writeBoard := func(extra string) { _ = os.WriteFile(dir+"/board.txt", []byte(plain(g)+extra), 0o644) }
 	emit()
 	k := 0

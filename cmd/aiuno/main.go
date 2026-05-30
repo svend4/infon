@@ -1,3 +1,5 @@
+//go:build experimental
+
 // Command aiuno plays UNO where a tvcp-ai/1 brain controls one player, using the
 // repo's experimental/games/cards engine. Demonstrates the protocol on a card
 // game (Move.CardIndex / Draw / Color).
