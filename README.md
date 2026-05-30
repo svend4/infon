@@ -8,6 +8,12 @@
 
 **TVCP** is the first video communication platform designed to work entirely inside a text terminal, using Unicode block elements and ANSI colors to render video at ultra-low bandwidth.
 
+## 🤖 AI integration (tvcp-ai/1)
+
+This repo also includes an **AI layer**: an open **`tvcp-ai/1`** format (JSON over HTTP) that lets **any neural network** be a partner for the terminal — drawing (draw-DSL + a simple sketch format), playing games (tic-tac-toe, Wordle, UNO), reacting with glyph cards, and acting as a video source. Swap brains by changing a URL — a reference brain (no model), local Ollama, or any OpenAI/Anthropic endpoint (demonstrated live with Claude Haiku).
+
+See **[ai/IMPLEMENTED.md](ai/IMPLEMENTED.md)** for everything that was built, **[ai/BRAIN_PROTOCOL.md](ai/BRAIN_PROTOCOL.md)** for the spec, and **[ai/showcase.html](ai/showcase.html)** for a visual gallery. New code lives in `pkg/scene`, `pkg/sketch`, `pkg/brain`, `internal/aisource`, and the `cmd/ai*` commands; `tvcp ai` streams an AI video source.
+
 ## ⚡ Key Features
 
 - **🚀 Ultra-low bandwidth:** 382 kbps total (vs 1.8 Mbps for Zoom)
