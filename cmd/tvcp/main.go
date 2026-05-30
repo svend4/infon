@@ -35,6 +35,8 @@ func main() {
 		runGenerate()
 	case "preview":
 		runPreview()
+	case "ai":
+		runAI()
 	case "synth", "generative":
 		runSynth()
 	case "send":
@@ -95,6 +97,7 @@ func printUsage() {
 	fmt.Println("  test                Run video/audio test")
 	fmt.Println("  demo <image>        Display image in terminal (proof-of-concept)")
 	fmt.Println("  preview [pattern]   Live camera preview (animated test patterns)")
+	fmt.Println("  ai                  Stream the AI-generated video source")
 	fmt.Println("  synth [gen]         Live synthesized graphics (plasma/ripple/neural)")
 	fmt.Println("  send <host:port>    Stream video to remote host (one-way)")
 	fmt.Println("  receive [port]      Receive video stream (default port: 5000)")
