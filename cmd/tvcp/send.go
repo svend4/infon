@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/svend4/infon/internal/aisource"
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/internal/device"
 	"github.com/svend4/infon/internal/network"
@@ -16,11 +17,15 @@ import (
 
 func runSend() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: tvcp send <host:port> [pattern]")
+		fmt.Fprintln(os.Stderr, "Usage: tvcp send <host:port> [pattern|source]")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
 		fmt.Fprintln(os.Stderr, "  tvcp send localhost:5000")
 		fmt.Fprintln(os.Stderr, "  tvcp send 192.168.1.100:5000 bounce")
 		fmt.Fprintln(os.Stderr, "  tvcp send [::1]:5000 gradient")
+		fmt.Fprintln(os.Stderr, "\nSynthesized / AI sources (stream generated video):")
+		fmt.Fprintln(os.Stderr, "  tvcp send localhost:5000 plasma     # procedural")
+		fmt.Fprintln(os.Stderr, "  tvcp send localhost:5000 neural     # model-painted")
+		fmt.Fprintln(os.Stderr, "    (neural picks IMAGE_API_URL > BRAIN_URL from the environment)")
 		os.Exit(1)
 	}
 
@@ -52,9 +57,17 @@ func runSend() {
 	fmt.Printf("Local: %s\n", transport.LocalAddr())
 	fmt.Println()
 
-	// Create camera
+	// Create the video source. A generative/AI name (plasma, ripple, neural, ai)
+	// builds a synthesized source so model-painted or procedural video streams
+	// over the network exactly like webcam video; anything else is a test pattern.
 	fps := 15.0
-	camera := device.NewTestCamera(640, 480, fps, pattern)
+	var camera device.Camera
+	if src, ok := aisource.BuildSource(pattern, 640, 480, fps); ok {
+		camera = src
+		fmt.Printf("Source: synthesized (%s)\n", pattern)
+	} else {
+		camera = device.NewTestCamera(640, 480, fps, pattern)
+	}
 	if err := camera.Open(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening camera: %v\n", err)
 		os.Exit(1)
@@ -98,7 +111,7 @@ func runSend() {
 				continue
 			}
 
-				// Encode to terminal frame
+			// Encode to terminal frame
 			frame := babe.ImageToFrame(img, width, height)
 
 			// Fragment frame
