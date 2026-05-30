@@ -203,6 +203,7 @@ Each block = 2×2 pixels encoded as:
 - 🌐 [**Network Streaming**](NETWORK.md) — Stream video over UDP
 - 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video rendering
 - 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering
+- 🧠 [**Generative Graphics**](GENERATIVE.md) — Synthesized frames (procedural + neural hook)
 
 ### Planning & Analysis
 - 📖 [Business Plan](tvcp-business-plan.md) — Full market analysis and roadmap
