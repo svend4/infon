@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/svend4/infon/internal/aisource"
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/internal/device"
 	"github.com/svend4/infon/pkg/color"
@@ -48,14 +49,17 @@ func runSynth() {
 		if prompt == "" {
 			prompt = "(no prompt)"
 		}
-		// No backend is wired in this prototype, so an animated placeholder is
-		// shown. Plug a model in by implementing device.NeuralBackend and
-		// calling NeuralGenerator.SetBackend — see GENERATIVE.md.
-		gen = device.NewNeuralGenerator(nil, prompt)
-		fmt.Printf("Generator: neural (Layer 2 hook)\n")
 		fmt.Printf("Prompt: %q\n", prompt)
-		fmt.Println("Backend: not connected — showing placeholder.")
-		fmt.Println("         Implement device.NeuralBackend to render real frames (see GENERATIVE.md).")
+		if url := os.Getenv("BRAIN_URL"); url != "" {
+			// Route generation through the open tvcp-ai/1 protocol: any model
+			// (Ollama / OpenAI / Anthropic adapter) paints frames asynchronously.
+			gen = device.NewNeuralGenerator(aisource.NewBrainBackend(url), prompt)
+			fmt.Printf("Generator: neural via tvcp-ai/1 brain at %s\n", url)
+		} else {
+			gen = device.NewNeuralGenerator(nil, prompt)
+			fmt.Println("Generator: neural (Layer 2 hook) — placeholder")
+			fmt.Println("Backend: not connected. Set BRAIN_URL to a tvcp-ai/1 endpoint to render with a model.")
+		}
 	} else {
 		g, err := device.NewProceduralGenerator(name)
 		if err != nil {
