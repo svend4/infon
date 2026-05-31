@@ -2,6 +2,7 @@ package aisource
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/svend4/infon/internal/device"
 )
@@ -50,6 +51,22 @@ func BuildSource(name string, width, height int, fps float64) (device.Camera, bo
 // The local tier keeps "visual chat" working on a Raspberry Pi or air-gapped
 // host, honoring TVCP's offline-first identity.
 func NeuralBackendFromEnv() device.NeuralBackend {
+	backend := pickBackend()
+	if backend == nil {
+		return nil
+	}
+	// Optional temporal-coherence wrapper (roadmap B1): TVCP_STREAM_COHERENCE in
+	// (0,1] cross-fades frames for smooth, live evolution instead of hard cuts.
+	if v := os.Getenv("TVCP_STREAM_COHERENCE"); v != "" {
+		if c, err := strconv.ParseFloat(v, 64); err == nil && c > 0 {
+			return NewStreamingBackend(backend, c)
+		}
+	}
+	return backend
+}
+
+// pickBackend implements the base tier policy (highest fidelity first).
+func pickBackend() device.NeuralBackend {
 	if ib, ok := NewImageBackendFromEnv(); ok {
 		return ib
 	}
