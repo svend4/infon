@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"image"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/svend4/infon/internal/device"
@@ -44,6 +46,16 @@ func (b *PseudoBackend) Name() string {
 // prompt and render it to a raster (downsampled later by the BABE renderer).
 func (b *PseudoBackend) Generate(ctx context.Context, prompt string, width, height int) (image.Image, error) {
 	_ = ctx // the HTTP client carries its own timeout
+	// Live re-prompt: if TVCP_PROMPT_FILE points at a readable file, its contents
+	// become the prompt for THIS frame, so the scene can be changed on the fly
+	// (write a new line to the file) without restarting the stream.
+	if pf := os.Getenv("TVCP_PROMPT_FILE"); pf != "" {
+		if data, err := os.ReadFile(pf); err == nil {
+			if live := strings.TrimSpace(string(data)); live != "" {
+				prompt = live
+			}
+		}
+	}
 	cols, rows := width/8, height/8
 	if cols < 24 {
 		cols = 24

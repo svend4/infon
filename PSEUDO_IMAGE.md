@@ -151,6 +151,17 @@ tvcp synth neural "a calm harbor at dawn"
 The slow model never stalls the terminal: generation runs through the async
 `device.NeuralGenerator`, exactly like the sketch backend.
 
+
+**Live re-prompt:** set `TVCP_PROMPT_FILE=/path/to/prompt.txt` and the pseudo backend
+re-reads it every frame — write a new line and the scene changes on the fly, no
+restart (steer a live "visual chat"):
+
+```bash
+echo "a calm harbor at dawn" > prompt.txt
+TVCP_PROMPT_FILE=prompt.txt TVCP_PSEUDO=grid BRAIN_URL=... tvcp synth neural x &
+echo "a neon cyberpunk city at night" > prompt.txt   # the terminal repaints
+```
+
 ## Ideas this opens up
 
 - **Denoise transitions** — use the `DiffuseFrames` animation as a scene wipe.
