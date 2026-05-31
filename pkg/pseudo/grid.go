@@ -16,6 +16,7 @@ var defGridColor = color.RGB{R: 20, G: 20, B: 28}
 // emit. Rows may be ragged; they are normalized to a rectangle on render.
 type Grid struct {
 	Rows [][]string `json:"rows"`
+	pal  Palette
 }
 
 // rect normalizes the (possibly ragged) token grid into a rectangle of RGB.
@@ -41,7 +42,7 @@ func (g *Grid) rect() (cells [][]color.RGB, w, h int) {
 			case len(row) > 0:
 				tok = row[len(row)-1] // extend the last color to pad ragged rows
 			}
-			cells[y][x] = Color(tok, defGridColor)
+			cells[y][x] = resolve(g.pal, tok, defGridColor)
 		}
 	}
 	return cells, w, h

@@ -13,11 +13,12 @@ type GlyphArt struct {
 	Palette map[string]string `json:"palette,omitempty"` // single-char key -> color token
 	Bg      string            `json:"bg,omitempty"`      // background color token
 	Fg      string            `json:"fg,omitempty"`      // default foreground token
+	pal     Palette
 }
 
 func (a *GlyphArt) frame(cols, rows int) *terminal.Frame {
-	bg := Color(a.Bg, color.RGB{R: 12, G: 12, B: 18})
-	deffg := Color(a.Fg, color.RGB{R: 230, G: 230, B: 235})
+	bg := resolve(a.pal, a.Bg, color.RGB{R: 12, G: 12, B: 18})
+	deffg := resolve(a.pal, a.Fg, color.RGB{R: 230, G: 230, B: 235})
 	f := terminal.NewFrame(cols, rows)
 	f.Fill(' ', bg, bg)
 
@@ -36,7 +37,7 @@ func (a *GlyphArt) frame(cols, rows int) *terminal.Frame {
 	cmap := make(map[rune]color.RGB, len(a.Palette))
 	for k, v := range a.Palette {
 		for _, kr := range k {
-			cmap[kr] = Color(v, deffg)
+			cmap[kr] = resolve(a.pal, v, deffg)
 			break
 		}
 	}

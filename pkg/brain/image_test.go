@@ -10,7 +10,7 @@ import (
 // The reference brain must be able to "paint" every pseudo-image format with no
 // model at all — that is the whole point of pseudo-images.
 func TestReferenceImageAllFormats(t *testing.T) {
-	formats := []string{"", "grid", "pixels", "glyphs", "sigils", "vector", "sketch"}
+	formats := []string{"", "grid", "pixels", "glyphs", "sigils", "vector", "sketch", "mixed"}
 	for _, f := range formats {
 		resp := Reference(Request{
 			Protocol: Protocol,
@@ -39,5 +39,22 @@ func TestReferenceImageAllFormats(t *testing.T) {
 		if _, err := spec.Image(120, 52); err != nil {
 			t.Fatalf("format %q: render image: %v", f, err)
 		}
+	}
+}
+
+func TestReferenceImagePalette(t *testing.T) {
+	plain := Reference(Request{Kind: "image", Prompt: "x", Format: "grid", Canvas: &Canvas{Width: 20, Height: 10}})
+	neon := Reference(Request{Kind: "image", Prompt: "x", Format: "grid", Palette: "neon", Canvas: &Canvas{Width: 20, Height: 10}})
+	var sp, sn pseudo.Spec
+	if err := json.Unmarshal(plain.Image, &sp); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(neon.Image, &sn); err != nil {
+		t.Fatal(err)
+	}
+	fp, _ := sp.Frame()
+	fn, _ := sn.Frame()
+	if fp.Blocks[0][0].Bg == fn.Blocks[0][0].Bg {
+		t.Fatal("palette did not affect the reference image")
 	}
 }

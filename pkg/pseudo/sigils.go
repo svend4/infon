@@ -22,6 +22,8 @@ type SigilScene struct {
 	Sky    string  `json:"sky,omitempty"`
 	Ground string  `json:"ground,omitempty"`
 	Items  []Sigil `json:"items"`
+	Labels []Label `json:"labels,omitempty"`
+	pal    Palette
 }
 
 // sigilRunes maps friendly names to BMP glyphs (kept in the Basic Multilingual
@@ -35,6 +37,9 @@ var sigilRunes = map[string]rune{
 	"fish": '❭', "music": '♪', "note": '♫', "check": '✓', "cross": '✗',
 	"circle": '●', "ring": '◯', "square": '■', "dot": '•', "arrow": '→',
 	"up": '↑', "down": '↓', "left": '←', "right": '→', "anchor": '⚓',
+	"flag": '⚑', "skull": '☠', "yinyang": '☯', "phone": '☎', "pencil": '✎',
+	"scissors": '✂', "plane": '✈', "crown": '♛', "king": '♚', "pawn": '♟',
+	"boat": '⛵', "comet": '☄', "atom": '⚛', "peace": '☮',
 }
 
 func (s *SigilScene) frame(cols, rows int) *terminal.Frame {
@@ -42,7 +47,7 @@ func (s *SigilScene) frame(cols, rows int) *terminal.Frame {
 
 	// background wash
 	if s.Sky != "" {
-		top := Color(s.Sky, color.RGB{R: 30, G: 40, B: 80})
+		top := resolve(s.pal, s.Sky, color.RGB{R: 30, G: 40, B: 80})
 		bot := top.Blend(color.RGB{R: 255, G: 255, B: 255}, 0.25)
 		for y := 0; y < rows; y++ {
 			t := 0.0
@@ -55,11 +60,11 @@ func (s *SigilScene) frame(cols, rows int) *terminal.Frame {
 			}
 		}
 	} else {
-		bg := Color(s.Bg, color.RGB{R: 12, G: 14, B: 22})
+		bg := resolve(s.pal, s.Bg, color.RGB{R: 12, G: 14, B: 22})
 		f.Fill(' ', bg, bg)
 	}
 	if s.Ground != "" {
-		g := Color(s.Ground, color.RGB{R: 30, G: 60, B: 40})
+		g := resolve(s.pal, s.Ground, color.RGB{R: 30, G: 60, B: 40})
 		for y := rows * 2 / 3; y < rows; y++ {
 			for x := 0; x < cols; x++ {
 				f.SetBlock(x, y, ' ', g, g)
@@ -74,9 +79,15 @@ func (s *SigilScene) frame(cols, rows int) *terminal.Frame {
 		}
 		x := clampi(int(it.X*float64(cols-1)+0.5), 0, cols-1)
 		y := clampi(int(it.Y*float64(rows-1)+0.5), 0, rows-1)
-		fg := Color(it.Color, color.RGB{R: 240, G: 230, B: 160})
+		fg := resolve(s.pal, it.Color, color.RGB{R: 240, G: 230, B: 160})
 		bg := f.Blocks[y][x].Bg
 		f.SetBlock(x, y, r, fg, bg)
+	}
+	for _, lb := range s.Labels {
+		x := clampi(int(lb.X*float64(cols-1)+0.5), 0, cols-1)
+		y := clampi(int(lb.Y*float64(rows-1)+0.5), 0, rows-1)
+		fg := resolve(s.pal, lb.Color, color.RGB{R: 245, G: 245, B: 250})
+		drawTextKeepBg(f, x, y, lb.Text, fg)
 	}
 	return f
 }

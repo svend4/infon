@@ -117,6 +117,36 @@ func main() {
 		fmt.Printf("ok  %-9s -> %s.png\n", ex.name, ex.name)
 	}
 
+	// Mixed format: a soft pseudo-diffusion grid with crisp sigils + a caption.
+	mixedDoc := `{"format":"mixed","cols":80,"rows":30,"palette":"dusk","mixed":{"grid":{"rows":[["navy","navy","purple","amber","gold","amber","purple","navy","navy","navy"],["navy","purple","amber","gold","white","gold","amber","purple","navy","navy"],["slate","amber","gold","amber","teal","teal","slate","slate","slate","slate"],["teal","skyblue","teal","blue","teal","skyblue","teal","blue","teal","teal"]]},"sigils":[{"name":"sun","x":0.7,"y":0.22,"color":"gold"},{"name":"star","x":0.12,"y":0.12,"color":"white"},{"name":"anchor","x":0.6,"y":0.82,"color":"white"},{"name":"boat","x":0.4,"y":0.8,"color":"white"}],"labels":[{"text":"tvcp-ai","x":0.03,"y":0.92,"color":"white"}]}}`
+	{
+		var ms pseudo.Spec
+		if err := json.Unmarshal([]byte(mixedDoc), &ms); err != nil {
+			fail(err)
+		}
+		mimg, err := ms.Image(480, 216)
+		if err != nil {
+			fail(err)
+		}
+		savePNG(filepath.Join(out, "7_mixed.png"), mimg)
+		fmt.Println("ok  7_mixed   -> 7_mixed.png")
+	}
+
+	// Palette presets: the SAME grid seed rendered in each mood.
+	for _, pal := range []string{"dawn", "dusk", "neon", "mono", "forest", "ocean"} {
+		var ps pseudo.Spec
+		if err := json.Unmarshal([]byte(examples[0].doc), &ps); err != nil {
+			fail(err)
+		}
+		ps.Palette = pal
+		pimg, err := ps.Image(360, 162)
+		if err != nil {
+			fail(err)
+		}
+		savePNG(filepath.Join(out, "palette_"+pal+".png"), pimg)
+		fmt.Printf("ok  palette   -> palette_%s.png\n", pal)
+	}
+
 	// Denoising animation from the grid seed (the "pseudo-diffusion" headline).
 	var gs pseudo.Spec
 	if err := json.Unmarshal([]byte(examples[0].doc), &gs); err != nil {

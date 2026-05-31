@@ -42,21 +42,24 @@ const (
 	FormatSigils Format = "sigils"
 	FormatVector Format = "vector"
 	FormatSketch Format = "sketch"
+	FormatMixed  Format = "mixed"
 )
 
 // Spec is the unified request a text model fills in. It picks one Format and
 // supplies the matching payload; Cols/Rows are the target terminal size.
 type Spec struct {
-	Format Format          `json:"format"`
-	Cols   int             `json:"cols,omitempty"`
-	Rows   int             `json:"rows,omitempty"`
-	Title  string          `json:"title,omitempty"`
-	Grid   *Grid           `json:"grid,omitempty"`
-	Pixels *Grid           `json:"pixels,omitempty"`
-	Glyphs *GlyphArt       `json:"glyphs,omitempty"`
-	Sigils *SigilScene     `json:"sigils,omitempty"`
-	Vector json.RawMessage `json:"vector,omitempty"`
-	Sketch json.RawMessage `json:"sketch,omitempty"`
+	Format  Format          `json:"format"`
+	Cols    int             `json:"cols,omitempty"`
+	Rows    int             `json:"rows,omitempty"`
+	Title   string          `json:"title,omitempty"`
+	Grid    *Grid           `json:"grid,omitempty"`
+	Pixels  *Grid           `json:"pixels,omitempty"`
+	Glyphs  *GlyphArt       `json:"glyphs,omitempty"`
+	Sigils  *SigilScene     `json:"sigils,omitempty"`
+	Vector  json.RawMessage `json:"vector,omitempty"`
+	Sketch  json.RawMessage `json:"sketch,omitempty"`
+	Mixed   *Mixed          `json:"mixed,omitempty"`
+	Palette string          `json:"palette,omitempty"` // preset: dawn|dusk|neon|mono|forest|ocean
 }
 
 // Canvas clamps keep a misbehaving model from blowing up the frame.
@@ -93,17 +96,26 @@ func (s Spec) rows() int {
 // Frame renders the spec to a terminal.Frame for the live renderer.
 func (s Spec) Frame() (*terminal.Frame, error) {
 	c, r := s.cols(), s.rows()
+	pal := presetPalette(s.Palette)
 	switch s.Format {
 	case FormatGlyphs:
 		if s.Glyphs == nil {
 			return nil, fmt.Errorf("pseudo: glyphs format with no glyphs payload")
 		}
+		s.Glyphs.pal = pal
 		return s.Glyphs.frame(c, r), nil
 	case FormatSigils:
 		if s.Sigils == nil {
 			return nil, fmt.Errorf("pseudo: sigils format with no sigils payload")
 		}
+		s.Sigils.pal = pal
 		return s.Sigils.frame(c, r), nil
+	case FormatMixed:
+		if s.Mixed == nil {
+			return nil, fmt.Errorf("pseudo: mixed format with no mixed payload")
+		}
+		s.Mixed.pal = pal
+		return s.Mixed.frame(c, r), nil
 	case FormatVector:
 		var sc scene.Scene
 		if err := json.Unmarshal(nonNil(s.Vector), &sc); err != nil {
@@ -128,12 +140,14 @@ func (s Spec) Frame() (*terminal.Frame, error) {
 		if g == nil {
 			return nil, fmt.Errorf("pseudo: pixels format with no grid payload")
 		}
+		g.pal = pal
 		return g.frameNearest(c, r), nil
 	case FormatGrid, "":
 		g := s.gridPayload()
 		if g == nil {
 			return nil, fmt.Errorf("pseudo: grid format with no grid payload")
 		}
+		g.pal = pal
 		return g.frameSmooth(c, r), nil
 	default:
 		return nil, fmt.Errorf("pseudo: unknown format %q", s.Format)
@@ -145,18 +159,21 @@ func (s Spec) Frame() (*terminal.Frame, error) {
 func (s Spec) Image(pxW, pxH int) (image.Image, error) {
 	pxW = clampi(pxW, 8, 4096)
 	pxH = clampi(pxH, 8, 4096)
+	pal := presetPalette(s.Palette)
 	switch s.Format {
 	case FormatGrid, "":
 		g := s.gridPayload()
 		if g == nil {
 			return nil, fmt.Errorf("pseudo: grid format with no grid payload")
 		}
+		g.pal = pal
 		return g.diffuse(pxW, pxH), nil
 	case FormatPixels:
 		g := s.gridPayload()
 		if g == nil {
 			return nil, fmt.Errorf("pseudo: pixels format with no grid payload")
 		}
+		g.pal = pal
 		return g.mosaic(pxW, pxH), nil
 	default:
 		f, err := s.Frame()

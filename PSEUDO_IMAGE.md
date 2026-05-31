@@ -95,6 +95,31 @@ all**. Any external model just has to emit the same shapes (see `adapters/`).
 `sigils` understands names like `sun ☀ · moon ☾ · star ★ · mountain ▲ · cloud ☁ ·
 wave ∿ · anchor ⚓ · house ⌂ · heart ♥ · bolt ⚡` (default `◆`).
 
+## Mixed format + palette presets (v2)
+
+`mixed` layers crisp symbols and captions over a soft pseudo-diffusion grid — a
+painterly background the model describes as a color grid, with sharp sigils and
+labels placed on top (best of both worlds):
+
+```json
+{ "format":"mixed", "palette":"dusk", "mixed": {
+    "grid":   { "rows": [["navy","amber","gold","amber","navy"], ["teal","skyblue","teal","blue","teal"]] },
+    "sigils": [ {"name":"sun","x":0.7,"y":0.2,"color":"gold"}, {"name":"anchor","x":0.6,"y":0.8,"color":"white"} ],
+    "labels": [ {"text":"tvcp-ai","x":0.03,"y":0.92,"color":"white"} ] } }
+```
+
+A `palette` preset remaps the named colors so the model can pick a mood without
+re-specifying every color — `dawn`, `dusk`, `neon`, `mono`, `forest`, `ocean`.
+It applies to every format, and over the protocol via `Request.Palette` (or the
+`palette` field of the spec):
+
+```bash
+TVCP_PSEUDO=mixed BRAIN_URL=http://localhost:8088 tvcp synth neural "a calm harbor at dusk"
+```
+
+New sigils since v1: flag, skull, yinyang, phone, pencil, scissors, plane, crown,
+king, pawn, boat, comet, atom, peace.
+
 ## Using it
 
 Render a spec directly:

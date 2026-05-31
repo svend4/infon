@@ -29,7 +29,8 @@ type Request struct {
 	State    json.RawMessage `json:"state,omitempty"` // game-specific state
 	Prompt   string          `json:"prompt,omitempty"`
 	Canvas   *Canvas         `json:"canvas,omitempty"`
-	Format   string          `json:"format,omitempty"` // image kind: grid|pixels|glyphs|sigils|vector|sketch
+	Format   string          `json:"format,omitempty"`  // image kind: grid|pixels|glyphs|sigils|vector|sketch
+	Palette  string          `json:"palette,omitempty"` // optional mood preset for image kind
 }
 
 // Canvas is the target size for a draw request (in terminal cells).
@@ -287,6 +288,7 @@ func refImage(req Request) Response {
 		hs += int(ch)
 	}
 	spec := pseudo.Spec{Cols: cols, Rows: rows, Title: req.Prompt}
+	spec.Palette = req.Palette
 	switch strings.ToLower(strings.TrimSpace(req.Format)) {
 	case "sketch":
 		spec.Format = pseudo.FormatSketch
@@ -303,6 +305,9 @@ func refImage(req Request) Response {
 	case "glyphs":
 		spec.Format = pseudo.FormatGlyphs
 		spec.Glyphs = refGlyphArt()
+	case "mixed":
+		spec.Format = pseudo.FormatMixed
+		spec.Mixed = refMixed(hs)
 	default: // "grid" or unspecified -> pseudo-diffusion
 		spec.Format = pseudo.FormatGrid
 		spec.Grid = refGridSeed(hs)
@@ -379,6 +384,20 @@ func refGlyphArt() *pseudo.GlyphArt {
 			"   ^^^^^^^^^^^^^^^^^^  ",
 			" ==~~==~~==~~==~~==~~= ",
 			"~~==~~==~~==~~==~~==~~~",
+		},
+	}
+}
+
+func refMixed(hs int) *pseudo.Mixed {
+	return &pseudo.Mixed{
+		Grid: refGridSeed(hs),
+		Sigils: []pseudo.Sigil{
+			{Name: "sun", X: 0.72, Y: 0.22, Color: "gold"},
+			{Name: "star", X: 0.12, Y: 0.14, Color: "white"},
+			{Name: "anchor", X: 0.6, Y: 0.82, Color: "white"},
+		},
+		Labels: []pseudo.Label{
+			{Text: "tvcp-ai", X: 0.04, Y: 0.9, Color: "white"},
 		},
 	}
 }
