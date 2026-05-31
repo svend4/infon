@@ -89,6 +89,11 @@ func runSynth() {
 		mode, _ = babe.ParseRenderMode(terminal.DetectCapability().BestBlitMode())
 	}
 
+	// Sixel pixel-protocol path (roadmap A5): opt in with TVCP_SIXEL=1, or auto
+	// when the terminal advertises Sixel and no glyph mode was forced.
+	sixel := os.Getenv("TVCP_SIXEL") == "1" ||
+		(os.Getenv("TVCP_RENDER_MODE") == "" && terminal.DetectCapability().Sixel)
+
 	source := device.NewGenerativeSource(srcWidth, srcHeight, fps, gen)
 	if err := source.Open(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening source: %v\n", err)
@@ -137,8 +142,15 @@ func runSynth() {
 				continue
 			}
 
-			frame := babe.ImageToFrameMode(img, termWidth, termHeight, mode)
-			frame.RenderToTerminal()
+			if sixel {
+				// Pixel-perfect path (roadmap A5): emit a real bitmap instead of
+				// glyph approximation on Sixel-capable terminals.
+				fmt.Print(terminal.MoveCursor(1, 1))
+				fmt.Print(terminal.EncodeSixel(img, 64))
+			} else {
+				frame := babe.ImageToFrameMode(img, termWidth, termHeight, mode)
+				frame.RenderToTerminal()
+			}
 
 			frameCount++
 
