@@ -61,6 +61,49 @@ func main() {
 	fmt.Printf("\ntotal: %d B as P-frames vs %d B as full frames  (%.1fx smaller)\n",
 		totalDelta, totalFull, float64(totalFull)/float64(max(totalDelta, 1)))
 	fmt.Printf("reconstruction exact: %v\n", ok)
+
+	// --- marks P-frames: a bird (◣) flies across a sky ---
+	fmt.Println("\nmarks P-frames (a bird flying across the sky):")
+	bird := func(bx int) pseudo.Spec {
+		const w, h = 16, 5
+		rows := make([][]string, h)
+		col := make([][]string, h)
+		for y := 0; y < h; y++ {
+			rows[y] = make([]string, w)
+			col[y] = make([]string, w)
+		}
+		if bx >= 0 && bx+1 < w {
+			rows[1][bx], rows[1][bx+1] = "tri-ll", "tri-lr"
+			col[1][bx], col[1][bx+1] = "white", "white"
+		}
+		return pseudo.Spec{Format: pseudo.FormatMarks, Marks: &pseudo.MarkArt{Bg: "navy", Rows: rows, Colors: col}}
+	}
+	mp := bird(0)
+	td, tf := 0, 0
+	exact := true
+	for x := 1; x <= 12; x++ {
+		nx := bird(x)
+		d, _ := semframe.DiffMarks(mp, nx)
+		td += semframe.Bytes(d)
+		tf += semframe.Bytes(nx)
+		if r := semframe.ApplyMarks(mp, d); !sameMarks(r, nx) {
+			exact = false
+		}
+		fmt.Printf("  bird@%-2d  P-frame %3d B  (full %3d B)  %d cells\n", x, semframe.Bytes(d), semframe.Bytes(nx), len(d.Cells))
+		mp = nx
+	}
+	fmt.Printf("  total: %d B vs %d B  (%.1fx smaller)  exact=%v\n", td, tf, float64(tf)/float64(max(td, 1)), exact)
+}
+
+func sameMarks(a, b pseudo.Spec) bool {
+	for y := range a.Marks.Rows {
+		for x := range a.Marks.Rows[y] {
+			if a.Marks.Rows[y][x] != b.Marks.Rows[y][x] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func sameGrid(a, b pseudo.Spec) bool {
