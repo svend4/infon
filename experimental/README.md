@@ -201,9 +201,12 @@ experimental/
 │   │   ├── wordle.go
 │   │   ├── hangman.go
 │   │   └── words_test.go
-│   └── cards/           # Карточные игры
-│       ├── uno.go
-│       └── uno_test.go
+│   ├── cards/           # Карточные игры
+│   │   ├── uno.go
+│   │   └── uno_test.go
+│   └── snake/           # Snake (real-time, `tvcp game`)
+│       ├── snake.go
+│       └── snake_test.go
 ├── fileshare/           # Файлообмен
 │   ├── transfer.go
 │   └── transfer_test.go

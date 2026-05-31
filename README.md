@@ -14,6 +14,25 @@ This repo also includes an **AI layer**: an open **`tvcp-ai/1`** format (JSON ov
 
 See **[ai/IMPLEMENTED.md](ai/IMPLEMENTED.md)** for everything that was built, **[ai/BRAIN_PROTOCOL.md](ai/BRAIN_PROTOCOL.md)** for the spec, and **[ai/showcase.html](ai/showcase.html)** for a visual gallery. New code lives in `pkg/scene`, `pkg/sketch`, `pkg/brain`, `internal/aisource`, and the `cmd/ai*` commands; `tvcp ai` streams an AI video source.
 
+A **generative graphics pipeline** builds on this: synthesized and model-painted
+video rendered with selectable high-fidelity modes and real pixel protocols.
+
+```bash
+tvcp synth plasma                      # live procedural synthesis
+TVCP_RENDER_MODE=octant tvcp synth ripple   # 2×4 octant glyphs (densest)
+TVCP_KITTY=1 tvcp synth neural "a calm bay" # true bitmap on Kitty terminals
+TVCP_LOCAL_BRAIN=1 tvcp synth neural "a storm at night"  # fully offline
+tvcp avatar send <host:port>           # neural-avatar P2P (talking face, ~35 kbps)
+tvcp game                              # real-time Snake (build with -tags experimental)
+```
+
+- **Render modes** (`TVCP_RENDER_MODE`, else auto-detected): `quadrant`, `perceptual`,
+  `optimal`, `halfblock`, `sextant`, `octant`, `braille`; plus `TVCP_SIXEL=1` / `TVCP_KITTY=1`.
+- **Neural backends** (by env, best first): `IMAGE_API_URL` (raster) → `BRAIN_URL`
+  (sketch) → `TVCP_LOCAL_BRAIN` (offline) → placeholder; optionally wrapped with
+  `DIRECTOR_URL`, `RESTORE_API_URL`, `TVCP_STREAM_COHERENCE`. See
+  [docs/EXTERNAL_MODELS.md](docs/EXTERNAL_MODELS.md) and [docs/NEURAL_GRAPHICS_ROADMAP.md](docs/NEURAL_GRAPHICS_ROADMAP.md).
+
 ## ⚡ Key Features
 
 - **🚀 Ultra-low bandwidth:** 382 kbps total (vs 1.8 Mbps for Zoom)
@@ -203,7 +222,9 @@ Each block = 2×2 pixels encoded as:
 - 🌐 [**Network Streaming**](NETWORK.md) — Stream video over UDP
 - 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video rendering
 - 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering
-- 🧠 [**Generative Graphics**](GENERATIVE.md) — Synthesized frames (procedural + neural hook)
+- 🧠 [**Generative Graphics**](GENERATIVE.md) — Synthesized frames, render modes (half-block / sextant / octant / Braille / Sixel / Kitty), and neural backends
+- 🗺️ [**Neural Graphics Roadmap**](docs/NEURAL_GRAPHICS_ROADMAP.md) — Design doc + current implementation status (graphics × neural networks)
+- 🔌 [**External Models**](docs/EXTERNAL_MODELS.md) — Wiring real models via HTTP sidecars or cloud APIs
 
 ### Planning & Analysis
 - 📖 [Business Plan](tvcp-business-plan.md) — Full market analysis and roadmap

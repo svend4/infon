@@ -4,6 +4,87 @@ All notable changes to TVCP will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-05-31
+
+### 🎨🤖 Generative Graphics × Neural Networks (PR #8)
+
+A complete pipeline for rendering AI-generated and synthesized content in the
+terminal, plus the graphics-fidelity and engineering work that supports it. All
+items below are merged; the research-tier neural features ship as full Go
+pipelines whose only external piece is the trained model (plugged in over HTTP).
+See [`docs/NEURAL_GRAPHICS_ROADMAP.md`](docs/NEURAL_GRAPHICS_ROADMAP.md),
+[`GENERATIVE.md`](GENERATIVE.md), and [`docs/EXTERNAL_MODELS.md`](docs/EXTERNAL_MODELS.md).
+
+#### Added — terminal graphics fidelity
+- **Render modes** selectable via `TVCP_RENDER_MODE`, auto-detected from the
+  terminal otherwise (`terminal.DetectCapability`):
+  - `halfblock` — `▀` with fg=top/bg=bottom: two exact colors, 2× vertical res.
+  - `sextant` (2×3, U+1FB00) and `octant` (2×4, Unicode 16 U+1CD00) glyphs —
+    verified codepoint tables (6 and 8 sub-pixels/cell).
+  - `braille` (2×4 dots) for line art / edges.
+  - `perceptual` / `optimal` — OKLab clustering; `optimal` searches all 16
+    quadrant partitions to minimize perceptual reconstruction error.
+- **Perceptual color & dithering** (`pkg/color`): sRGB↔OKLab, perceptual distance,
+  Floyd–Steinberg and ordered Bayer dithering.
+- **Pixel protocols** (`pkg/terminal`): `EncodeSixel` (`TVCP_SIXEL=1`) and
+  `EncodeKitty` (`TVCP_KITTY=1`) for true bitmaps on capable terminals.
+- **Flicker-free diff renderer** (`terminal.DiffRenderer`) — emits only changed
+  cell-runs (~31× cheaper than a full repaint).
+
+#### Added — neural backends & generative pipeline
+- `device.GenerativeSource` (a `device.Camera`) + `FrameGenerator` seam;
+  procedural generators (`plasma`, `ripple`, `audio-reactive`).
+- `device.NeuralGenerator` + `NeuralBackend` seam (asynchronous; never blocks the
+  render loop). Backends in `internal/aisource`, chosen by a tiered env policy:
+  - `ImageBackend` (`IMAGE_API_URL`) — real text-to-image raster models.
+  - `BrainBackend` (`BRAIN_URL`) — tvcp-ai/1 sketch brains.
+  - `LocalBackend` (`TVCP_LOCAL_BRAIN=1`) — fully offline procedural generator.
+  - `RestoreBackend` (`RESTORE_API_URL`) — super-resolution/restoration decorator.
+  - `StreamingBackend` (`TVCP_STREAM_COHERENCE`) — OKLab temporal cross-fade.
+  - `DirectorPainter` (`DIRECTOR_URL`) — LLM plans a sketch, painter executes it.
+- **Visual-chat steering** (`pkg/visualchat`) — runtime `Steer` messages
+  (prompt/style/strength/seed) applied to the async generator.
+- **Semantic codec** (`aisource.SemanticFrame`) — transmit a scene description
+  (~hundreds of bytes) instead of pixels (≈68× smaller).
+- `tvcp synth` (live synthesis), `tvcp ai` (AI video source, async).
+
+#### Added — vision, audio, avatars
+- **Vision overlays** (`internal/vision`): pure-Go Sobel edge detection +
+  Braille overlay, and a `FrameAnalyzer` seam + HTTP client for external
+  object/face models (`VISION_API_URL`), with box/landmark overlays.
+- **Audio-reactive synthesis** (`internal/audio/reactive`): spectral feature
+  extractor (own FFT) driving an `AudioReactiveGenerator`.
+- **Neural avatars** (`internal/avatar`): compact face-keypoint codec (≈65×
+  smaller than block video) with sender (`Extractor`) and receiver
+  (`Reconstructor`); `tvcp avatar send|receive` streams a talking face over P2P
+  at ~35 kbps (`PacketTypeAvatar`).
+
+#### Added — real-time game & enablers
+- `tvcp game` — real-time interactive Snake (`experimental/games/snake`) using
+  the diff renderer + raw-TTY input (experimental build).
+- **Adaptive frame pacing** (`device.Pacer`) — skips slots under load.
+- **P-frame bandwidth metering** (`video.StreamStats`, ≈28× on static scenes).
+- **Golden render tests** and **benchmarks** for the render modes/encoders.
+
+#### Added — external-model integration (HTTP sidecars + cloud)
+- Python sidecars in `ai/adapters/`: `cloud_image_sidecar.py` (Replicate/fal/
+  OpenAI proxy), `restore_sidecar.py`, `vision_sidecar.py`,
+  `avatar_landmark_sidecar.py`, `avatar_generate_sidecar.py` — each with a
+  model-free fallback so the pipeline runs with zero heavy deps;
+  `ai/adapters/requirements.txt` for enabling real models.
+
+#### Changed / Fixed
+- **perf:** removed redundant OKLab conversions/allocations in the perceptual and
+  optimal encoders (≈14–19× faster; 0 allocations in the hot path).
+- **ci:** added `.golangci.yml` (deterministic lint policy) and updated the Lint
+  job to `golangci-lint-action@v7` with a pinned `golangci-lint v2.5.0` (the old
+  `@v4` + `version: latest` could not drive golangci-lint v2 → `exit code 3`).
+- **fix:** data races in experimental async-callback tests (fileshare,
+  recording, screenshare, security, whiteboard, trivia) — flags made atomic;
+  added thread-safe `recording.Recorder.GetState()`. `go test -race` is clean.
+- Preview media moved to the `assets` orphan branch (kept out of code history);
+  docs reference them via raw URLs.
+
 ## [Unreleased] - 2026-02-07
 
 ### 🎯 Cross-Platform Audio Completion

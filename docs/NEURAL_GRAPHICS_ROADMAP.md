@@ -7,40 +7,61 @@
 >
 > Status legend: ✅ done · 🟡 partial / scaffolded · ⬜ proposed (not started)
 
-## Implementation status (this work)
+## Implementation status
 
-Most of Phases 1–3 are now built, tested, and on the branch:
+Phases 1–3 plus the engineering enablers are built, tested, and **merged to
+`main`** (PR #8). Every roadmap item below is done; only the trained models for
+the research-tier items remain external (they plug in over HTTP).
 
 | Item | What shipped | Status |
 |---|---|---|
 | A1 half-block | `babe.ImageToFrameHalfBlock` + `RenderMode` | ✅ |
-| A2 sextant | verified U+1FB00 table + `ImageToFrameSextant` | ✅ |
+| A2 sextant (2×3) | verified U+1FB00 table + `ImageToFrameSextant` | ✅ |
+| A2+ octant (2×4) | verified U+1CD00 (Unicode 16) table + `ImageToFrameOctant` | ✅ |
 | A3 Braille | `babe.ImageToFrameBraille` | ✅ |
 | A4 perceptual color + dithering | `pkg/color` OKLab + Floyd–Steinberg/Bayer; `EncodeBlockPerceptual` | ✅ |
 | A5 Sixel | `terminal.EncodeSixel` + `TVCP_SIXEL` | ✅ |
-| B1 streaming coherence | `aisource.StreamingBackend` (OKLab cross-fade) | ✅ (GPU model still external) |
+| A5 Kitty | `terminal.EncodeKitty` + `TVCP_KITTY` (auto via capability) | ✅ |
+| B1 streaming coherence | `aisource.StreamingBackend` (OKLab cross-fade) | ✅ (GPU model external) |
 | B2 visual-chat steering | `pkg/visualchat` (Steer + Controller) | ✅ |
 | B3 semantic codec | `aisource` SemanticFrame (≈68× smaller) | ✅ |
-| B4 local/offline brain | `aisource.LocalBackend` + 4-tier policy | ✅ |
+| B4 local/offline brain | `aisource.LocalBackend` + tiered policy | ✅ |
+| B5 director + painter | `aisource.DirectorPainter` (`DIRECTOR_URL`) | ✅ |
+| C1 super-resolution | `aisource.RestoreBackend` + `restore_sidecar.py` | ✅ (model external) |
 | C2 learned/optimal encoder | `babe.EncodeBlockOptimal` (exhaustive perceptual) | ✅ |
+| C3 vision overlays | `internal/vision` (Sobel/edges + `FrameAnalyzer`) + `vision_sidecar.py` | ✅ (model external) |
 | C4 audio-reactive | `internal/audio/reactive` + `AudioReactiveGenerator` | ✅ |
+| C5 neural avatars | `internal/avatar` (keypoint codec ≈65× smaller) + sidecars | ✅ (model external) |
+| C5 avatars over P2P | `tvcp avatar send/receive` (PacketTypeAvatar, ~35 kbps) | ✅ |
 | D1 P-frame metering | `video.StreamStats` (≈28× on static scenes) | ✅ |
 | D2 capability probe | `terminal.DetectCapability` + auto mode | ✅ |
+| D3 adaptive pacing | `device.Pacer` (skips slots under load); used by `synth` | ✅ |
 | D5 golden render tests | `pkg/terminal/golden_test.go` | ✅ |
-| C1 super-resolution | `aisource.RestoreBackend` + `restore_sidecar.py` | ✅ (model external) |
-| C3 vision overlays | `internal/vision` (Sobel/edges + `FrameAnalyzer`) + `vision_sidecar.py` | ✅ (model external) |
-| C5 neural avatars | `internal/avatar` (keypoint codec ≈65× smaller) + sender/receiver sidecars | ✅ (model external) |
+| D6 benchmarks | `bench_test.go` (modes/encoders/diff); drove the OKLab perf fix | ✅ |
+| perf | OKLab caching in `EncodeBlockPerceptual`/`EncodeBlockOptimal` (≈19× on `ModeOptimal`) | ✅ |
 
 The research-tier items (C1/C3/C5) ship as **complete Go pipelines with seams,
 codecs, overlays, tests, and reference sidecars** — the only external piece is
 the trained model itself, which plugs in via HTTP (local sidecar or cloud). See
 [`EXTERNAL_MODELS.md`](EXTERNAL_MODELS.md) for wiring real models in.
 
-Render modes are selectable via `TVCP_RENDER_MODE`
-(`quadrant|perceptual|optimal|halfblock|sextant|braille`) and auto-detected from
-the terminal otherwise. Neural backends are chosen by env
-(`IMAGE_API_URL` > `BRAIN_URL` > `TVCP_LOCAL_BRAIN` > placeholder), optionally
-wrapped for streaming (`TVCP_STREAM_COHERENCE`).
+**Render modes** (`TVCP_RENDER_MODE`, auto-detected from the terminal otherwise):
+`quadrant | perceptual | optimal | halfblock | sextant | octant | braille`,
+plus pixel protocols `TVCP_SIXEL=1` / `TVCP_KITTY=1`.
+
+**Neural backends** are chosen by env, best-available first:
+`IMAGE_API_URL` (raster) > `BRAIN_URL` (tvcp-ai/1 sketch) > `TVCP_LOCAL_BRAIN=1`
+(offline procedural) > placeholder; optionally composed with `DIRECTOR_URL`
+(plan+paint), `RESTORE_API_URL` (super-resolution), and `TVCP_STREAM_COHERENCE`
+(temporal cross-fade).
+
+**Commands:** `tvcp synth` (live synthesis), `tvcp ai` (AI video source),
+`tvcp avatar send|receive` (neural-avatar P2P), `tvcp game` (real-time Snake,
+experimental build).
+
+> Status legend below (in the detailed sections): ✅ done · 🟡 partial · ⬜ proposed.
+> The per-section ⬜ markers in Parts A–E predate implementation; the table above
+> is the authoritative current state.
 
 ---
 
