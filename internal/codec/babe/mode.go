@@ -19,6 +19,9 @@ const (
 	// ModeHalfBlock renders '▀' with fg=top, bg=bottom: 2 exact colors, 2x
 	// vertical resolution, no clustering (A1).
 	ModeHalfBlock
+	// ModeSextant renders 2x3 legacy-computing glyphs: 6 sub-pixels/cell, denser
+	// than quadrants (A2). Needs Unicode 13 support; gate via Capability.
+	ModeSextant
 )
 
 // String returns the mode's CLI name.
@@ -28,6 +31,8 @@ func (m RenderMode) String() string {
 		return "perceptual"
 	case ModeHalfBlock:
 		return "halfblock"
+	case ModeSextant:
+		return "sextant"
 	default:
 		return "quadrant"
 	}
@@ -42,6 +47,8 @@ func ParseRenderMode(name string) (RenderMode, bool) {
 		return ModePerceptual, true
 	case "halfblock", "half":
 		return ModeHalfBlock, true
+	case "sextant", "sext":
+		return ModeSextant, true
 	default:
 		return ModeQuadrant, false
 	}
@@ -55,6 +62,8 @@ func ImageToFrameMode(img image.Image, w, h int, mode RenderMode) *terminal.Fram
 		return ImageToFramePerceptual(img, w, h)
 	case ModeHalfBlock:
 		return ImageToFrameHalfBlock(img, w, h)
+	case ModeSextant:
+		return ImageToFrameSextant(img, w, h)
 	default:
 		return ImageToFrame(img, w, h)
 	}
