@@ -85,3 +85,8 @@ ai/previews/
 
 # Local git worktree used to manage the assets branch.
 /.assets-wt/
+
+# Python sidecar artifacts (ai/adapters/*.py)
+__pycache__/
+*.pyc
+*.pyo
