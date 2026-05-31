@@ -36,14 +36,44 @@ RESTORE_API_URL=http://127.0.0.1:8094/  TVCP_LOCAL_BRAIN=1 \
 python ai/adapters/vision_sidecar.py 8096
 # set VISION_API_URL=http://127.0.0.1:8096/ in the consumer (overlay path)
 
-# C5 — neural avatars (sender + receiver)
-python ai/adapters/avatar_landmark_sidecar.py 8097   # extracts keypoints
-python ai/adapters/avatar_generate_sidecar.py 8098   # reconstructs the face
+# C5 — neural avatars over the network (talking face for kilobits/sec)
+python ai/adapters/avatar_landmark_sidecar.py 8097   # sender: extracts keypoints
+python ai/adapters/avatar_generate_sidecar.py 8098   # receiver: reconstructs face
+
+# receiver:                         sender:
+AVATAR_GEN_URL=http://127.0.0.1:8098/ ./bin/tvcp avatar receive 5000
+AVATAR_LM_URL=http://127.0.0.1:8097/  ./bin/tvcp avatar send localhost:5000
+# (measured ~35 kbps for a 15 fps talking face vs ~350 KB/s for block video)
 ```
 
 Installing the real models upgrades each sidecar automatically:
-`pip install realesrgan` (C1), `pip install ultralytics` or `mediapipe` (C3),
-`pip install mediapipe` + a talking-head model (C5).
+
+```bash
+pip install -r ai/adapters/requirements.txt   # all, or pick per feature:
+pip install pillow realesrgan torch            # C1 restoration
+pip install pillow ultralytics                 # C3 object detection
+pip install pillow mediapipe numpy             # C3 faces + C5 landmarks
+```
+
+## Cloud generation with no local GPU (proxy sidecar)
+
+`ai/adapters/cloud_image_sidecar.py` forwards the raster contract to a hosted
+provider, so `tvcp synth neural` works with zero local model:
+
+```bash
+# Replicate (fast FLUX-schnell by default):
+CLOUD_PROVIDER=replicate REPLICATE_API_TOKEN=r8_... \
+  python ai/adapters/cloud_image_sidecar.py 8099
+IMAGE_API_URL=http://127.0.0.1:8099/ ./bin/tvcp synth neural "a calm bay"
+
+# Or fal.ai / OpenAI images:
+CLOUD_PROVIDER=fal    FAL_KEY=...          python ai/adapters/cloud_image_sidecar.py 8099
+CLOUD_PROVIDER=openai OPENAI_API_KEY=sk-... python ai/adapters/cloud_image_sidecar.py 8099
+```
+
+It uses only the Python standard library (no pip installs) — just provider keys
+in the environment, never logged. A failed call returns a clean 502 so the Go
+side keeps showing the last frame.
 
 ## Cloud API instead of a sidecar
 

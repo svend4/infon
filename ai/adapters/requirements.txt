@@ -1,0 +1,33 @@
+# Optional dependencies for the TVCP model sidecars (ai/adapters/*.py).
+#
+# Every sidecar runs WITHOUT these (model-free fallback) so you can test the
+# pipeline first. Install only what you need for the feature you want to enable.
+#
+#   pip install -r ai/adapters/requirements.txt          # everything
+#   pip install pillow ultralytics                       # just C3 objects
+#
+# Heavy packages (torch, mediapipe, ultralytics) pull in large wheels and may
+# need a matching CUDA for GPU speed; CPU works but is slower.
+
+# --- shared ---
+pillow>=10.0            # image decode/encode for most sidecars
+
+# --- C1: restoration / super-resolution (restore_sidecar.py) ---
+# Real-ESRGAN; needs torch. Comment out to use the Pillow LANCZOS fallback.
+realesrgan>=0.3 ; platform_system != "Windows"
+torch>=2.0 ; platform_system != "Windows"
+
+# --- C3: vision overlays (vision_sidecar.py) ---
+ultralytics>=8.0        # YOLOv8 object detection
+mediapipe>=0.10         # face detection / face mesh (also used by C5)
+numpy>=1.24
+
+# --- C5: neural avatars (avatar_*_sidecar.py) ---
+# Landmarks use mediapipe (above). The talking-head generator slot is left for a
+# model of your choice (LivePortrait / Thin-Plate-Spline-Motion / face-vid2vid);
+# install per that project's instructions and wire it at the marked slot in
+# avatar_generate_sidecar.py.
+
+# --- cloud proxy (cloud_image_sidecar.py) ---
+# No Python deps: it uses only the standard library (urllib). Set provider keys
+# in the environment instead (REPLICATE_API_TOKEN / FAL_KEY / OPENAI_API_KEY).
