@@ -25,6 +25,9 @@ const (
 	// ModeBraille renders 2x4 Braille dots: highest spatial resolution, per-cell
 	// color; best for line art / edges (A3).
 	ModeBraille
+	// ModeOptimal is ModeQuadrant with an exhaustive perceptual-optimal block
+	// encoder (searches all 16 partitions to minimize OKLab error) (C2).
+	ModeOptimal
 )
 
 // String returns the mode's CLI name.
@@ -38,6 +41,8 @@ func (m RenderMode) String() string {
 		return "sextant"
 	case ModeBraille:
 		return "braille"
+	case ModeOptimal:
+		return "optimal"
 	default:
 		return "quadrant"
 	}
@@ -56,6 +61,8 @@ func ParseRenderMode(name string) (RenderMode, bool) {
 		return ModeSextant, true
 	case "braille":
 		return ModeBraille, true
+	case "optimal", "best":
+		return ModeOptimal, true
 	default:
 		return ModeQuadrant, false
 	}
@@ -73,6 +80,8 @@ func ImageToFrameMode(img image.Image, w, h int, mode RenderMode) *terminal.Fram
 		return ImageToFrameSextant(img, w, h)
 	case ModeBraille:
 		return ImageToFrameBraille(img, w, h)
+	case ModeOptimal:
+		return imageToFrameWithEncoder(img, w, h, EncodeBlockOptimal)
 	default:
 		return ImageToFrame(img, w, h)
 	}

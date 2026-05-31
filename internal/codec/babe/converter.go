@@ -103,6 +103,47 @@ func ImageToFramePerceptual(img image.Image, targetWidth, targetHeight int) *ter
 	return frame
 }
 
+// blockEncoder is the signature shared by EncodeBlock / EncodeBlockPerceptual /
+// EncodeBlockOptimal, so converters can be parameterized by the encoder.
+type blockEncoder func(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, color.RGB)
+
+// imageToFrameWithEncoder runs the standard 2x2 sampling loop using the given
+// block encoder, avoiding copy-paste across the quadrant-family converters.
+func imageToFrameWithEncoder(img image.Image, targetWidth, targetHeight int, enc blockEncoder) *terminal.Frame {
+	frame := terminal.NewFrame(targetWidth, targetHeight)
+
+	bounds := img.Bounds()
+	srcWidth := bounds.Dx()
+	srcHeight := bounds.Dy()
+
+	scaleX := float64(srcWidth) / float64(targetWidth*2)
+	scaleY := float64(srcHeight) / float64(targetHeight*2)
+
+	for ty := 0; ty < targetHeight; ty++ {
+		for tx := 0; tx < targetWidth; tx++ {
+			sx := int(float64(tx*2) * scaleX)
+			sy := int(float64(ty*2) * scaleY)
+
+			var pixels [4]color.RGB
+			var validPixels [4]bool
+			positions := [4][2]int{
+				{sx, sy}, {sx + 1, sy}, {sx, sy + 1}, {sx + 1, sy + 1},
+			}
+			for i, pos := range positions {
+				px, py := pos[0], pos[1]
+				if px < srcWidth && py < srcHeight {
+					r, g, b, _ := img.At(px, py).RGBA()
+					pixels[i] = color.RGB{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8)}
+					validPixels[i] = true
+				}
+			}
+			glyph, fg, bg := enc(pixels, validPixels)
+			frame.SetBlock(tx, ty, glyph, fg, bg)
+		}
+	}
+	return frame
+}
+
 // EncodeBlock determines the best glyph and colors for a 2x2 pixel block
 // Uses simple 2-means clustering (k=2)
 func EncodeBlock(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, color.RGB) {
