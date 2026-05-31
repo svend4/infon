@@ -112,9 +112,12 @@ func runSynth() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	frameDuration := time.Duration(1000.0/fps) * time.Millisecond
-	ticker := time.NewTicker(frameDuration)
+	// Poll faster than the target FPS; the pacer (roadmap D3) decides when a
+	// frame is actually due and skips slots when producing/rendering falls
+	// behind, so cadence stays smooth under load instead of drifting.
+	ticker := time.NewTicker(time.Duration(1000.0/(fps*2)) * time.Millisecond)
 	defer ticker.Stop()
+	pacer := device.NewPacer(fps, 0)
 
 	frameCount := 0
 	startTime := time.Now()
@@ -130,12 +133,16 @@ func runSynth() {
 			elapsed := time.Since(startTime)
 			actualFPS := float64(frameCount) / elapsed.Seconds()
 			fmt.Printf("\n✓ Synthesis stopped\n")
-			fmt.Printf("Frames rendered: %d\n", frameCount)
+			fmt.Printf("Frames rendered: %d (skipped %d under load)\n", frameCount, pacer.Skipped)
 			fmt.Printf("Duration: %.1fs\n", elapsed.Seconds())
 			fmt.Printf("Average FPS: %.1f\n", actualFPS)
 			return
 
 		case <-ticker.C:
+			if !pacer.ShouldRender(time.Now()) {
+				continue
+			}
+			workStart := time.Now()
 			img, err := source.Read()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\nError reading frame: %v\n", err)
@@ -151,6 +158,7 @@ func runSynth() {
 				frame := babe.ImageToFrameMode(img, termWidth, termHeight, mode)
 				frame.RenderToTerminal()
 			}
+			pacer.Observe(time.Since(workStart))
 
 			frameCount++
 
