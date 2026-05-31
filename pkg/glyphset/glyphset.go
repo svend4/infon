@@ -320,6 +320,27 @@ func Glyph(token string) rune {
 	return ' '
 }
 
+// nameByGlyph maps each glyph rune back to its canonical Mark name (ASCII).
+var nameByGlyph = func() map[rune]string {
+	m := make(map[rune]string, len(Marks))
+	for _, mk := range Marks {
+		if _, ok := m[mk.Glyph]; !ok {
+			m[mk.Glyph] = mk.Name
+		}
+	}
+	return m
+}()
+
+// NameOf returns the canonical ASCII Mark name for a glyph rune (e.g. '◣' ->
+// "tri-ll"), or the rune as a string if it has no name. This lets callers put
+// LLM-friendly ASCII tokens on the wire instead of raw box-drawing glyphs.
+func NameOf(r rune) string {
+	if n, ok := nameByGlyph[r]; ok {
+		return n
+	}
+	return string(r)
+}
+
 // Sub is the sub-sampling resolution (a Sub×Sub mask per cell) behind Coverage.
 const Sub = sub
 

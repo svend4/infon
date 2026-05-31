@@ -37,7 +37,7 @@ func PuzzleFromFigure(f Figure) PuzzleState {
 		if c.glyph == ' ' {
 			continue
 		}
-		g := string(c.glyph)
+		g := glyphset.NameOf(c.glyph)
 		target[k[0]][k[1]] = g
 		if !seen[g] {
 			seen[g] = true

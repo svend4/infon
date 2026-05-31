@@ -50,6 +50,15 @@ IMG_SYS = ("You paint pseudo-images for a terminal. Reply with ONLY one JSON obj
            "names: sun moon star mountain cloud wave boat anchor tree house flag. "
            "Output ONLY the JSON for the requested format.")
 
+TANGRAM_SYS = ("You assemble tangram figures from a FIXED set of sub-cell pieces. Reply with ONLY "
+               "one JSON object, no prose, no code fences. The request state has h, w, palette "
+               "(allowed glyph tokens) and target: a grid of glyph tokens where \"\" is an empty "
+               "cell. Reproduce the shape exactly: for EVERY non-empty target cell, emit one piece "
+               "with the SAME glyph token at the SAME y (row 0..h-1) and x (column 0..w-1). Use ONLY "
+               "tokens that appear in palette. Reply "
+               "{\"tangram\":{\"h\":H,\"w\":W,\"pieces\":[{\"glyph\":TOK,\"y\":Y,\"x\":X}]}}. "
+               "Never put two pieces in one cell. Output ONLY that JSON.")
+
 def extract_json(text):
     t = text.strip()
     if t.startswith("```"):
@@ -138,8 +147,24 @@ def decide(req):
     last = ""
     for attempt in range(3):
         try:
-            m = ask(req, IMG_SYS if kind == "image" else SYS)
+            sysmsg = SYS
+            if kind == "image":
+                sysmsg = IMG_SYS
+            elif kind == "move" and req.get("game") == "tangram":
+                sysmsg = TANGRAM_SYS
+            m = ask(req, sysmsg)
             if kind == "move":
+                if req.get("game") == "tangram":
+                    fig = m.get("tangram", m)
+                    if isinstance(fig, dict) and fig.get("pieces"):
+                        st = req.get("state") or {}
+                        fig.setdefault("h", st.get("h"))
+                        fig.setdefault("w", st.get("w"))
+                        resp["tangram"] = fig
+                        resp["reasoning"] = f"tangram:{MODEL}"
+                        return resp
+                    last = "no tangram pieces"
+                    continue
                 mv = m.get("move", m)
                 if not isinstance(mv, dict):
                     mv = m
@@ -187,8 +212,12 @@ def decide(req):
             last = str(e)
     resp["error"] = last
     if kind == "move":
-        legal = (req.get("state") or {}).get("legal") or [[1, 1]]
-        resp["move"] = {"row": legal[0][0], "col": legal[0][1]}
+        if req.get("game") == "tangram":
+            st = req.get("state") or {}
+            resp["tangram"] = {"h": st.get("h", 1), "w": st.get("w", 1), "pieces": []}
+        else:
+            legal = (req.get("state") or {}).get("legal") or [[1, 1]]
+            resp["move"] = {"row": legal[0][0], "col": legal[0][1]}
     elif kind == "draw":
         resp["scene"] = SAFE_SCENE
     elif kind == "sketch":
