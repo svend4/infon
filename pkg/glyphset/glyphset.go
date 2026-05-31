@@ -319,3 +319,14 @@ func Glyph(token string) rune {
 	}
 	return ' '
 }
+
+// Sub is the sub-sampling resolution (a Sub×Sub mask per cell) behind Coverage.
+const Sub = sub
+
+// Coverage reports whether sub-pixel (x,y) of an S×S cell is foreground for the
+// glyph that token resolves to. It exposes the single internal mask source so
+// other packages (e.g. tangram tiling/overlap checks) reason about piece shapes
+// without re-deriving them.
+func Coverage(token string, x, y, S int) bool {
+	return coverage(Glyph(token), x, y, S)
+}
