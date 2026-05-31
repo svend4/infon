@@ -96,3 +96,4 @@ __pycache__/
 *.api.key
 _pseudo/
 _pseudo_go/
+ai/adapters/last_raw.txt
