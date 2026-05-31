@@ -40,7 +40,7 @@ func main() {
 	cols, rows := 64, 36
 	cam := aisource.NewAICamera(cols*2, rows*2, 16)
 	_ = cam.Open()
-	defer cam.Close()
+	defer func() { _ = cam.Close() }()
 	for i := 0; i < *frames; i++ {
 		img, _ := cam.Read()
 		frame := babe.ImageToFrame(img, cols, rows)
