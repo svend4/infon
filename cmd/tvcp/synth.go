@@ -81,6 +81,13 @@ func runSynth() {
 		fmt.Printf("Generator: %s (Layer 1 procedural)\n", g.Name())
 	}
 
+	// Render mode (roadmap A1/A4): TVCP_RENDER_MODE=quadrant|perceptual|halfblock.
+	mode, ok := babe.ParseRenderMode(os.Getenv("TVCP_RENDER_MODE"))
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Unknown TVCP_RENDER_MODE %q (use quadrant|perceptual|halfblock)\n", os.Getenv("TVCP_RENDER_MODE"))
+		os.Exit(1)
+	}
+
 	source := device.NewGenerativeSource(srcWidth, srcHeight, fps, gen)
 	if err := source.Open(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening source: %v\n", err)
@@ -89,6 +96,7 @@ func runSynth() {
 	defer func() { _ = source.Close() }()
 
 	fmt.Printf("Source: %dx%d @ %.0f FPS\n", source.GetWidth(), source.GetHeight(), source.GetFPS())
+	fmt.Printf("Render mode: %s\n", mode)
 	fmt.Printf("Terminal: %dx%d characters\n", termWidth, termHeight)
 	fmt.Println("\nPress Ctrl+C to stop")
 
@@ -128,7 +136,7 @@ func runSynth() {
 				continue
 			}
 
-			frame := babe.ImageToFrame(img, termWidth, termHeight)
+			frame := babe.ImageToFrameMode(img, termWidth, termHeight, mode)
 			frame.RenderToTerminal()
 
 			frameCount++
