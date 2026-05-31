@@ -27,7 +27,14 @@ Most of Phases 1–3 are now built, tested, and on the branch:
 | D1 P-frame metering | `video.StreamStats` (≈28× on static scenes) | ✅ |
 | D2 capability probe | `terminal.DetectCapability` + auto mode | ✅ |
 | D5 golden render tests | `pkg/terminal/golden_test.go` | ✅ |
-| C1 super-resolution · C3 vision overlays · C5 neural avatars | need trained models | ⬜ (research) |
+| C1 super-resolution | `aisource.RestoreBackend` + `restore_sidecar.py` | ✅ (model external) |
+| C3 vision overlays | `internal/vision` (Sobel/edges + `FrameAnalyzer`) + `vision_sidecar.py` | ✅ (model external) |
+| C5 neural avatars | `internal/avatar` (keypoint codec ≈65× smaller) + sender/receiver sidecars | ✅ (model external) |
+
+The research-tier items (C1/C3/C5) ship as **complete Go pipelines with seams,
+codecs, overlays, tests, and reference sidecars** — the only external piece is
+the trained model itself, which plugs in via HTTP (local sidecar or cloud). See
+[`EXTERNAL_MODELS.md`](EXTERNAL_MODELS.md) for wiring real models in.
 
 Render modes are selectable via `TVCP_RENDER_MODE`
 (`quadrant|perceptual|optimal|halfblock|sextant|braille`) and auto-detected from
