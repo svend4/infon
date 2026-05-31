@@ -85,6 +85,46 @@ See [`docs/NEURAL_GRAPHICS_ROADMAP.md`](docs/NEURAL_GRAPHICS_ROADMAP.md),
 - Preview media moved to the `assets` orphan branch (kept out of code history);
   docs reference them via raw URLs.
 
+## [Unreleased] - 2026-05-30
+
+### 🤖 AI Integration — open `tvcp-ai/1` protocol
+
+An open JSON-over-HTTP format that lets **any neural network** be a partner for
+the terminal — drawing, playing games, reacting, and acting as a video source.
+Swap brains by changing a URL (reference brain, local Ollama, or any
+OpenAI/Anthropic endpoint; demonstrated live with Claude Haiku). Documented in
+[`ai/IMPLEMENTED.md`](ai/IMPLEMENTED.md), [`ai/BRAIN_PROTOCOL.md`](ai/BRAIN_PROTOCOL.md),
+and the gallery [`ai/showcase.html`](ai/showcase.html).
+
+#### Added — protocol & rendering packages
+- `pkg/brain` — the `tvcp-ai/1` protocol types, an HTTP client, and a
+  self-contained **reference brain** (tic-tac-toe minimax, Wordle solver, UNO
+  policy, draw, sketch, react) — no model required.
+- `pkg/scene` — the **draw-DSL** (a small JSON drawing language: fill / rect /
+  vgradient / hgradient / text / box / quad / disc) rendered to a `terminal.Frame`,
+  size-clamped against a misbehaving model.
+- `pkg/sketch` — a high-level, weak-model-friendly format (named colors + a few
+  shapes) that translates to the draw-DSL.
+- `internal/aisource` — `AICamera` (implements `device.Camera`) and
+  model-painted frames; the seam later neural backends build on.
+
+#### Added — commands
+- `tvcp ai` — streams an AI-generated video source.
+- Standalone demos in `cmd/`: `aidraw`, `aiimg`, `aiplay` (+ `aiplayf` live over
+  a shared folder, `aiplayi` interactive from stdin), `aiturn`, `aicards`,
+  `aicam`, `aiwordle`, `aiuno`, `braindemo`, and `brainserver` (the reference
+  `tvcp-ai/1` HTTP server).
+
+#### Added — games over the protocol
+- Tic-tac-toe, **Wordle**, and **UNO** played by a brain over `tvcp-ai/1`, using
+  the repo's `experimental/games/*` engines; plus draw / sketch / react / video.
+
+#### Added — model adapters (`ai/adapters/`)
+- `anthropic_brain.py` (Claude / Haiku), `ollama_brain.py` (local models), and
+  `openai_brain.py` (any OpenAI-compatible endpoint). Keys read from the
+  environment, never committed; adapters retry, validate per-game moves, and
+  fall back safely.
+
 ## [Unreleased] - 2026-02-07
 
 ### 🎯 Cross-Platform Audio Completion
