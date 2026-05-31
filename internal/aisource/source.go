@@ -52,6 +52,13 @@ func BuildSource(name string, width, height int, fps float64) (device.Camera, bo
 // host, honoring TVCP's offline-first identity.
 func NeuralBackendFromEnv() device.NeuralBackend {
 	backend := pickBackend()
+
+	// Optional director+painter composition (roadmap B5): DIRECTOR_URL plans a
+	// sketch with an LLM brain, then the chosen backend (if any) paints it; with
+	// no painter it renders the plan procedurally. This wraps the base backend.
+	if dir := os.Getenv("DIRECTOR_URL"); dir != "" {
+		backend = NewDirectorPainter(dir, backend)
+	}
 	if backend == nil {
 		return nil
 	}
