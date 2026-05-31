@@ -51,7 +51,9 @@ the game/draw clients (`braindemo`, future `aiplay --brain`) are unchanged.
 
 ## Verified
 `bin\braindemo.exe` runs a full game (X = brain over HTTP) and a draw over real
-HTTP using this format. See previews/brain_game.gif and previews/brain_draw.png.
+HTTP using this format. See
+[brain_game.gif](https://raw.githubusercontent.com/svend4/infon/assets/previews/brain_game.gif)
+and [brain_draw.png](https://raw.githubusercontent.com/svend4/infon/assets/previews/brain_draw.png).
 
 ## Update: sketch, react, robustness (points 1-3)
 

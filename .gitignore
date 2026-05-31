@@ -78,11 +78,10 @@ coverage.html
 .tvcp/contacts.json
 *.profile
 
-# AI preview artifacts. The 12 images referenced by ai/*.md and ai/showcase.html
-# are tracked intentionally; new throwaway captures should NOT be committed —
-# regenerate them or attach them to a GitHub release instead. (Removing the
-# already-committed blobs from git *history* would need git-filter-repo + a
-# force-push to a protected branch; see ai/previews/README.md.)
-ai/previews/*_final.png
-ai/previews/*_frame*.png
-ai/previews/*_clamped.png
+# AI preview images live on the `assets` orphan branch, NOT on main — keep them
+# out of the code history. Docs embed them via raw.githubusercontent URLs
+# (see ai/SHOWCASE.md). Don't commit binary previews back onto main.
+ai/previews/
+
+# Local git worktree used to manage the assets branch.
+/.assets-wt/

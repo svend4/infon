@@ -3,7 +3,8 @@
 A complete, working bridge that lets **any neural network** act as a partner for
 the TVCP terminal — drawing, playing games, reacting, and acting as a video
 source — behind one open format, **`tvcp-ai/1`** (JSON over HTTP). Everything
-here was compiled with Go 1.24 and run for real; the `ai/previews/` images are
+here was compiled with Go 1.24 and run for real; the preview images (on the
+[`assets`](https://github.com/svend4/infon/tree/assets) branch) are
 faithful renders of the actual terminal output.
 
 ## New packages
@@ -48,7 +49,7 @@ Kinds: **move** (games `tictactoe` / `wordle` / `uno`), **draw** (full DSL),
 Each is a tiny HTTP server speaking `tvcp-ai/1`. **Swap brains by changing a URL.**
 Adapters retry, validate moves per-game, and fall back safely.
 
-## Verified live (see `ai/previews/` and `ai/showcase.html`)
+## Verified live (see the [`assets`](https://github.com/svend4/infon/tree/assets) branch and `ai/showcase.html`)
 - Real binaries built and run on Windows for every command above.
 - Reference brain solved Wordle (`GHOST` in 3) and played a full UNO game.
 - **Claude Haiku, live via the user's API key**: played tic-tac-toe (you won),
