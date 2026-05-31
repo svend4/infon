@@ -14,8 +14,10 @@ import (
 	"path/filepath"
 
 	"github.com/svend4/infon/internal/codec/babe"
+	"github.com/svend4/infon/pkg/color"
 	"github.com/svend4/infon/pkg/glyphset"
 	"github.com/svend4/infon/pkg/pseudo"
+	"github.com/svend4/infon/pkg/terminal"
 )
 
 // source: a navy sky, a gold sun, and a white mountain slope — lots of diagonals.
@@ -106,6 +108,24 @@ func main() {
 	save(filepath.Join(out, "c_alphabet.png"), glyphset.Rasterize(glyphset.Chart(8), 22))
 	if mf, err := marksScene(24, 9).Frame(); err == nil {
 		save(filepath.Join(out, "d_marks.png"), glyphset.Rasterize(mf, 16))
+	}
+
+	// e: the mini-font — real text labels rendered from masks (no system font),
+	// mixed with triangle glyphs in one frame.
+	{
+		navy := color.RGB{R: 20, G: 24, B: 56}
+		gold := color.RGB{R: 245, G: 205, B: 90}
+		white := color.RGB{R: 235, G: 238, B: 245}
+		teal := color.RGB{R: 70, G: 200, B: 180}
+		lf := terminal.NewFrame(9, 5)
+		lf.Fill(' ', navy, navy)
+		lf.DrawText(1, 0, "TVCP-AI", gold, navy)
+		lf.DrawText(1, 1, "GLYPHS", white, navy)
+		lf.DrawText(1, 2, "2026", teal, navy)
+		for i, r := range []rune{'◤', '◥', '◣', '◢', '⊠'} {
+			lf.SetBlock(1+i, 4, r, white, navy)
+		}
+		save(filepath.Join(out, "e_label.png"), glyphset.Rasterize(lf, 20))
 	}
 
 	fmt.Println("alphabet (digitized from the sheet):")

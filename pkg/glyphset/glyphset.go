@@ -183,6 +183,20 @@ func Rasterize(f *terminal.Frame, cell int) image.Image {
 	for y := 0; y < f.Height; y++ {
 		for x := 0; x < f.Width; x++ {
 			blk := f.Blocks[y][x]
+			if rows, ok := fontMask(blk.Glyph); ok && blk.Glyph != ' ' {
+				for py := 0; py < cell; py++ {
+					fr := py * 7 / cell
+					for px := 0; px < cell; px++ {
+						fc := px * 5 / cell
+						c := blk.Bg
+						if fr < len(rows) && fc < len(rows[fr]) && rows[fr][fc] == '#' {
+							c = blk.Fg
+						}
+						img.SetRGBA(x*cell+px, y*cell+py, stdcolor.RGBA{R: c.R, G: c.G, B: c.B, A: 255})
+					}
+				}
+				continue
+			}
 			for py := 0; py < cell; py++ {
 				sy := py * sub / cell
 				for px := 0; px < cell; px++ {
