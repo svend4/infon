@@ -10,8 +10,17 @@ and it streams into the terminal like video).
 > ```bash
 > tvcp synth plasma          # Layer 1: procedural, real-time, runs anywhere
 > tvcp synth ripple
+> tvcp synth audioreactive   # plasma that pulses to live audio
 > tvcp synth neural "a red sunset over mountains"   # Layer 2: neural hook
+>
+> TVCP_RENDER_MODE=octant tvcp synth ripple   # densest 2×4 glyphs
+> TVCP_KITTY=1 tvcp synth neural "a calm bay" # true bitmap on capable terminals
+> TVCP_LOCAL_BRAIN=1 tvcp synth neural "..."  # fully offline, no GPU/network
+> tvcp avatar send <host:port>                # neural-avatar P2P (~35 kbps)
 > ```
+>
+> Status: this pipeline is implemented and merged — see the status table in
+> [`docs/NEURAL_GRAPHICS_ROADMAP.md`](docs/NEURAL_GRAPHICS_ROADMAP.md).
 
 ## Why this works at all
 
@@ -42,10 +51,37 @@ FrameGenerator  ──►  GenerativeSource (implements device.Camera)
 
 Cheap, deterministic, GPU-free generators in
 [`generators_procedural.go`](internal/device/generators_procedural.go)
-(`plasma`, `ripple`). They run at full frame rate on a Raspberry Pi or over SSH
-and are the dependable fallback. This is also exactly how a **game renderer**
-would integrate: render the game's framebuffer into an `image.Image` and feed it
-through the same `FrameGenerator` seam.
+(`plasma`, `ripple`) and
+[`generators_reactive.go`](internal/device/generators_reactive.go)
+(`audioreactive` — pulses to live audio via the spectral features in
+[`internal/audio/reactive`](internal/audio/reactive)). They run at full frame
+rate on a Raspberry Pi or over SSH and are the dependable fallback. This is also
+exactly how a **game renderer** integrates (see `tvcp game`): render the game's
+framebuffer into an `image.Image` and feed it through the same `FrameGenerator`
+seam.
+
+## Render modes & pixel protocols
+
+A frame can be turned into terminal cells several ways, selected with
+`TVCP_RENDER_MODE` (or auto-detected from the terminal via
+[`terminal.DetectCapability`](pkg/terminal/capability.go)):
+
+| Mode | Sub-pixels/cell | Notes |
+|---|---|---|
+| `quadrant` | 2×2, 2 colors | original; luminance clustering |
+| `perceptual` | 2×2, 2 colors | OKLab clustering (better color) |
+| `optimal` | 2×2, 2 colors | searches all 16 partitions for min perceptual error |
+| `halfblock` | 1×2, 2 exact colors | `▀`; 2× vertical, no clustering |
+| `sextant` | 2×3 | Unicode 13 (U+1FB00) |
+| `octant` | 2×4 | Unicode 16 (U+1CD00) — densest glyph mode |
+| `braille` | 2×4 dots | per-cell color; line art / edges |
+
+For true bitmaps on capable terminals, `TVCP_SIXEL=1` (Sixel) or `TVCP_KITTY=1`
+(Kitty graphics) emit the actual image pixel-perfect instead of glyph
+approximation. Perceptual color uses OKLab; dithering (Floyd–Steinberg / Bayer)
+lives in [`pkg/color/dither.go`](pkg/color/dither.go). The
+[`DiffRenderer`](pkg/terminal/diff.go) repaints only changed cells, and
+[`device.Pacer`](internal/device/pacer.go) adapts FPS under load.
 
 ### Layer 2 — neural hook (optional, heavier)
 
@@ -122,9 +158,33 @@ export BRAIN_URL=http://127.0.0.1:8088/v1/decide
 tvcp synth neural "a calm harbor at dawn"
 ```
 
-Both run through the async `NeuralGenerator`, so a slow model never stalls the
+### 3. Offline procedural (`LocalBackend`)
+
+`TVCP_LOCAL_BRAIN=1` — turns a prompt into a landscape sketch deterministically
+(keywords + a stable hash), with **no model, GPU, or network**. Keeps "visual
+chat" working on a Raspberry Pi or air-gapped host.
+
+### Decorators (composed automatically by the env tier policy)
+
+- `RestoreBackend` (`RESTORE_API_URL`) — post-processes each frame through a
+  super-resolution/restoration model (Real-ESRGAN class).
+- `StreamingBackend` (`TVCP_STREAM_COHERENCE`, 0..1) — OKLab cross-fade between
+  frames so a model stream *evolves* instead of flickering.
+- `DirectorPainter` (`DIRECTOR_URL`) — an LLM "director" plans a sketch, the
+  chosen backend (or the procedural renderer) "paints" it.
+
+`internal/aisource.NeuralBackendFromEnv` composes these, best-available first:
+
+```
+IMAGE_API_URL ─┐
+BRAIN_URL ─────┼─► base ─► [DIRECTOR_URL] ─► [RESTORE_API_URL] ─► [TVCP_STREAM_COHERENCE]
+TVCP_LOCAL_BRAIN┘  (or placeholder)
+```
+
+All run through the async `NeuralGenerator`, so a slow model never stalls the
 terminal — verified: against a 2s-per-reply brain, `tvcp ai -brain` still renders
-~15 fps.
+~15 fps. Full wiring (HTTP sidecars + cloud providers, with reference Python
+adapters) is in [`docs/EXTERNAL_MODELS.md`](docs/EXTERNAL_MODELS.md).
 
 ## Practical notes (honest constraints)
 
@@ -147,11 +207,15 @@ terminal — verified: against a 2s-per-reply brain, `tvcp ai -brain` still rend
 | [`internal/device/generators_neural.go`](internal/device/generators_neural.go) | Layer 2: `NeuralBackend` + `NeuralGenerator` (async) |
 | [`cmd/tvcp/synth.go`](cmd/tvcp/synth.go) | `tvcp synth` live demo command |
 
-## Where this can go next
+## Roadmap & status
 
-See [`docs/NEURAL_GRAPHICS_ROADMAP.md`](docs/NEURAL_GRAPHICS_ROADMAP.md) for a
-detailed design doc on future directions where graphics and neural networks
-interact: higher glyph density (half-block / sextant / Braille / Sixel),
-streaming diffusion backends, a "visual chat" steering protocol, a learned block
-encoder, semantic (send-meaning-not-pixels) transport, audio-reactive synthesis,
-and neural avatars — with a recommended impact-vs-effort sequencing.
+[`docs/NEURAL_GRAPHICS_ROADMAP.md`](docs/NEURAL_GRAPHICS_ROADMAP.md) is the design
+doc and the authoritative **implementation-status table**. Nearly all of it is
+now implemented and merged: higher glyph density (half-block / sextant / octant /
+Braille / Sixel / Kitty), the "visual chat" steering protocol
+([`pkg/visualchat`](pkg/visualchat)), a learned/optimal block encoder, the
+semantic (send-meaning-not-pixels) codec, audio-reactive synthesis, vision
+overlays ([`internal/vision`](internal/vision)), and neural avatars
+([`internal/avatar`](internal/avatar), `tvcp avatar`). The only external piece
+for the research-tier items (super-resolution, vision, avatars) is the trained
+model, wired in over HTTP per [`docs/EXTERNAL_MODELS.md`](docs/EXTERNAL_MODELS.md).
