@@ -51,26 +51,19 @@ func runSynth() {
 			prompt = "(no prompt)"
 		}
 		fmt.Printf("Prompt: %q\n", prompt)
-		// Backend priority:
-		//   1. IMAGE_API_URL — a real text-to-image model (raster output): the
-		//      true "describe it, the model paints it" path.
-		//   2. BRAIN_URL — a tvcp-ai/1 brain returns a vector sketch we rasterize.
-		//   3. neither — an animated placeholder, so the pipeline still runs.
-		// All three run through the async NeuralGenerator, so a slow model never
-		// stalls the terminal.
-		if ib, ok := aisource.NewImageBackendFromEnv(); ok {
-			gen = device.NewNeuralGenerator(ib, prompt)
-			fmt.Println("Generator: neural via text-to-image API (raster)")
-		} else if url := os.Getenv("BRAIN_URL"); url != "" {
-			// Route generation through the open tvcp-ai/1 protocol: any model
-			// (Ollama / OpenAI / Anthropic adapter) paints frames asynchronously.
-			gen = device.NewNeuralGenerator(aisource.NewBrainBackend(url), prompt)
-			fmt.Printf("Generator: neural via tvcp-ai/1 brain at %s\n", url)
+		// Backend chosen by the tiered policy (roadmap B4):
+		//   IMAGE_API_URL (raster model) > BRAIN_URL (tvcp-ai/1 sketch) >
+		//   TVCP_LOCAL_BRAIN=1 (offline procedural) > placeholder.
+		// All run through the async NeuralGenerator, so a slow model never stalls
+		// the terminal.
+		backend := aisource.NeuralBackendFromEnv()
+		gen = device.NewNeuralGenerator(backend, prompt)
+		if backend != nil {
+			fmt.Printf("Generator: neural via %s\n", backend.Name())
 		} else {
-			gen = device.NewNeuralGenerator(nil, prompt)
 			fmt.Println("Generator: neural (Layer 2 hook) — placeholder")
-			fmt.Println("Backend: not connected. Set IMAGE_API_URL (raster model) or")
-			fmt.Println("         BRAIN_URL (tvcp-ai/1 sketch) to render with a model.")
+			fmt.Println("Backend: none. Set IMAGE_API_URL (raster), BRAIN_URL (sketch),")
+			fmt.Println("         or TVCP_LOCAL_BRAIN=1 (offline procedural) to render with a model.")
 		}
 	} else {
 		g, err := device.NewProceduralGenerator(name)

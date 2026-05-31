@@ -38,15 +38,26 @@ func BuildSource(name string, width, height int, fps float64) (device.Camera, bo
 	}
 }
 
-// NeuralBackendFromEnv picks a neural backend from the environment, preferring a
-// real raster text-to-image API, then a tvcp-ai/1 sketch brain, else nil (which
-// makes NeuralGenerator show its animated placeholder).
+// NeuralBackendFromEnv picks a neural backend by a tiered policy (roadmap B4),
+// best-available first:
+//
+//  1. IMAGE_API_URL  — a real raster text-to-image model (highest fidelity);
+//  2. BRAIN_URL      — a tvcp-ai/1 sketch brain (local Ollama or cloud);
+//  3. TVCP_LOCAL_BRAIN=1 — the offline, dependency-free procedural LocalBackend
+//     (prompt-responsive imagery with no model/GPU/network);
+//  4. otherwise nil  — NeuralGenerator shows its animated placeholder.
+//
+// The local tier keeps "visual chat" working on a Raspberry Pi or air-gapped
+// host, honoring TVCP's offline-first identity.
 func NeuralBackendFromEnv() device.NeuralBackend {
 	if ib, ok := NewImageBackendFromEnv(); ok {
 		return ib
 	}
 	if url := os.Getenv("BRAIN_URL"); url != "" {
 		return NewBrainBackend(url)
+	}
+	if os.Getenv("TVCP_LOCAL_BRAIN") == "1" {
+		return NewLocalBackend()
 	}
 	return nil
 }
