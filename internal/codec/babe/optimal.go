@@ -29,7 +29,7 @@ func EncodeBlockOptimal(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, co
 		return ' ', color.Black, color.Black
 	}
 
-	// Precompute OKLab for each valid sub-pixel.
+	// Precompute OKLab for each valid sub-pixel ONCE (the conversion is the cost).
 	var lab [4]color.OKLab
 	for i := 0; i < 4; i++ {
 		if valid[i] {
@@ -38,52 +38,62 @@ func EncodeBlockOptimal(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, co
 	}
 
 	bestErr := -1.0
-	var bestGlyph rune = ' '
-	bestFg, bestBg := color.Black, color.Black
+	var bestPattern int
+	var bestFgLab, bestBgLab color.OKLab
 
-	// Each pattern 0..15: bit i (TL,TR,BL,BR) means sub-pixel i is foreground.
+	// Each pattern 0..15: bit (3-i) set means sub-pixel i is foreground. We work
+	// entirely in OKLab from the cached lab[]: the group MEAN in OKLab is exactly
+	// the color we'd render, so no slices, no RGB round-trips, no re-conversion.
 	for pattern := 0; pattern < 16; pattern++ {
-		var fgGroup, bgGroup []color.RGB
+		var fl, fa, fb, bl, ba, bb float64
+		var fn, bn int
 		for i := 0; i < 4; i++ {
 			if !valid[i] {
 				continue
 			}
-			if pattern&(1<<uint(3-i)) != 0 { // bit3=TL .. bit0=BR (matches GetGlyphFromBits)
-				fgGroup = append(fgGroup, pixels[i])
+			if pattern&(1<<uint(3-i)) != 0 {
+				fl += lab[i].L
+				fa += lab[i].A
+				fb += lab[i].B
+				fn++
 			} else {
-				bgGroup = append(bgGroup, pixels[i])
+				bl += lab[i].L
+				ba += lab[i].A
+				bb += lab[i].B
+				bn++
 			}
 		}
-		fg := averageColorOKLab(fgGroup)
-		bg := averageColorOKLab(bgGroup)
-		fgLab := fg.ToOKLab()
-		bgLab := bg.ToOKLab()
+		var fgLab, bgLab color.OKLab
+		if fn > 0 {
+			fgLab = color.OKLab{L: fl / float64(fn), A: fa / float64(fn), B: fb / float64(fn)}
+		}
+		if bn > 0 {
+			bgLab = color.OKLab{L: bl / float64(bn), A: ba / float64(bn), B: bb / float64(bn)}
+		}
 
-		// Reconstruction error: each sub-pixel rendered as fg (if in fg group)
-		// or bg, scored by squared OKLab distance.
+		// Reconstruction error: each sub-pixel scored against its group mean.
 		errSum := 0.0
 		for i := 0; i < 4; i++ {
 			if !valid[i] {
 				continue
 			}
-			var rendered color.OKLab
 			if pattern&(1<<uint(3-i)) != 0 {
-				rendered = fgLab
+				errSum += labDist2(lab[i], fgLab)
 			} else {
-				rendered = bgLab
+				errSum += labDist2(lab[i], bgLab)
 			}
-			errSum += labDist2(lab[i], rendered)
 		}
 
 		if bestErr < 0 || errSum < bestErr {
 			bestErr = errSum
-			bestGlyph = glyphFromPattern(pattern)
-			bestFg = fg
-			bestBg = bg
+			bestPattern = pattern
+			bestFgLab = fgLab
+			bestBgLab = bgLab
 		}
 	}
 
-	return bestGlyph, bestFg, bestBg
+	// Convert the two winning OKLab means back to RGB just ONCE (not per pattern).
+	return glyphFromPattern(bestPattern), bestFgLab.ToRGB(), bestBgLab.ToRGB()
 }
 
 // glyphFromPattern maps a 4-bit pattern (bit3=TL,bit2=TR,bit1=BL,bit0=BR) to its

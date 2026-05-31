@@ -202,12 +202,16 @@ func EncodeBlock(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, color.RGB
 // OKLab lightness, so the two chosen colors better match how the block looks to
 // the eye — which is what dominates perceived quality at terminal resolution.
 func EncodeBlockPerceptual(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, color.RGB) {
+	// Convert each valid pixel to OKLab ONCE and reuse (the conversion is the hot
+	// path — cbrt/pow — so doing it per-pixel-per-use was the bottleneck D6 found).
+	var lab [4]color.OKLab
 	validCount := 0
 	totalL := 0.0
 	for i := 0; i < 4; i++ {
 		if valid[i] {
+			lab[i] = pixels[i].ToOKLab()
 			validCount++
-			totalL += pixels[i].ToOKLab().L
+			totalL += lab[i].L
 		}
 	}
 	if validCount == 0 {
@@ -215,23 +219,42 @@ func EncodeBlockPerceptual(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB,
 	}
 	avgL := totalL / float64(validCount)
 
-	var group0, group1 []color.RGB
+	// Accumulate group means directly in OKLab (no slices, no re-conversion).
+	var l0, a0, b0, l1, a1, b1 float64
+	var n0, n1 int
 	var bits [4]bool
 	for i := 0; i < 4; i++ {
-		if valid[i] {
-			if pixels[i].ToOKLab().L >= avgL {
-				group1 = append(group1, pixels[i])
-				bits[i] = true
-			} else {
-				group0 = append(group0, pixels[i])
-			}
+		if !valid[i] {
+			continue
+		}
+		if lab[i].L >= avgL {
+			l1 += lab[i].L
+			a1 += lab[i].A
+			b1 += lab[i].B
+			n1++
+			bits[i] = true
+		} else {
+			l0 += lab[i].L
+			a0 += lab[i].A
+			b0 += lab[i].B
+			n0++
 		}
 	}
 
-	bg := averageColorOKLab(group0) // darker group = background
-	fg := averageColorOKLab(group1) // lighter group = foreground
+	bg := meanOKLab(l0, a0, b0, n0) // darker group = background
+	fg := meanOKLab(l1, a1, b1, n1) // lighter group = foreground
 	glyph := glyphs.GetGlyphFromBits(bits[0], bits[1], bits[2], bits[3])
 	return glyph.Char, fg, bg
+}
+
+// meanOKLab returns the RGB of the averaged OKLab sums over n samples (black if
+// n==0). Avoids slice allocation in the per-block hot path.
+func meanOKLab(l, a, b float64, n int) color.RGB {
+	if n == 0 {
+		return color.Black
+	}
+	fn := float64(n)
+	return color.OKLab{L: l / fn, A: a / fn, B: b / fn}.ToRGB()
 }
 
 // averageColorOKLab averages colors in OKLab space (perceptually even mean),
