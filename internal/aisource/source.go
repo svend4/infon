@@ -55,6 +55,9 @@ func NeuralBackendFromEnv() device.NeuralBackend {
 	if backend == nil {
 		return nil
 	}
+	// Optional restoration/super-resolution pass (roadmap C1): RESTORE_API_URL
+	// post-processes each frame through a Real-ESRGAN-class model. No-op unset.
+	backend = NewRestoreBackendFromEnv(backend)
 	// Optional temporal-coherence wrapper (roadmap B1): TVCP_STREAM_COHERENCE in
 	// (0,1] cross-fades frames for smooth, live evolution instead of hard cuts.
 	if v := os.Getenv("TVCP_STREAM_COHERENCE"); v != "" {
