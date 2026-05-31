@@ -146,3 +146,12 @@ terminal — verified: against a 2s-per-reply brain, `tvcp ai -brain` still rend
 | [`internal/device/generators_procedural.go`](internal/device/generators_procedural.go) | Layer 1: `plasma`, `ripple` |
 | [`internal/device/generators_neural.go`](internal/device/generators_neural.go) | Layer 2: `NeuralBackend` + `NeuralGenerator` (async) |
 | [`cmd/tvcp/synth.go`](cmd/tvcp/synth.go) | `tvcp synth` live demo command |
+
+## Where this can go next
+
+See [`docs/NEURAL_GRAPHICS_ROADMAP.md`](docs/NEURAL_GRAPHICS_ROADMAP.md) for a
+detailed design doc on future directions where graphics and neural networks
+interact: higher glyph density (half-block / sextant / Braille / Sixel),
+streaming diffusion backends, a "visual chat" steering protocol, a learned block
+encoder, semantic (send-meaning-not-pixels) transport, audio-reactive synthesis,
+and neural avatars — with a recommended impact-vs-effort sequencing.
