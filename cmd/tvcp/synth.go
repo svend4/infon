@@ -89,10 +89,14 @@ func runSynth() {
 		mode, _ = babe.ParseRenderMode(terminal.DetectCapability().BestBlitMode())
 	}
 
-	// Sixel pixel-protocol path (roadmap A5): opt in with TVCP_SIXEL=1, or auto
-	// when the terminal advertises Sixel and no glyph mode was forced.
-	sixel := os.Getenv("TVCP_SIXEL") == "1" ||
-		(os.Getenv("TVCP_RENDER_MODE") == "" && terminal.DetectCapability().Sixel)
+	// Pixel-protocol paths (roadmap A5): true bitmaps instead of glyphs on
+	// capable terminals. Explicit opt-in via TVCP_SIXEL=1 / TVCP_KITTY=1, or auto
+	// when the terminal advertises support and no glyph mode was forced. Kitty is
+	// preferred over Sixel when both are available.
+	cap := terminal.DetectCapability()
+	autoPixel := os.Getenv("TVCP_RENDER_MODE") == ""
+	kitty := os.Getenv("TVCP_KITTY") == "1" || (autoPixel && cap.Kitty)
+	sixel := os.Getenv("TVCP_SIXEL") == "1" || (autoPixel && cap.Sixel && !kitty)
 
 	source := device.NewGenerativeSource(srcWidth, srcHeight, fps, gen)
 	if err := source.Open(); err != nil {
@@ -102,7 +106,14 @@ func runSynth() {
 	defer func() { _ = source.Close() }()
 
 	fmt.Printf("Source: %dx%d @ %.0f FPS\n", source.GetWidth(), source.GetHeight(), source.GetFPS())
-	fmt.Printf("Render mode: %s\n", mode)
+	switch {
+	case kitty:
+		fmt.Println("Render mode: kitty (pixel protocol)")
+	case sixel:
+		fmt.Println("Render mode: sixel (pixel protocol)")
+	default:
+		fmt.Printf("Render mode: %s\n", mode)
+	}
 	fmt.Printf("Terminal: %dx%d characters\n", termWidth, termHeight)
 	fmt.Println("\nPress Ctrl+C to stop")
 
@@ -149,9 +160,12 @@ func runSynth() {
 				continue
 			}
 
-			if sixel {
-				// Pixel-perfect path (roadmap A5): emit a real bitmap instead of
-				// glyph approximation on Sixel-capable terminals.
+			if kitty {
+				// Pixel-perfect path (roadmap A5): Kitty graphics protocol.
+				fmt.Print(terminal.MoveCursor(1, 1))
+				fmt.Print(terminal.EncodeKitty(img))
+			} else if sixel {
+				// Pixel-perfect path (roadmap A5): Sixel bitmap.
 				fmt.Print(terminal.MoveCursor(1, 1))
 				fmt.Print(terminal.EncodeSixel(img, 64))
 			} else {
