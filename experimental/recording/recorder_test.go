@@ -5,6 +5,7 @@ package recording
 import (
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -300,43 +301,46 @@ func TestRecorderCallbacks(t *testing.T) {
 	config.OutputDir = tmpDir
 	recorder := NewRecorder("rec1", "call1", config)
 
-	startCalled := false
-	stopCalled := false
-	pauseCalled := false
-	resumeCalled := false
+	// Callbacks fire from goroutines; flags are atomic and polled (a plain bool
+	// + sleep is a data race).
+	var startCalled, stopCalled, pauseCalled, resumeCalled atomic.Bool
 
-	recorder.OnStart = func() { startCalled = true }
-	recorder.OnStop = func(path string) { stopCalled = true }
-	recorder.OnPause = func() { pauseCalled = true }
-	recorder.OnResume = func() { resumeCalled = true }
+	recorder.OnStart = func() { startCalled.Store(true) }
+	recorder.OnStop = func(path string) { stopCalled.Store(true) }
+	recorder.OnPause = func() { pauseCalled.Store(true) }
+	recorder.OnResume = func() { resumeCalled.Store(true) }
 
 	recorder.Start()
-	time.Sleep(50 * time.Millisecond)
-
-	if !startCalled {
+	if !waitFlag(&startCalled) {
 		t.Error("OnStart callback should be called")
 	}
 
 	recorder.Pause()
-	time.Sleep(50 * time.Millisecond)
-
-	if !pauseCalled {
+	if !waitFlag(&pauseCalled) {
 		t.Error("OnPause callback should be called")
 	}
 
 	recorder.Resume()
-	time.Sleep(50 * time.Millisecond)
-
-	if !resumeCalled {
+	if !waitFlag(&resumeCalled) {
 		t.Error("OnResume callback should be called")
 	}
 
 	recorder.Stop()
-	time.Sleep(50 * time.Millisecond)
-
-	if !stopCalled {
+	if !waitFlag(&stopCalled) {
 		t.Error("OnStop callback should be called")
 	}
+}
+
+// waitFlag polls an atomic flag for up to a second; returns true once set.
+func waitFlag(b *atomic.Bool) bool {
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if b.Load() {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return b.Load()
 }
 
 // TestRecorderInvalidStateTransitions tests invalid state transitions
@@ -391,8 +395,8 @@ func TestRecorderMaxDuration(t *testing.T) {
 	config.MaxDuration = 200 * time.Millisecond
 	recorder := NewRecorder("rec1", "call1", config)
 
-	limitReached := false
-	recorder.OnTimeLimit = func() { limitReached = true }
+	var limitReached atomic.Bool
+	recorder.OnTimeLimit = func() { limitReached.Store(true) }
 
 	recorder.Start()
 
@@ -405,17 +409,17 @@ func TestRecorderMaxDuration(t *testing.T) {
 		time.Sleep(checkInterval)
 		elapsed += checkInterval
 
-		if limitReached && recorder.State == StateFinished {
+		if limitReached.Load() && recorder.GetState() == StateFinished {
 			return // Test passed
 		}
 	}
 
-	if !limitReached {
+	if !limitReached.Load() {
 		t.Error("Time limit callback should be called")
 	}
 
-	if recorder.State != StateFinished {
-		t.Errorf("Recording should be finished, got state %v", recorder.State)
+	if recorder.GetState() != StateFinished {
+		t.Errorf("Recording should be finished, got state %v", recorder.GetState())
 	}
 }
 

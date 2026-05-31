@@ -3,6 +3,7 @@
 package screenshare
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -191,24 +192,32 @@ func TestGetStats(t *testing.T) {
 func TestCallbacks(t *testing.T) {
 	share := NewScreenShare("share1", "user1", "Alice", "call1", nil)
 
-	startCalled := false
-	stopCalled := false
-	share.OnStart = func() { startCalled = true }
-	share.OnStop = func() { stopCalled = true }
+	// Callbacks fire from goroutines; flags are atomic and polled.
+	var startCalled, stopCalled atomic.Bool
+	share.OnStart = func() { startCalled.Store(true) }
+	share.OnStop = func() { stopCalled.Store(true) }
 
 	share.Start()
-	time.Sleep(50 * time.Millisecond)
-
-	if !startCalled {
+	if !waitFlag(&startCalled) {
 		t.Error("OnStart should be called")
 	}
 
 	share.Stop()
-	time.Sleep(50 * time.Millisecond)
-
-	if !stopCalled {
+	if !waitFlag(&stopCalled) {
 		t.Error("OnStop should be called")
 	}
+}
+
+// waitFlag polls an atomic flag for up to a second; returns true once set.
+func waitFlag(b *atomic.Bool) bool {
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if b.Load() {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return b.Load()
 }
 
 func TestInvalidStateTransitions(t *testing.T) {
