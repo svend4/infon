@@ -12,6 +12,7 @@ import (
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/internal/device"
 	"github.com/svend4/infon/pkg/color"
+	"github.com/svend4/infon/pkg/terminal"
 )
 
 // runSynth renders synthesized graphics live in the terminal.
@@ -81,11 +82,18 @@ func runSynth() {
 		fmt.Printf("Generator: %s (Layer 1 procedural)\n", g.Name())
 	}
 
-	// Render mode (roadmap A1/A4): TVCP_RENDER_MODE=quadrant|perceptual|halfblock.
-	mode, ok := babe.ParseRenderMode(os.Getenv("TVCP_RENDER_MODE"))
-	if !ok {
-		fmt.Fprintf(os.Stderr, "Unknown TVCP_RENDER_MODE %q (use quadrant|perceptual|halfblock)\n", os.Getenv("TVCP_RENDER_MODE"))
-		os.Exit(1)
+	// Render mode (roadmap A1-A4): explicit TVCP_RENDER_MODE wins; otherwise
+	// auto-pick the best glyph mode the terminal can show (roadmap D2).
+	var mode babe.RenderMode
+	if envMode := os.Getenv("TVCP_RENDER_MODE"); envMode != "" {
+		m, ok := babe.ParseRenderMode(envMode)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "Unknown TVCP_RENDER_MODE %q (use quadrant|perceptual|halfblock|sextant|braille)\n", envMode)
+			os.Exit(1)
+		}
+		mode = m
+	} else {
+		mode, _ = babe.ParseRenderMode(terminal.DetectCapability().BestBlitMode())
 	}
 
 	source := device.NewGenerativeSource(srcWidth, srcHeight, fps, gen)

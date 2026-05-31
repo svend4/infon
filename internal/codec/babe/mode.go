@@ -22,6 +22,9 @@ const (
 	// ModeSextant renders 2x3 legacy-computing glyphs: 6 sub-pixels/cell, denser
 	// than quadrants (A2). Needs Unicode 13 support; gate via Capability.
 	ModeSextant
+	// ModeBraille renders 2x4 Braille dots: highest spatial resolution, per-cell
+	// color; best for line art / edges (A3).
+	ModeBraille
 )
 
 // String returns the mode's CLI name.
@@ -33,6 +36,8 @@ func (m RenderMode) String() string {
 		return "halfblock"
 	case ModeSextant:
 		return "sextant"
+	case ModeBraille:
+		return "braille"
 	default:
 		return "quadrant"
 	}
@@ -49,6 +54,8 @@ func ParseRenderMode(name string) (RenderMode, bool) {
 		return ModeHalfBlock, true
 	case "sextant", "sext":
 		return ModeSextant, true
+	case "braille":
+		return ModeBraille, true
 	default:
 		return ModeQuadrant, false
 	}
@@ -64,6 +71,8 @@ func ImageToFrameMode(img image.Image, w, h int, mode RenderMode) *terminal.Fram
 		return ImageToFrameHalfBlock(img, w, h)
 	case ModeSextant:
 		return ImageToFrameSextant(img, w, h)
+	case ModeBraille:
+		return ImageToFrameBraille(img, w, h)
 	default:
 		return ImageToFrame(img, w, h)
 	}
