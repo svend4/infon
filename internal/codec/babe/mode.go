@@ -28,6 +28,10 @@ const (
 	// ModeOptimal is ModeQuadrant with an exhaustive perceptual-optimal block
 	// encoder (searches all 16 partitions to minimize OKLab error) (C2).
 	ModeOptimal
+	// ModeOctant renders 2x4 legacy-computing glyphs: 8 sub-pixels/cell, the
+	// densest glyph mode (A2 extended). Needs Unicode 16 support; gate via
+	// Capability.
+	ModeOctant
 )
 
 // String returns the mode's CLI name.
@@ -43,6 +47,8 @@ func (m RenderMode) String() string {
 		return "braille"
 	case ModeOptimal:
 		return "optimal"
+	case ModeOctant:
+		return "octant"
 	default:
 		return "quadrant"
 	}
@@ -63,6 +69,8 @@ func ParseRenderMode(name string) (RenderMode, bool) {
 		return ModeBraille, true
 	case "optimal", "best":
 		return ModeOptimal, true
+	case "octant", "oct":
+		return ModeOctant, true
 	default:
 		return ModeQuadrant, false
 	}
@@ -82,6 +90,8 @@ func ImageToFrameMode(img image.Image, w, h int, mode RenderMode) *terminal.Fram
 		return ImageToFrameBraille(img, w, h)
 	case ModeOptimal:
 		return imageToFrameWithEncoder(img, w, h, EncodeBlockOptimal)
+	case ModeOctant:
+		return ImageToFrameOctant(img, w, h)
 	default:
 		return ImageToFrame(img, w, h)
 	}
