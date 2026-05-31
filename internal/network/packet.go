@@ -15,6 +15,7 @@ const (
 	PacketTypeKeepAlive uint8 = 0x05 // Keep-alive ping
 	PacketTypeTextChat  uint8 = 0x06 // Text chat message
 	PacketTypeScreen    uint8 = 0x07 // Screen sharing (terminal output)
+	PacketTypeAvatar    uint8 = 0x08 // Neural-avatar face keypoints (ultra-low bandwidth)
 )
 
 // Packet represents a network packet
@@ -26,7 +27,7 @@ type Packet struct {
 }
 
 var (
-	ErrInvalidPacket = errors.New("invalid packet format")
+	ErrInvalidPacket  = errors.New("invalid packet format")
 	ErrPacketTooLarge = errors.New("packet exceeds maximum size")
 )
 

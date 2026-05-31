@@ -39,6 +39,8 @@ func main() {
 		runAI()
 	case "synth", "generative":
 		runSynth()
+	case "avatar":
+		runAvatar()
 	case "game":
 		runGame()
 	case "send":
@@ -101,6 +103,7 @@ func printUsage() {
 	fmt.Println("  preview [pattern]   Live camera preview (animated test patterns)")
 	fmt.Println("  ai                  Stream the AI-generated video source")
 	fmt.Println("  synth [gen]         Live synthesized graphics (plasma/ripple/neural)")
+	fmt.Println("  avatar <send|recv>  Neural-avatar transport (talking face for kilobits/s)")
 	fmt.Println("  game                Real-time Snake (experimental build; arrows/WASD)")
 	fmt.Println("  send <host:port>    Stream video to remote host (one-way)")
 	fmt.Println("  receive [port]      Receive video stream (default port: 5000)")
