@@ -40,6 +40,8 @@ var sigilRunes = map[string]rune{
 	"flag": '⚑', "skull": '☠', "yinyang": '☯', "phone": '☎', "pencil": '✎',
 	"scissors": '✂', "plane": '✈', "crown": '♛', "king": '♚', "pawn": '♟',
 	"boat": '⛵', "comet": '☄', "atom": '⚛', "peace": '☮',
+	"tower": '♜', "castle": '♜', "rook": '♜', "fleur": '⚜', "fleurdelis": '⚜',
+	"sword": '⚔', "key": '⚷', "shield": '⛉', "lion": '♌', "bishop": '♝', "knight": '♞',
 }
 
 func (s *SigilScene) frame(cols, rows int) *terminal.Frame {
