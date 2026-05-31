@@ -157,7 +157,9 @@ func NewProceduralGenerator(name string) (FrameGenerator, error) {
 		return PlasmaGenerator{}, nil
 	case "ripple":
 		return RippleGenerator{}, nil
+	case "audioreactive", "reactive":
+		return NewAudioReactiveGenerator(), nil
 	default:
-		return nil, fmt.Errorf("unknown procedural generator %q (available: plasma, ripple)", name)
+		return nil, fmt.Errorf("unknown procedural generator %q (available: plasma, ripple, audioreactive)", name)
 	}
 }
