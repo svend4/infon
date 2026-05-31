@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/svend4/infon/pkg/color"
+	"github.com/svend4/infon/pkg/glyphset"
 	"github.com/svend4/infon/pkg/scene"
 	"github.com/svend4/infon/pkg/sketch"
 	"github.com/svend4/infon/pkg/terminal"
@@ -188,7 +189,7 @@ func (s Spec) Image(pxW, pxH int) (image.Image, error) {
 		if err != nil {
 			return nil, err
 		}
-		return RasterizeFrame(f, pxW, pxH), nil
+		return glyphset.RasterizeSize(f, pxW, pxH), nil
 	}
 }
 

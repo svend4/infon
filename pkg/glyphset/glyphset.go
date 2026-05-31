@@ -175,42 +175,74 @@ func avg(r, g, b, n float64) color.RGB {
 	return color.RGB{R: uint8(r / n), G: uint8(g / n), B: uint8(b / n)}
 }
 
-// Rasterize draws a Frame to an RGBA image, painting each cell's glyph MASK (not
-// just its color) so triangle/diagonal/quadrant shapes are reproduced faithfully.
-// cell is the pixel size of one terminal cell.
+// Rasterize draws a Frame to an RGBA image at `cell` px per cell (mask + font
+// faithful). For an arbitrary target size, use RasterizeSize.
 func Rasterize(f *terminal.Frame, cell int) image.Image {
-	img := image.NewRGBA(image.Rect(0, 0, f.Width*cell, f.Height*cell))
-	for y := 0; y < f.Height; y++ {
-		for x := 0; x < f.Width; x++ {
-			blk := f.Blocks[y][x]
-			if rows, ok := fontMask(blk.Glyph); ok && blk.Glyph != ' ' {
-				for py := 0; py < cell; py++ {
-					fr := py * 7 / cell
-					for px := 0; px < cell; px++ {
-						fc := px * 5 / cell
-						c := blk.Bg
-						if fr < len(rows) && fc < len(rows[fr]) && rows[fr][fc] == '#' {
-							c = blk.Fg
-						}
-						img.SetRGBA(x*cell+px, y*cell+py, stdcolor.RGBA{R: c.R, G: c.G, B: c.B, A: 255})
-					}
-				}
-				continue
+	return RasterizeSize(f, f.Width*cell, f.Height*cell)
+}
+
+// RasterizeSize draws a Frame into a w×h RGBA image, painting each cell's glyph
+// mask: triangles/diagonals/quadrants via coverage(), letters/digits via the
+// mini-font, and any other glyph (e.g. a sigil) as a solid fg block — so previews
+// show real shapes and text without depending on a system font.
+func RasterizeSize(f *terminal.Frame, w, h int) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	if f == nil || f.Width == 0 || f.Height == 0 {
+		return img
+	}
+	for y := 0; y < h; y++ {
+		cy := y * f.Height / h
+		top := cy * h / f.Height
+		ch := (cy+1)*h/f.Height - top
+		if ch < 1 {
+			ch = 1
+		}
+		fy := y - top
+		for x := 0; x < w; x++ {
+			cx := x * f.Width / w
+			left := cx * w / f.Width
+			cw := (cx+1)*w/f.Width - left
+			if cw < 1 {
+				cw = 1
 			}
-			for py := 0; py < cell; py++ {
-				sy := py * sub / cell
-				for px := 0; px < cell; px++ {
-					sx := px * sub / cell
-					c := blk.Bg
-					if coverage(blk.Glyph, sx, sy, sub) {
-						c = blk.Fg
-					}
-					img.SetRGBA(x*cell+px, y*cell+py, stdcolor.RGBA{R: c.R, G: c.G, B: c.B, A: 255})
-				}
-			}
+			c := pixelColor(f.Blocks[cy][cx], x-left, fy, cw, ch)
+			img.SetRGBA(x, y, stdcolor.RGBA{R: c.R, G: c.G, B: c.B, A: 255})
 		}
 	}
 	return img
+}
+
+var maskGlyphs = func() map[rune]bool {
+	m := make(map[rune]bool)
+	for _, r := range candidates {
+		m[r] = true
+	}
+	for _, r := range []rune{'╱', '╲', '╳', '□', '⊠'} {
+		m[r] = true
+	}
+	return m
+}()
+
+// pixelColor returns fg or bg for sub-position (fx,fy) of a cell sized cw×ch.
+func pixelColor(blk terminal.Block, fx, fy, cw, ch int) color.RGB {
+	if blk.Glyph == ' ' {
+		return blk.Bg
+	}
+	if rows, ok := fontMask(blk.Glyph); ok {
+		fr := fy * 7 / ch
+		fc := fx * 5 / cw
+		if fr < len(rows) && fc < len(rows[fr]) && rows[fr][fc] == '#' {
+			return blk.Fg
+		}
+		return blk.Bg
+	}
+	if maskGlyphs[blk.Glyph] {
+		if coverage(blk.Glyph, fx*sub/cw, fy*sub/ch, sub) {
+			return blk.Fg
+		}
+		return blk.Bg
+	}
+	return blk.Fg // unknown glyph (e.g. a sigil) -> solid, like the original rasterizer
 }
 
 // Mark is one named glyph in the digitized alphabet.
