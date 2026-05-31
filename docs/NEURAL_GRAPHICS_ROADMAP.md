@@ -7,6 +7,34 @@
 >
 > Status legend: ✅ done · 🟡 partial / scaffolded · ⬜ proposed (not started)
 
+## Implementation status (this work)
+
+Most of Phases 1–3 are now built, tested, and on the branch:
+
+| Item | What shipped | Status |
+|---|---|---|
+| A1 half-block | `babe.ImageToFrameHalfBlock` + `RenderMode` | ✅ |
+| A2 sextant | verified U+1FB00 table + `ImageToFrameSextant` | ✅ |
+| A3 Braille | `babe.ImageToFrameBraille` | ✅ |
+| A4 perceptual color + dithering | `pkg/color` OKLab + Floyd–Steinberg/Bayer; `EncodeBlockPerceptual` | ✅ |
+| A5 Sixel | `terminal.EncodeSixel` + `TVCP_SIXEL` | ✅ |
+| B1 streaming coherence | `aisource.StreamingBackend` (OKLab cross-fade) | ✅ (GPU model still external) |
+| B2 visual-chat steering | `pkg/visualchat` (Steer + Controller) | ✅ |
+| B3 semantic codec | `aisource` SemanticFrame (≈68× smaller) | ✅ |
+| B4 local/offline brain | `aisource.LocalBackend` + 4-tier policy | ✅ |
+| C2 learned/optimal encoder | `babe.EncodeBlockOptimal` (exhaustive perceptual) | ✅ |
+| C4 audio-reactive | `internal/audio/reactive` + `AudioReactiveGenerator` | ✅ |
+| D1 P-frame metering | `video.StreamStats` (≈28× on static scenes) | ✅ |
+| D2 capability probe | `terminal.DetectCapability` + auto mode | ✅ |
+| D5 golden render tests | `pkg/terminal/golden_test.go` | ✅ |
+| C1 super-resolution · C3 vision overlays · C5 neural avatars | need trained models | ⬜ (research) |
+
+Render modes are selectable via `TVCP_RENDER_MODE`
+(`quadrant|perceptual|optimal|halfblock|sextant|braille`) and auto-detected from
+the terminal otherwise. Neural backends are chosen by env
+(`IMAGE_API_URL` > `BRAIN_URL` > `TVCP_LOCAL_BRAIN` > placeholder), optionally
+wrapped for streaming (`TVCP_STREAM_COHERENCE`).
+
 ---
 
 ## 0. Where we are today (the substrate)
