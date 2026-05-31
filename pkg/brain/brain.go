@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/svend4/infon/pkg/pseudo"
 	"github.com/svend4/infon/pkg/scene"
 	"github.com/svend4/infon/pkg/sketch"
 )
@@ -23,11 +24,12 @@ const Protocol = "tvcp-ai/1"
 // Request is what we ask a brain to decide.
 type Request struct {
 	Protocol string          `json:"protocol"`
-	Kind     string          `json:"kind"`            // "move" | "draw" | "react"
+	Kind     string          `json:"kind"`            // "move" | "draw" | "sketch" | "image" | "react"
 	Game     string          `json:"game,omitempty"`  // e.g. "tictactoe"
 	State    json.RawMessage `json:"state,omitempty"` // game-specific state
 	Prompt   string          `json:"prompt,omitempty"`
 	Canvas   *Canvas         `json:"canvas,omitempty"`
+	Format   string          `json:"format,omitempty"` // image kind: grid|pixels|glyphs|sigils|vector|sketch
 }
 
 // Canvas is the target size for a draw request (in terminal cells).
@@ -53,7 +55,8 @@ type Response struct {
 	Move      *Move           `json:"move,omitempty"`
 	Scene     json.RawMessage `json:"scene,omitempty"`  // a draw-DSL document
 	Sketch    json.RawMessage `json:"sketch,omitempty"` // a high-level sketch
-	Cards     []string        `json:"cards,omitempty"` // glyph "cards" for react
+	Image     json.RawMessage `json:"image,omitempty"`  // a pseudo-image spec (pkg/pseudo)
+	Cards     []string        `json:"cards,omitempty"`  // glyph "cards" for react
 	Reasoning string          `json:"reasoning,omitempty"`
 	Error     string          `json:"error,omitempty"`
 }
@@ -265,6 +268,121 @@ func refSketch(req Request) Response {
 	return Response{Protocol: Protocol, Kind: "sketch", Sketch: data, Reasoning: "reference sketch"}
 }
 
+// refImage answers a kind:"image" request with a pkg/pseudo spec. It proves the
+// whole point of pseudo-images: even a backend with NO image model (this one)
+// can "paint" by emitting a few tokens of structured JSON. The Format field of
+// the request selects the encoding; the default is the pseudo-diffusion grid.
+func refImage(req Request) Response {
+	cols, rows := 64, 28
+	if req.Canvas != nil {
+		if req.Canvas.Width > 0 {
+			cols = req.Canvas.Width
+		}
+		if req.Canvas.Height > 0 {
+			rows = req.Canvas.Height
+		}
+	}
+	hs := 0
+	for _, ch := range req.Prompt {
+		hs += int(ch)
+	}
+	spec := pseudo.Spec{Cols: cols, Rows: rows, Title: req.Prompt}
+	switch strings.ToLower(strings.TrimSpace(req.Format)) {
+	case "sketch":
+		spec.Format = pseudo.FormatSketch
+		spec.Sketch = refSketch(req).Sketch
+	case "vector":
+		spec.Format = pseudo.FormatVector
+		spec.Vector = refDraw(req).Scene
+	case "pixels":
+		spec.Format = pseudo.FormatPixels
+		spec.Pixels = refGridSeed(hs)
+	case "sigils":
+		spec.Format = pseudo.FormatSigils
+		spec.Sigils = refSigilScene(hs)
+	case "glyphs":
+		spec.Format = pseudo.FormatGlyphs
+		spec.Glyphs = refGlyphArt()
+	default: // "grid" or unspecified -> pseudo-diffusion
+		spec.Format = pseudo.FormatGrid
+		spec.Grid = refGridSeed(hs)
+	}
+	data, _ := json.Marshal(spec)
+	return Response{Protocol: Protocol, Kind: "image", Image: data, Reasoning: "reference pseudo-image (" + string(spec.Format) + ")"}
+}
+
+// refGridSeed builds a tiny 12x8 landscape seed (sky + sun glow + water) that the
+// pseudo-diffusion renderer upscales and blurs into a painterly image.
+func refGridSeed(hs int) *pseudo.Grid {
+	skies := [][2]string{{"navy", "purple"}, {"dusk", "navy"}, {"navy", "blue"}, {"purple", "navy"}}
+	waters := []string{"teal", "blue", "skyblue"}
+	s := skies[hs%len(skies)]
+	w := waters[hs%len(waters)]
+	sun := 3 + hs%6
+	rows := make([][]string, 8)
+	for y := 0; y < 8; y++ {
+		row := make([]string, 12)
+		for x := 0; x < 12; x++ {
+			switch {
+			case y >= 5:
+				row[x] = w
+				if (x+y)%3 == 0 {
+					row[x] = "skyblue"
+				}
+			case y == 4:
+				row[x] = "slate"
+			default:
+				d := x - sun
+				if d < 0 {
+					d = -d
+				}
+				switch {
+				case d+y <= 2:
+					row[x] = "gold"
+				case d+y <= 4:
+					row[x] = "amber"
+				case x < 6:
+					row[x] = s[0]
+				default:
+					row[x] = s[1]
+				}
+			}
+		}
+		rows[y] = row
+	}
+	return &pseudo.Grid{Rows: rows}
+}
+
+func refSigilScene(hs int) *pseudo.SigilScene {
+	skies := []string{"navy", "dusk", "purple"}
+	return &pseudo.SigilScene{
+		Sky:    skies[hs%len(skies)],
+		Ground: "teal",
+		Items: []pseudo.Sigil{
+			{Name: "sun", X: 0.72, Y: 0.24, Color: "gold"},
+			{Name: "cloud", X: 0.3, Y: 0.18, Color: "gray"},
+			{Name: "star", X: 0.12, Y: 0.12, Color: "white"},
+			{Name: "mountain", X: 0.24, Y: 0.58, Color: "slate"},
+			{Name: "mountain", X: 0.36, Y: 0.62, Color: "dusk"},
+			{Name: "anchor", X: 0.62, Y: 0.82, Color: "white"},
+		},
+	}
+}
+
+func refGlyphArt() *pseudo.GlyphArt {
+	return &pseudo.GlyphArt{
+		Bg: "navy", Fg: "white",
+		Palette: map[string]string{"*": "gold", "^": "slate", "~": "skyblue", "=": "teal"},
+		Rows: []string{
+			"          *           ",
+			"     ^^        ^^^     ",
+			"   ^^^^^^^^^^^^^^^^^^  ",
+			" ==~~==~~==~~==~~==~~= ",
+			"~~==~~==~~==~~==~~==~~~",
+		},
+	}
+}
+
 var wordleWords = []string{
 	"WATER", "CRANE", "SLATE", "ROBOT", "PIXEL", "LIGHT", "SOUND", "BRAIN", "CLOUD", "STONE",
 	"RIVER", "OCEAN", "PLANT", "HOUSE", "MUSIC", "DREAM", "FLAME", "GHOST", "KNIFE", "LEMON",
@@ -277,8 +395,8 @@ type wMark struct {
 	Marks []string `json:"marks"`
 }
 type wState struct {
-	Length  int      `json:"length"`
-	Guesses []wMark  `json:"guesses"`
+	Length  int     `json:"length"`
+	Guesses []wMark `json:"guesses"`
 }
 
 func wConsistent(word, guess string, marks []string) bool {
@@ -378,6 +496,8 @@ func Reference(req Request) Response {
 		return refDraw(req)
 	case "sketch":
 		return refSketch(req)
+	case "image":
+		return refImage(req)
 	case "react":
 		return refReact(req)
 	default:
