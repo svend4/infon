@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/svend4/infon/ai/schema/tvcp-ai.response.schema.json",
+  "title": "tvcp-ai Response",
+  "type": "object",
+  "required": ["kind"],
+  "properties": {
+    "protocol": { "type": "string", "pattern": "^tvcp-ai/[0-9]+$" },
+    "kind": { "type": "string", "enum": ["move", "draw", "sketch", "image", "react"] },
+    "move": {
+      "type": "object",
+      "properties": {
+        "row": { "type": "integer" },
+        "col": { "type": "integer" },
+        "word": { "type": "string" },
+        "card_index": { "type": ["integer", "null"] },
+        "draw": { "type": "boolean" },
+        "color": { "type": "string" }
+      }
+    },
+    "scene": { "type": "object" },
+    "sketch": { "type": "object" },
+    "image": { "type": "object" },
+    "cards": { "type": "array", "items": { "type": "string" } },
+    "reasoning": { "type": "string" },
+    "error": { "type": "string" }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "image" } }, "required": ["kind"] },
+      "then": { "anyOf": [ { "required": ["image"] }, { "required": ["error"] } ] } },
+    { "if": { "properties": { "kind": { "const": "react" } }, "required": ["kind"] },
+      "then": { "anyOf": [ { "required": ["cards"] }, { "required": ["error"] } ] } }
+  ],
+  "additionalProperties": true
+}
