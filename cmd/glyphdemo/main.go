@@ -128,6 +128,24 @@ func main() {
 		save(filepath.Join(out, "e_label.png"), glyphset.Rasterize(lf, 20))
 	}
 
+	// f: a specimen of the user's own font (myFront4Solan4), now the text font.
+	{
+		navy := color.RGB{R: 18, G: 22, B: 50}
+		gold := color.RGB{R: 245, G: 205, B: 90}
+		white := color.RGB{R: 235, G: 238, B: 245}
+		lines := []string{"ABCDEFGHIJKLM", "NOPQRSTUVWXYZ", "abcdefghijklm", "nopqrstuvwxyz", "0123456789", "SVEND 2016"}
+		sf := terminal.NewFrame(13, len(lines))
+		sf.Fill(' ', navy, navy)
+		for i, ln := range lines {
+			c := white
+			if i >= 4 {
+				c = gold
+			}
+			sf.DrawText(0, i, ln, c, navy)
+		}
+		save(filepath.Join(out, "f_solan.png"), glyphset.Rasterize(sf, 18))
+	}
+
 	fmt.Println("alphabet (digitized from the sheet):")
 	for i, m := range glyphset.Marks {
 		fmt.Printf("  %-8s %c", m.Name, m.Glyph)

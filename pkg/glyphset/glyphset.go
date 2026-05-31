@@ -228,6 +228,15 @@ func pixelColor(blk terminal.Block, fx, fy, cw, ch int) color.RGB {
 	if blk.Glyph == ' ' {
 		return blk.Bg
 	}
+	if rows, w, ok := solanMask(blk.Glyph); ok {
+		h := len(rows)
+		fr := fy * h / ch
+		fc := fx * w / cw
+		if fr < h && fc < w && (rows[fr]>>uint(w-1-fc))&1 == 1 {
+			return blk.Fg
+		}
+		return blk.Bg
+	}
 	if rows, ok := fontMask(blk.Glyph); ok {
 		fr := fy * 7 / ch
 		fc := fx * 5 / cw

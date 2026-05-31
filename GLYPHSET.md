@@ -24,3 +24,13 @@ both the best-match renderer and the faithful rasterizer.
 This is a new render primitive: a candidate `tvcp` render mode beside quadrant /
 sextant / braille, strongest exactly where the others are weakest — diagonal and
 curved edges.
+
+## The myFront4Solan4 font (© svend)
+
+Rasterize's **primary text font** is the user's own hand-designed bitmap font
+`myFront4Solan4`: 8×8 geometric/diagonal letters and digits, plus 16×16 pattern
+tiles — the grid-paper alphabet formalized. It is generated into
+`pkg/glyphset/solan.go` from the JSON source `ai/fonts/myFront4Solan4.json`; the
+5×7 micro-font covers any glyph it doesn't define. `cmd/glyphdemo` writes a
+specimen `f_solan.png`. So captions and labels across the project now render in
+the author's own typeface — no system font required.
