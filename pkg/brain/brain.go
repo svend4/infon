@@ -29,7 +29,7 @@ type Request struct {
 	State    json.RawMessage `json:"state,omitempty"` // game-specific state
 	Prompt   string          `json:"prompt,omitempty"`
 	Canvas   *Canvas         `json:"canvas,omitempty"`
-	Format   string          `json:"format,omitempty"`  // image kind: grid|pixels|glyphs|sigils|vector|sketch
+	Format   string          `json:"format,omitempty"`  // image kind: grid|pixels|glyphs|sigils|vector|sketch|mixed|marks
 	Palette  string          `json:"palette,omitempty"` // optional mood preset for image kind
 }
 
@@ -299,6 +299,9 @@ func refImage(req Request) Response {
 	case "pixels":
 		spec.Format = pseudo.FormatPixels
 		spec.Pixels = refGridSeed(hs)
+	case "marks":
+		spec.Format = pseudo.FormatMarks
+		spec.Marks = refMarks(hs)
 	case "sigils":
 		spec.Format = pseudo.FormatSigils
 		spec.Sigils = refSigilScene(hs)
@@ -356,6 +359,18 @@ func refGridSeed(hs int) *pseudo.Grid {
 		rows[y] = row
 	}
 	return &pseudo.Grid{Rows: rows}
+}
+
+func refMarks(hs int) *pseudo.MarkArt {
+	return &pseudo.MarkArt{
+		Bg: "navy", Fg: "white",
+		Rows: [][]string{
+			{"", "", "", "tri-ul", "tri-ur", "", "", ""},
+			{"", "", "tri-ul", "full", "full", "tri-ur", "", ""},
+			{"", "tri-ul", "full", "full", "full", "full", "tri-ur", ""},
+			{"tri-ul", "full", "full", "full", "full", "full", "full", "tri-ur"},
+		},
+	}
 }
 
 func refSigilScene(hs int) *pseudo.SigilScene {

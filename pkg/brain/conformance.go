@@ -43,6 +43,7 @@ func ConformanceBattery() []ConformanceCase {
 		{"image/grid", Request{Kind: "image", Format: "grid", Prompt: "a calm harbor", Canvas: &Canvas{Width: 48, Height: 20}}},
 		{"image/sigils", Request{Kind: "image", Format: "sigils", Prompt: "a harbor"}},
 		{"image/glyphs", Request{Kind: "image", Format: "glyphs", Prompt: "a harbor"}},
+		{"image/marks", Request{Kind: "image", Format: "marks", Prompt: "a mountain"}},
 		{"react", Request{Kind: "react", Prompt: "great job!"}},
 	}
 }

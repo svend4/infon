@@ -24,7 +24,7 @@ swappable part.** You change brains by changing a URL.
 | `state` | object | game-specific state |
 | `prompt` | string | free text for `draw`/`sketch`/`image`/`react` |
 | `canvas` | object | `{width,height}` target size in terminal cells |
-| `format` | string | for `image`: `grid\|pixels\|glyphs\|sigils\|vector\|sketch\|mixed` |
+| `format` | string | for `image`: `grid\|pixels\|glyphs\|sigils\|vector\|sketch\|mixed\|marks\|mixed\|marks` |
 | `palette` | string | for `image`: mood preset `dawn\|dusk\|neon\|mono\|forest\|ocean` |
 
 **Response**

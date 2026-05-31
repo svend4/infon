@@ -43,6 +43,7 @@ const (
 	FormatVector Format = "vector"
 	FormatSketch Format = "sketch"
 	FormatMixed  Format = "mixed"
+	FormatMarks  Format = "marks"
 )
 
 // Spec is the unified request a text model fills in. It picks one Format and
@@ -59,6 +60,7 @@ type Spec struct {
 	Vector  json.RawMessage `json:"vector,omitempty"`
 	Sketch  json.RawMessage `json:"sketch,omitempty"`
 	Mixed   *Mixed          `json:"mixed,omitempty"`
+	Marks   *MarkArt        `json:"marks,omitempty"`
 	Palette string          `json:"palette,omitempty"` // preset: dawn|dusk|neon|mono|forest|ocean
 }
 
@@ -116,6 +118,12 @@ func (s Spec) Frame() (*terminal.Frame, error) {
 		}
 		s.Mixed.pal = pal
 		return s.Mixed.frame(c, r), nil
+	case FormatMarks:
+		if s.Marks == nil {
+			return nil, fmt.Errorf("pseudo: marks format with no marks payload")
+		}
+		s.Marks.pal = pal
+		return s.Marks.frame(c, r), nil
 	case FormatVector:
 		var sc scene.Scene
 		if err := json.Unmarshal(nonNil(s.Vector), &sc); err != nil {

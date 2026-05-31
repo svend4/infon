@@ -15,6 +15,7 @@ package glyphset
 import (
 	"image"
 	stdcolor "image/color"
+	"strings"
 
 	"github.com/svend4/infon/pkg/color"
 	"github.com/svend4/infon/pkg/terminal"
@@ -235,4 +236,31 @@ func Chart(perRow int) *terminal.Frame {
 		f.SetBlock(cx, cy, m.Glyph, white, navy)
 	}
 	return f
+}
+
+// byToken resolves Mark names and literal glyphs to runes.
+var byToken = func() map[string]rune {
+	m := make(map[string]rune, len(Marks)*2)
+	for _, mk := range Marks {
+		m[mk.Name] = mk.Glyph
+		m[string(mk.Glyph)] = mk.Glyph
+	}
+	return m
+}()
+
+// Glyph resolves a token (a Mark name like "tri-ll", or a literal glyph like
+// "◣") to its rune. Empty -> blank; an unknown single rune is accepted as
+// itself, so a model may use either names or the glyphs directly.
+func Glyph(token string) rune {
+	t := strings.TrimSpace(token)
+	if t == "" {
+		return ' '
+	}
+	if r, ok := byToken[t]; ok {
+		return r
+	}
+	for _, r := range t {
+		return r
+	}
+	return ' '
 }
