@@ -1,3 +1,5 @@
+//go:build experimental
+
 // Command aiwordle plays Wordle where a tvcp-ai/1 brain guesses, using the
 // repo's experimental/games/words engine for validation/feedback. Shows the
 // protocol generalizing beyond tic-tac-toe to a word game (Move.Word).

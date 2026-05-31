@@ -19,7 +19,7 @@ func ImageToFrame(img image.Image, targetWidth, targetHeight int) *terminal.Fram
 	srcHeight := bounds.Dy()
 
 	// Calculate scaling factors
-	scaleX := float64(srcWidth) / float64(targetWidth*2)  // *2 because each char = 2 pixels wide
+	scaleX := float64(srcWidth) / float64(targetWidth*2)   // *2 because each char = 2 pixels wide
 	scaleY := float64(srcHeight) / float64(targetHeight*2) // *2 because each char = 2 pixels high
 
 	// Process each terminal character position
@@ -60,6 +60,87 @@ func ImageToFrame(img image.Image, targetWidth, targetHeight int) *terminal.Fram
 		}
 	}
 
+	return frame
+}
+
+// ImageToFramePerceptual is like ImageToFrame but uses EncodeBlockPerceptual
+// (OKLab clustering) for higher color fidelity. It is a drop-in alternative for
+// callers that prefer quality over the marginally cheaper luminance path.
+func ImageToFramePerceptual(img image.Image, targetWidth, targetHeight int) *terminal.Frame {
+	frame := terminal.NewFrame(targetWidth, targetHeight)
+
+	bounds := img.Bounds()
+	srcWidth := bounds.Dx()
+	srcHeight := bounds.Dy()
+
+	scaleX := float64(srcWidth) / float64(targetWidth*2)
+	scaleY := float64(srcHeight) / float64(targetHeight*2)
+
+	for ty := 0; ty < targetHeight; ty++ {
+		for tx := 0; tx < targetWidth; tx++ {
+			sx := int(float64(tx*2) * scaleX)
+			sy := int(float64(ty*2) * scaleY)
+
+			var pixels [4]color.RGB
+			var validPixels [4]bool
+			positions := [4][2]int{
+				{sx, sy}, {sx + 1, sy}, {sx, sy + 1}, {sx + 1, sy + 1},
+			}
+			for i, pos := range positions {
+				px, py := pos[0], pos[1]
+				if px < srcWidth && py < srcHeight {
+					r, g, b, _ := img.At(px, py).RGBA()
+					pixels[i] = color.RGB{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8)}
+					validPixels[i] = true
+				}
+			}
+
+			glyph, fg, bg := EncodeBlockPerceptual(pixels, validPixels)
+			frame.SetBlock(tx, ty, glyph, fg, bg)
+		}
+	}
+
+	return frame
+}
+
+// blockEncoder is the signature shared by EncodeBlock / EncodeBlockPerceptual /
+// EncodeBlockOptimal, so converters can be parameterized by the encoder.
+type blockEncoder func(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, color.RGB)
+
+// imageToFrameWithEncoder runs the standard 2x2 sampling loop using the given
+// block encoder, avoiding copy-paste across the quadrant-family converters.
+func imageToFrameWithEncoder(img image.Image, targetWidth, targetHeight int, enc blockEncoder) *terminal.Frame {
+	frame := terminal.NewFrame(targetWidth, targetHeight)
+
+	bounds := img.Bounds()
+	srcWidth := bounds.Dx()
+	srcHeight := bounds.Dy()
+
+	scaleX := float64(srcWidth) / float64(targetWidth*2)
+	scaleY := float64(srcHeight) / float64(targetHeight*2)
+
+	for ty := 0; ty < targetHeight; ty++ {
+		for tx := 0; tx < targetWidth; tx++ {
+			sx := int(float64(tx*2) * scaleX)
+			sy := int(float64(ty*2) * scaleY)
+
+			var pixels [4]color.RGB
+			var validPixels [4]bool
+			positions := [4][2]int{
+				{sx, sy}, {sx + 1, sy}, {sx, sy + 1}, {sx + 1, sy + 1},
+			}
+			for i, pos := range positions {
+				px, py := pos[0], pos[1]
+				if px < srcWidth && py < srcHeight {
+					r, g, b, _ := img.At(px, py).RGBA()
+					pixels[i] = color.RGB{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8)}
+					validPixels[i] = true
+				}
+			}
+			glyph, fg, bg := enc(pixels, validPixels)
+			frame.SetBlock(tx, ty, glyph, fg, bg)
+		}
+	}
 	return frame
 }
 
@@ -113,6 +194,84 @@ func EncodeBlock(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, color.RGB
 	glyph := glyphs.GetGlyphFromBits(bits[0], bits[1], bits[2], bits[3])
 
 	return glyph.Char, fg, bg
+}
+
+// EncodeBlockPerceptual is a higher-quality variant of EncodeBlock that clusters
+// the 2x2 block in the OKLab perceptual space instead of by raw luminance, and
+// averages each group's color perceptually. The split threshold is the mean
+// OKLab lightness, so the two chosen colors better match how the block looks to
+// the eye — which is what dominates perceived quality at terminal resolution.
+func EncodeBlockPerceptual(pixels [4]color.RGB, valid [4]bool) (rune, color.RGB, color.RGB) {
+	// Convert each valid pixel to OKLab ONCE and reuse (the conversion is the hot
+	// path — cbrt/pow — so doing it per-pixel-per-use was the bottleneck D6 found).
+	var lab [4]color.OKLab
+	validCount := 0
+	totalL := 0.0
+	for i := 0; i < 4; i++ {
+		if valid[i] {
+			lab[i] = pixels[i].ToOKLab()
+			validCount++
+			totalL += lab[i].L
+		}
+	}
+	if validCount == 0 {
+		return ' ', color.Black, color.Black
+	}
+	avgL := totalL / float64(validCount)
+
+	// Accumulate group means directly in OKLab (no slices, no re-conversion).
+	var l0, a0, b0, l1, a1, b1 float64
+	var n0, n1 int
+	var bits [4]bool
+	for i := 0; i < 4; i++ {
+		if !valid[i] {
+			continue
+		}
+		if lab[i].L >= avgL {
+			l1 += lab[i].L
+			a1 += lab[i].A
+			b1 += lab[i].B
+			n1++
+			bits[i] = true
+		} else {
+			l0 += lab[i].L
+			a0 += lab[i].A
+			b0 += lab[i].B
+			n0++
+		}
+	}
+
+	bg := meanOKLab(l0, a0, b0, n0) // darker group = background
+	fg := meanOKLab(l1, a1, b1, n1) // lighter group = foreground
+	glyph := glyphs.GetGlyphFromBits(bits[0], bits[1], bits[2], bits[3])
+	return glyph.Char, fg, bg
+}
+
+// meanOKLab returns the RGB of the averaged OKLab sums over n samples (black if
+// n==0). Avoids slice allocation in the per-block hot path.
+func meanOKLab(l, a, b float64, n int) color.RGB {
+	if n == 0 {
+		return color.Black
+	}
+	fn := float64(n)
+	return color.OKLab{L: l / fn, A: a / fn, B: b / fn}.ToRGB()
+}
+
+// averageColorOKLab averages colors in OKLab space (perceptually even mean),
+// avoiding the muddy results of averaging gamma-encoded sRGB directly.
+func averageColorOKLab(colors []color.RGB) color.RGB {
+	if len(colors) == 0 {
+		return color.Black
+	}
+	var l, a, b float64
+	for _, c := range colors {
+		o := c.ToOKLab()
+		l += o.L
+		a += o.A
+		b += o.B
+	}
+	n := float64(len(colors))
+	return color.OKLab{L: l / n, A: a / n, B: b / n}.ToRGB()
 }
 
 // averageColor calculates the average of a slice of colors

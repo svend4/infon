@@ -53,15 +53,19 @@ Canvas: `{ "width": int, "height": int, "bg": [r,g,b]?, "ops": [ ... ] }`
                  so the existing call / record / export carry AI-generated video)
 
 ## previews/
-sunset.png, sunset_real.png (real Go output), aurora_terminal.png, ttt.gif,
-ttt_sheet.png, cards.png, effect.gif
+Preview images live on the [`assets`](https://github.com/svend4/infon/tree/assets)
+orphan branch (kept out of the code history) and are embedded in
+[SHOWCASE.md](SHOWCASE.md) via raw URLs: sunset_real.png, aurora_terminal.png,
+ttt.gif, cards.png, brain_video.gif, brain_game.gif, vs_haiku_captioned.gif,
+haiku_sketch.png, haiku_react2.png, wordle_ref.gif.
 
 ## Phase 4 — AI as a video source (done)
 
 `internal/aisource/camera.go`: `AICamera` implements `device.Camera`, checked at
 compile time by `var _ device.Camera = (*AICamera)(nil)`. `cmd/aicam` runs it
 through the REAL pipeline `device.Camera -> babe.ImageToFrame -> terminal.Frame`
-(see previews/aicam.gif). Drop-in: copy `integration/ai.go.txt` to
+(see [aicam.gif](https://raw.githubusercontent.com/svend4/infon/assets/previews/aicam.gif)).
+Drop-in: copy `integration/ai.go.txt` to
 `cmd/tvcp/ai.go` and add `case "ai": runAI()` to main.go — then the same source
 flows through send / call / record / export unchanged.
 

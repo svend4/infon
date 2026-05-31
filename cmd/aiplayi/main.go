@@ -1,3 +1,5 @@
+//go:build experimental
+
 // Command aiplayi is an INTERACTIVE tic-tac-toe: X reads moves from stdin (so a
 // live LLM can play through the terminal via interact_with_process), O is the
 // repo engine (random here for a winnable game). Each board is also logged as a

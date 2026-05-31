@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -357,9 +358,12 @@ func TestProgressTracking(t *testing.T) {
 
 	ft, _ := NewFileTransfer("test-13", filePath, "recipient")
 
-	progressCalled := false
+	// OnProgress fires from a goroutine (see updateProgressLocked), so the flag
+	// must be accessed atomically rather than via a plain bool + sleep (which is
+	// a data race, not synchronization).
+	var progressCalled atomic.Bool
 	ft.OnProgress = func(progress float64) {
-		progressCalled = true
+		progressCalled.Store(true)
 	}
 
 	ft.AcknowledgeChunk(0)
@@ -368,10 +372,12 @@ func TestProgressTracking(t *testing.T) {
 		t.Errorf("Expected progress 0.25, got %f", ft.Progress)
 	}
 
-	// Wait a bit for goroutine
-	time.Sleep(10 * time.Millisecond)
-
-	if !progressCalled {
+	// Poll for the async callback instead of a fixed sleep.
+	deadline := time.Now().Add(time.Second)
+	for !progressCalled.Load() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !progressCalled.Load() {
 		t.Error("OnProgress callback should be called")
 	}
 
@@ -386,25 +392,25 @@ func TestCompleteCallback(t *testing.T) {
 
 	ft, _ := NewFileTransfer("test-14", filePath, "recipient")
 
-	completeCalled := false
-	var receivedChecksum string
-
+	// OnComplete fires from a goroutine; deliver its result over a channel so the
+	// test reads it with proper synchronization (not a racy bool + sleep).
+	done := make(chan string, 1)
 	ft.OnComplete = func(checksum string) {
-		completeCalled = true
-		receivedChecksum = checksum
+		select {
+		case done <- checksum:
+		default:
+		}
 	}
 
 	ft.AcknowledgeChunk(0)
 
-	// Wait for goroutine
-	time.Sleep(10 * time.Millisecond)
-
-	if !completeCalled {
+	select {
+	case receivedChecksum := <-done:
+		if receivedChecksum != ft.Checksum {
+			t.Errorf("Expected checksum %s, got %s", ft.Checksum, receivedChecksum)
+		}
+	case <-time.After(time.Second):
 		t.Error("OnComplete callback should be called")
-	}
-
-	if receivedChecksum != ft.Checksum {
-		t.Errorf("Expected checksum %s, got %s", ft.Checksum, receivedChecksum)
 	}
 }
 

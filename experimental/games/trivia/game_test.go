@@ -4,6 +4,7 @@ package trivia
 
 import (
 	"encoding/json"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -555,54 +556,57 @@ func TestCallbacks(t *testing.T) {
 	game.AddQuestions(createTestQuestions())
 	game.AddPlayer("player1", "Alice")
 
-	gameStarted := false
-	questionAsked := false
-	answerSubmitted := false
-	questionEnded := false
+	// Callbacks fire from goroutines (see TriviaGame.Start etc.), so the flags
+	// are atomic and we poll for them — a plain bool + sleep is a data race.
+	var gameStarted, questionAsked, answerSubmitted, questionEnded atomic.Bool
 
 	game.Callbacks.OnGameStart = func(g *TriviaGame) {
-		gameStarted = true
+		gameStarted.Store(true)
 	}
 
 	game.Callbacks.OnQuestionAsked = func(g *TriviaGame, q *Question) {
-		questionAsked = true
+		questionAsked.Store(true)
 	}
 
 	game.Callbacks.OnAnswer = func(g *TriviaGame, p *Player, a *Answer) {
-		answerSubmitted = true
+		answerSubmitted.Store(true)
 	}
 
 	game.Callbacks.OnQuestionEnd = func(g *TriviaGame, q *Question, correct int) {
-		questionEnded = true
+		questionEnded.Store(true)
 	}
 
 	game.Start()
-	time.Sleep(10 * time.Millisecond) // Wait for goroutine
-
-	if !gameStarted {
+	if !waitFlag(&gameStarted) {
 		t.Error("OnGameStart callback not called")
 	}
 
 	game.NextQuestion()
-	time.Sleep(10 * time.Millisecond)
-
-	if !questionAsked {
+	if !waitFlag(&questionAsked) {
 		t.Error("OnQuestionAsked callback not called")
 	}
 
 	game.SubmitAnswer("player1", 2)
-	time.Sleep(10 * time.Millisecond)
-
-	if !answerSubmitted {
+	if !waitFlag(&answerSubmitted) {
 		t.Error("OnAnswer callback not called")
 	}
 
 	game.RevealAnswer()
-	time.Sleep(10 * time.Millisecond)
-
-	if !questionEnded {
+	if !waitFlag(&questionEnded) {
 		t.Error("OnQuestionEnd callback not called")
 	}
+}
+
+// waitFlag polls an atomic flag for up to a second; returns true once set.
+func waitFlag(b *atomic.Bool) bool {
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if b.Load() {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return b.Load()
 }
 
 func TestTimeBonusPoints(t *testing.T) {

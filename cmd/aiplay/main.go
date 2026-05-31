@@ -1,3 +1,5 @@
+//go:build experimental
+
 // Command aiplay connects an external "brain" to the repo's tic-tac-toe engine
 // (experimental/games/board) and renders every board as a colored Frame.
 //

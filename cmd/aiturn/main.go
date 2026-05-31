@@ -1,3 +1,5 @@
+//go:build experimental
+
 // Command aiturn plays ONE turn per run against the repo engine, persisting the
 // game in a shared folder so an external brain (you, or another model) drives X
 // move-by-move. O is the repo random by default, or — with -brain URL — any
@@ -193,7 +195,10 @@ func main() {
 	g2 := newGame()
 	ff, _ := os.Create("assets/aiturn.frames.txt")
 	mn := 0
-	emit := func(gg *board.TicTacToe) { ff.WriteString(renderBoard(gg, mn, who).Render()); ff.WriteString("\n@@@FRAME@@@\n") }
+	emit := func(gg *board.TicTacToe) {
+		ff.WriteString(renderBoard(gg, mn, who).Render())
+		ff.WriteString("\n@@@FRAME@@@\n")
+	}
 	emit(g2)
 	for _, m := range hist {
 		_ = g2.MakeMove(m[0], m[1])

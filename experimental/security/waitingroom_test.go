@@ -4,6 +4,7 @@ package security
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -67,9 +68,9 @@ func TestAdmit(t *testing.T) {
 
 	wr.RequestJoin("user1", "Alice", "", "")
 
-	admitted := false
+	var admitted atomic.Bool
 	wr.OnAdmitted = func(participantID string) {
-		admitted = true
+		admitted.Store(true)
 	}
 
 	err := wr.Admit("user1")
@@ -80,7 +81,7 @@ func TestAdmit(t *testing.T) {
 	// Wait for goroutine
 	time.Sleep(10 * time.Millisecond)
 
-	if !admitted {
+	if !admitted.Load() {
 		t.Error("OnAdmitted callback should be called")
 	}
 
@@ -99,9 +100,9 @@ func TestReject(t *testing.T) {
 
 	wr.RequestJoin("user1", "Alice", "", "")
 
-	rejected := false
+	var rejected atomic.Bool
 	wr.OnRejected = func(participantID string) {
-		rejected = true
+		rejected.Store(true)
 	}
 
 	err := wr.Reject("user1", "Not allowed")
@@ -111,7 +112,7 @@ func TestReject(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	if !rejected {
+	if !rejected.Load() {
 		t.Error("OnRejected callback should be called")
 	}
 
@@ -124,16 +125,16 @@ func TestAutoAdmit(t *testing.T) {
 	wr := NewWaitingRoom("wr1", "room1")
 	wr.AutoAdmit = true
 
-	admitted := false
+	var admitted atomic.Bool
 	wr.OnAdmitted = func(participantID string) {
-		admitted = true
+		admitted.Store(true)
 	}
 
 	wr.RequestJoin("user1", "Alice", "", "")
 
 	time.Sleep(10 * time.Millisecond)
 
-	if !admitted {
+	if !admitted.Load() {
 		t.Error("Should be auto-admitted")
 	}
 
@@ -212,9 +213,9 @@ func TestTimeout(t *testing.T) {
 	wr := NewWaitingRoom("wr1", "room1")
 	wr.Timeout = 100 * time.Millisecond
 
-	timedOut := false
+	var timedOut atomic.Bool
 	wr.OnTimeout = func(participantID string) {
-		timedOut = true
+		timedOut.Store(true)
 	}
 
 	wr.RequestJoin("user1", "Alice", "", "")
@@ -222,7 +223,7 @@ func TestTimeout(t *testing.T) {
 	// Wait for timeout
 	time.Sleep(150 * time.Millisecond)
 
-	if !timedOut {
+	if !timedOut.Load() {
 		t.Error("OnTimeout callback should be called")
 	}
 

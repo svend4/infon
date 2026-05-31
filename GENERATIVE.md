@@ -85,6 +85,47 @@ src := device.NewGenerativeSource(256, 256, 15, gen)
 gen.SetPrompt("now a storm rolls in")
 ```
 
+## Built-in backends
+
+Two ready-made `NeuralBackend` implementations ship in
+[`internal/aisource`](internal/aisource), both driven by `tvcp synth neural`:
+
+### 1. Raster — a real text-to-image model (`ImageBackend`)
+
+The genuine "describe it, the model paints it" path: POST a prompt to an
+image-generation HTTP API and decode the returned **picture** (PNG/JPEG).
+Provider-agnostic and stdlib-only; configured via env vars (takes priority when
+`IMAGE_API_URL` is set):
+
+```bash
+export IMAGE_API_URL=https://your-endpoint/v1/images
+export IMAGE_API_KEY=sk-...                 # optional bearer token
+export IMAGE_B64_PATH=data.0.b64_json       # optional: dot-path to base64 in a
+                                            # JSON response (OpenAI-style). Omit
+                                            # if the body is raw image bytes.
+tvcp synth neural "a calm harbor at dawn"
+```
+
+Responses are handled three ways: an `image/*` Content-Type (raw bytes), a
+configured base64 JSON path (incl. `data:` URLs), or a raw-body fallback.
+`IMAGE_PROMPT_FIELD` / `IMAGE_WIDTH_FIELD` / `IMAGE_HEIGHT_FIELD` override the
+request field names for non-standard APIs.
+
+### 2. Vector — a tvcp-ai/1 brain (`BrainBackend`)
+
+Asks any [`tvcp-ai/1`](ai/BRAIN_PROTOCOL.md) brain for a high-level *sketch* and
+rasterizes it locally. Good for small/local LLMs (Ollama) that can emit simple
+JSON but not pixels:
+
+```bash
+export BRAIN_URL=http://127.0.0.1:8088/v1/decide
+tvcp synth neural "a calm harbor at dawn"
+```
+
+Both run through the async `NeuralGenerator`, so a slow model never stalls the
+terminal — verified: against a 2s-per-reply brain, `tvcp ai -brain` still renders
+~15 fps.
+
 ## Practical notes (honest constraints)
 
 - **Low terminal resolution is an advantage here.** The terminal shows ~160×48
@@ -105,3 +146,12 @@ gen.SetPrompt("now a storm rolls in")
 | [`internal/device/generators_procedural.go`](internal/device/generators_procedural.go) | Layer 1: `plasma`, `ripple` |
 | [`internal/device/generators_neural.go`](internal/device/generators_neural.go) | Layer 2: `NeuralBackend` + `NeuralGenerator` (async) |
 | [`cmd/tvcp/synth.go`](cmd/tvcp/synth.go) | `tvcp synth` live demo command |
+
+## Where this can go next
+
+See [`docs/NEURAL_GRAPHICS_ROADMAP.md`](docs/NEURAL_GRAPHICS_ROADMAP.md) for a
+detailed design doc on future directions where graphics and neural networks
+interact: higher glyph density (half-block / sextant / Braille / Sixel),
+streaming diffusion backends, a "visual chat" steering protocol, a learned block
+encoder, semantic (send-meaning-not-pixels) transport, audio-reactive synthesis,
+and neural avatars — with a recommended impact-vs-effort sequencing.

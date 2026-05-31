@@ -4,42 +4,45 @@ Connecting **any neural network** to terminal graphics via the open
 `tvcp-ai/1` format. Everything below was compiled with Go 1.24 on the PC and
 run for real; previews are faithful renders of the terminal output.
 
+> Images are hosted on the [`assets`](https://github.com/svend4/infon/tree/assets)
+> orphan branch (kept out of the code history); they render inline below.
+
 ## 1. The rendering core (draw-DSL → terminal)
-![sunset](previews/sunset_real.png)
+![sunset](https://raw.githubusercontent.com/svend4/infon/assets/previews/sunset_real.png)
 Real `aidraw.exe` renders a JSON draw-DSL scene I authored. `aidraw scenes/sunset.json`
 
 ## 2. Pixel path (any image → blocks)
-![aurora](previews/aurora_terminal.png)
+![aurora](https://raw.githubusercontent.com/svend4/infon/assets/previews/aurora_terminal.png)
 `babe.ImageToFrame` turns a raster into 2×2 quadrant blocks. `aiimg assets/aurora.png 80 50`
 
 ## 3. AI plays a game
-![tictactoe](previews/ttt.gif)
+![tictactoe](https://raw.githubusercontent.com/svend4/infon/assets/previews/ttt.gif)
 The repo's tic-tac-toe engine + minimax, rendered as colored frames. `aiplay`
 
 ## 4. A visual language (cards + effects)
-![cards](previews/cards.png)
+![cards](https://raw.githubusercontent.com/svend4/infon/assets/previews/cards.png)
 Glyph "cards" + a truecolor sweep. `aicards`
 
 ## 5. AI as a video source
-![brain video](previews/brain_video.gif)
+![brain video](https://raw.githubusercontent.com/svend4/infon/assets/previews/brain_video.gif)
 A model paints frames (sketch → scene). `tvcp ai -brain URL` / `aicam -brain URL`
 
 ## 6. Open protocol — any model plugs in
-![brain game](previews/brain_game.gif)
+![brain game](https://raw.githubusercontent.com/svend4/infon/assets/previews/brain_game.gif)
 A full game over real HTTP using `tvcp-ai/1`. `braindemo -brain URL`
 
 ## 7. Live with Claude Haiku (your API key)
-![vs haiku](previews/vs_haiku_captioned.gif)
+![vs haiku](https://raw.githubusercontent.com/svend4/infon/assets/previews/vs_haiku_captioned.gif)
 You beat Haiku in the terminal (Haiku plays O). `aiturn -brain URL <r> <c>`
 
-![haiku sketch](previews/haiku_sketch.png)
+![haiku sketch](https://raw.githubusercontent.com/svend4/infon/assets/previews/haiku_sketch.png)
 Haiku draws via the simple `sketch` format. `aidraw -brain URL -sketch -prompt "..."`
 
-![haiku react](previews/haiku_react2.png)
+![haiku react](https://raw.githubusercontent.com/svend4/infon/assets/previews/haiku_react2.png)
 Haiku reacts with symbol cards. `aicards -brain URL -msg "..."`
 
 ## 8. A new game in the same protocol — Wordle
-![wordle](previews/wordle_ref.gif)
+![wordle](https://raw.githubusercontent.com/svend4/infon/assets/previews/wordle_ref.gif)
 The brain guesses; the repo's Wordle engine gives feedback. `aiwordle -word GHOST`
 
 ## Binaries (infon/bin)
