@@ -8,6 +8,7 @@ import (
 	"github.com/svend4/infon/pkg/pseudo"
 	"github.com/svend4/infon/pkg/scene"
 	"github.com/svend4/infon/pkg/sketch"
+	"github.com/svend4/infon/pkg/tangram"
 )
 
 // ConformanceCase is one labeled request from the standard battery.
@@ -34,10 +35,12 @@ func ConformanceBattery() []ConformanceCase {
 	})
 	wState, _ := json.Marshal(map[string]any{"length": 5, "guesses": []any{}})
 	uState, _ := json.Marshal(map[string]any{"hand": []string{"Red 5", "Blue 2"}, "color": "Red", "playable": []int{0}})
+	tgState, _ := json.Marshal(PuzzleStateFromFigureTree())
 	return []ConformanceCase{
 		{"move/tictactoe", Request{Kind: "move", Game: "tictactoe", State: ttState}},
 		{"move/wordle", Request{Kind: "move", Game: "wordle", State: wState}},
 		{"move/uno", Request{Kind: "move", Game: "uno", State: uState}},
+		{"move/tangram", Request{Kind: "move", Game: "tangram", State: tgState}},
 		{"draw", Request{Kind: "draw", Prompt: "a calm harbor at dawn", Canvas: &Canvas{Width: 48, Height: 20}}},
 		{"sketch", Request{Kind: "sketch", Prompt: "sunset over mountains"}},
 		{"image/grid", Request{Kind: "image", Format: "grid", Prompt: "a calm harbor", Canvas: &Canvas{Width: 48, Height: 20}}},
@@ -46,6 +49,11 @@ func ConformanceBattery() []ConformanceCase {
 		{"image/marks", Request{Kind: "image", Format: "marks", Prompt: "a mountain"}},
 		{"react", Request{Kind: "react", Prompt: "great job!"}},
 	}
+}
+
+// PuzzleStateFromFigureTree builds the tangram conformance puzzle (a tree).
+func PuzzleStateFromFigureTree() tangram.PuzzleState {
+	return tangram.PuzzleFromFigure(tangram.Tree())
 }
 
 var wordRe = regexp.MustCompile(`^[A-Za-z]{5}$`)
@@ -58,6 +66,24 @@ func CheckResponse(req Request, resp Response) (string, bool) {
 	}
 	switch req.Kind {
 	case "move":
+		if req.Game == "tangram" {
+			var ps tangram.PuzzleState
+			if json.Unmarshal(req.State, &ps) != nil {
+				return "tangram: bad state", false
+			}
+			var sol tangram.Figure
+			if len(resp.Tangram) == 0 || json.Unmarshal(resp.Tangram, &sol) != nil {
+				return "tangram: missing or invalid solution", false
+			}
+			sc := tangram.ScorePuzzle(ps, sol)
+			if !sc.WellFormed {
+				return "tangram: solution has overlaps", false
+			}
+			if sc.IoU < 0.5 {
+				return fmt.Sprintf("tangram: IoU too low: %.2f", sc.IoU), false
+			}
+			return "", true
+		}
 		if resp.Move == nil {
 			return "no move in response", false
 		}

@@ -16,6 +16,7 @@ import (
 	"github.com/svend4/infon/pkg/pseudo"
 	"github.com/svend4/infon/pkg/scene"
 	"github.com/svend4/infon/pkg/sketch"
+	"github.com/svend4/infon/pkg/tangram"
 )
 
 // Protocol is the format version string.
@@ -54,10 +55,11 @@ type Response struct {
 	Protocol  string          `json:"protocol"`
 	Kind      string          `json:"kind"`
 	Move      *Move           `json:"move,omitempty"`
-	Scene     json.RawMessage `json:"scene,omitempty"`  // a draw-DSL document
-	Sketch    json.RawMessage `json:"sketch,omitempty"` // a high-level sketch
-	Image     json.RawMessage `json:"image,omitempty"`  // a pseudo-image spec (pkg/pseudo)
-	Cards     []string        `json:"cards,omitempty"`  // glyph "cards" for react
+	Scene     json.RawMessage `json:"scene,omitempty"`   // a draw-DSL document
+	Sketch    json.RawMessage `json:"sketch,omitempty"`  // a high-level sketch
+	Image     json.RawMessage `json:"image,omitempty"`   // a pseudo-image spec (pkg/pseudo)
+	Tangram   json.RawMessage `json:"tangram,omitempty"` // a tangram solution (pkg/tangram)
+	Cards     []string        `json:"cards,omitempty"`   // glyph "cards" for react
 	Reasoning string          `json:"reasoning,omitempty"`
 	Error     string          `json:"error,omitempty"`
 }
@@ -516,6 +518,21 @@ func refUno(req Request) Response {
 
 // Reference is a self-contained brain implementing tvcp-ai/1. Any other backend
 // (Ollama, OpenAI, Anthropic, this model) just needs to produce the same shapes.
+// refTangram solves a tangram puzzle from Request.State with the reference
+// best-match solver and returns the placements in Response.Tangram.
+func refTangram(req Request) Response {
+	var ps tangram.PuzzleState
+	if err := json.Unmarshal(req.State, &ps); err != nil {
+		return Response{Protocol: Protocol, Kind: "move", Error: "tangram: bad state: " + err.Error()}
+	}
+	sol := tangram.Solve(ps)
+	data, err := json.Marshal(sol)
+	if err != nil {
+		return Response{Protocol: Protocol, Kind: "move", Error: "tangram: " + err.Error()}
+	}
+	return Response{Protocol: Protocol, Kind: "move", Tangram: data, Reasoning: "reference best-match solver"}
+}
+
 func Reference(req Request) Response {
 	switch req.Kind {
 	case "move":
@@ -524,6 +541,9 @@ func Reference(req Request) Response {
 		}
 		if req.Game == "uno" {
 			return refUno(req)
+		}
+		if req.Game == "tangram" {
+			return refTangram(req)
 		}
 		return refMove(req)
 	case "draw":
