@@ -11,6 +11,8 @@ Technical documentation for TVCP development.
 - `dns-peer-discovery.md` — DNS-based peer discovery (inspired by «Doom Over DNS»): using DNS TXT records for human-readable addressing (`user@domain`)
 - `gaming-in-tvcp.md` — Games in TVCP: BABE renderer for arbitrary graphics, co-op game sharing, architecture analysis
 - `cross-pollination-analysis.md` — Technical cross-pollination: TVCP × Doom Over DNS mutual enrichment matrix
+- `NEURAL_GRAPHICS_ROADMAP.md` — Design doc + implementation-status table for graphics × neural networks (render modes, neural backends, cross-modal)
+- `EXTERNAL_MODELS.md` — Connecting real models via HTTP sidecars or cloud APIs (the seams, env vars, and reference Python adapters)
 - `terminal-compatibility.md` — Terminal compatibility matrix
 - `api.md` — Public API documentation
 - `contributing.md` — Contribution guidelines

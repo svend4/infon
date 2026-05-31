@@ -18,14 +18,19 @@ var (
 	ErrTemporary = errors.New("temporary network error")
 )
 
+// temporaryError interface for errors that implement Temporary() method
+type temporaryError interface {
+	Temporary() bool
+}
+
 // IsTemporaryError checks if an error is temporary and can be retried
 func IsTemporaryError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// Check for net.Error with Temporary() method
-	if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+	// Check if error implements Temporary() method
+	if tempErr, ok := err.(temporaryError); ok && tempErr.Temporary() {
 		return true
 	}
 

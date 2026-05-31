@@ -76,3 +76,17 @@ coverage.html
 *.babe
 # User contact data
 .tvcp/contacts.json
+*.profile
+
+# AI preview images live on the `assets` orphan branch, NOT on main — keep them
+# out of the code history. Docs embed them via raw.githubusercontent URLs
+# (see ai/SHOWCASE.md). Don't commit binary previews back onto main.
+ai/previews/
+
+# Local git worktree used to manage the assets branch.
+/.assets-wt/
+
+# Python sidecar artifacts (ai/adapters/*.py)
+__pycache__/
+*.pyc
+*.pyo

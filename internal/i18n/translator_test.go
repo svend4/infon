@@ -149,12 +149,12 @@ func TestTranslator_LoadAllFromDir(t *testing.T) {
 	// Create English file
 	enFile := filepath.Join(tmpDir, "en.json")
 	enContent := `{"hello": "Hello"}`
-	os.WriteFile(enFile, []byte(enContent), 0644)
+	_ = os.WriteFile(enFile, []byte(enContent), 0644)
 
 	// Create Russian file
 	ruFile := filepath.Join(tmpDir, "ru.json")
 	ruContent := `{"hello": "Привет"}`
-	os.WriteFile(ruFile, []byte(ruContent), 0644)
+	_ = os.WriteFile(ruFile, []byte(ruContent), 0644)
 
 	// Load all
 	err := tr.LoadAllFromDir(tmpDir)

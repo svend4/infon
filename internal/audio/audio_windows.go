@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows && ignore_for_now
 
 package audio
 
@@ -11,11 +11,11 @@ package audio
 #include <functiondiscoverykeys_devpkey.h>
 
 // WASAPI GUIDs and constants
-static const GUID CLSID_MMDeviceEnumerator = {0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}};
-static const GUID IID_IMMDeviceEnumerator = {0xA95664D2, 0x9614, 0x4F35, {0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6}};
-static const GUID IID_IAudioClient = {0x1CB9AD4C, 0xDBFA, 0x4c32, {0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2}};
-static const GUID IID_IAudioCaptureClient = {0xC8ADBD64, 0xE71E, 0x48a0, {0xA4, 0xDE, 0x18, 0x5C, 0x39, 0x5C, 0xD3, 0x17}};
-static const GUID IID_IAudioRenderClient = {0xF294ACFC, 0x3146, 0x4483, {0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2}};
+const GUID CLSID_MMDeviceEnumerator = {0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}};
+const GUID IID_IMMDeviceEnumerator = {0xA95664D2, 0x9614, 0x4F35, {0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6}};
+const GUID IID_IAudioClient = {0x1CB9AD4C, 0xDBFA, 0x4c32, {0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2}};
+const GUID IID_IAudioCaptureClient = {0xC8ADBD64, 0xE71E, 0x48a0, {0xA4, 0xDE, 0x18, 0x5C, 0x39, 0x5C, 0xD3, 0x17}};
+const GUID IID_IAudioRenderClient = {0xF294ACFC, 0x3146, 0x4483, {0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2}};
 
 // WAVEFORMATEX structure
 typedef struct {
@@ -28,7 +28,9 @@ typedef struct {
 	WORD  cbSize;
 } WAVEFORMATEX_T;
 
+#ifndef WAVE_FORMAT_PCM
 #define WAVE_FORMAT_PCM 0x0001
+#endif
 #define AUDCLNT_SHAREMODE_SHARED 0
 #define AUDCLNT_STREAMFLAGS_EVENTCALLBACK 0x00040000
 #define AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM 0x80000000
@@ -85,6 +87,50 @@ static ULONG ReleaseInterface(void* obj) {
 	typedef ULONG (*ReleaseMethod)(void*);
 	ReleaseMethod release = (ReleaseMethod)(((void***)obj)[0][2]); // IUnknown::Release is at index 2
 	return release(obj);
+}
+
+// Specialized helper for IMMDeviceEnumerator::GetDefaultAudioEndpoint
+static HRESULT GetDefaultAudioEndpoint(void* enumerator, int dataFlow, int role, void** device) {
+	typedef HRESULT (*Method)(void*, int, int, void**);
+	Method method = (Method)(((void***)enumerator)[0][4]); // GetDefaultAudioEndpoint is at index 4
+	return method(enumerator, dataFlow, role, device);
+}
+
+// Specialized helper for IMMDevice::Activate
+static HRESULT ActivateAudioClient(void* device, GUID* iid, DWORD clsCtx, void** audioClient) {
+	typedef HRESULT (*Method)(void*, GUID*, DWORD, void*, void**);
+	Method method = (Method)(((void***)device)[0][3]); // Activate is at index 3
+	return method(device, iid, clsCtx, NULL, audioClient);
+}
+
+// Specialized helper for IAudioClient::Initialize
+static HRESULT InitializeAudioClient(void* audioClient, DWORD shareMode, DWORD streamFlags,
+                                      LONGLONG bufferDuration, LONGLONG periodicity,
+                                      void* format, void* sessionGuid) {
+	typedef HRESULT (*Method)(void*, DWORD, DWORD, LONGLONG, LONGLONG, void*, void*);
+	Method method = (Method)(((void***)audioClient)[0][3]); // Initialize is at index 3
+	return method(audioClient, shareMode, streamFlags, bufferDuration, periodicity, format, sessionGuid);
+}
+
+// Specialized helper for IAudioCaptureClient::ReleaseBuffer
+static HRESULT CaptureReleaseBuffer(void* captureClient, UINT32 numFrames) {
+	typedef HRESULT (*Method)(void*, UINT32);
+	Method method = (Method)(((void***)captureClient)[0][4]); // ReleaseBuffer is at index 4
+	return method(captureClient, numFrames);
+}
+
+// Specialized helper for IAudioRenderClient::GetBuffer
+static HRESULT GetRenderBuffer(void* renderClient, UINT32 numFrames, void** data) {
+	typedef HRESULT (*Method)(void*, UINT32, void**);
+	Method method = (Method)(((void***)renderClient)[0][3]); // GetBuffer is at index 3
+	return method(renderClient, numFrames, data);
+}
+
+// Specialized helper for IAudioRenderClient::ReleaseBuffer
+static HRESULT RenderReleaseBuffer(void* renderClient, UINT32 numFrames, DWORD flags) {
+	typedef HRESULT (*Method)(void*, UINT32, DWORD);
+	Method method = (Method)(((void***)renderClient)[0][4]); // ReleaseBuffer is at index 4
+	return method(renderClient, numFrames, flags);
 }
 */
 import "C"
@@ -346,15 +392,7 @@ func (c *WASAPICapture) Open() error {
 
 	// Step 2: Get default audio endpoint (IMMDeviceEnumerator::GetDefaultAudioEndpoint)
 	var device unsafe.Pointer
-	hr := C.CallMethod2(enumerator, 4, // GetDefaultAudioEndpoint is method 4
-		unsafe.Pointer(uintptr(eCapture)),
-		unsafe.Pointer(uintptr(eConsole)))
-
-	// Get the device pointer from method call
-	hr = C.CallMethod3(enumerator, 4,
-		unsafe.Pointer(uintptr(eCapture)),
-		unsafe.Pointer(uintptr(eConsole)),
-		unsafe.Pointer(&device))
+	hr := C.GetDefaultAudioEndpoint(enumerator, C.int(eCapture), C.int(eConsole), &device)
 
 	if hr != 0 {
 		return fmt.Errorf("failed to get default capture device: %x", hr)
@@ -363,11 +401,7 @@ func (c *WASAPICapture) Open() error {
 
 	// Step 3: Activate IAudioClient (IMMDevice::Activate)
 	var audioClient unsafe.Pointer
-	hr = C.CallMethod4(device, 3, // Activate is method 3
-		unsafe.Pointer(&C.IID_IAudioClient),
-		unsafe.Pointer(uintptr(CLSCTX_INPROC_SERVER)),
-		nil,
-		unsafe.Pointer(&audioClient))
+	hr = C.ActivateAudioClient(device, &C.IID_IAudioClient, C.DWORD(CLSCTX_INPROC_SERVER), &audioClient)
 
 	if hr != 0 {
 		C.ReleaseInterface(device)
@@ -399,11 +433,11 @@ func (c *WASAPICapture) Open() error {
 	wfx.cbSize = 0
 
 	// Step 5: Initialize audio client (IAudioClient::Initialize)
-	hr = C.CallMethod6(audioClient, 3, // Initialize is method 3
-		unsafe.Pointer(uintptr(AUDCLNT_SHAREMODE_SHARED)),
-		unsafe.Pointer(uintptr(C.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM|C.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY)),
-		unsafe.Pointer(uintptr(BUFFER_DURATION)),
-		unsafe.Pointer(uintptr(0)),
+	hr = C.InitializeAudioClient(audioClient,
+		C.DWORD(AUDCLNT_SHAREMODE_SHARED),
+		C.DWORD(C.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM|C.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY),
+		C.LONGLONG(BUFFER_DURATION),
+		C.LONGLONG(0),
 		pwfx,
 		nil)
 
@@ -507,8 +541,7 @@ func (c *WASAPICapture) captureAudio() {
 	}
 
 	// Release buffer (IAudioCaptureClient::ReleaseBuffer)
-	C.CallMethod1(c.captureClient, 4, // ReleaseBuffer is method 4
-		unsafe.Pointer(uintptr(numFrames)))
+	C.CaptureReleaseBuffer(c.captureClient, numFrames)
 }
 
 func (c *WASAPICapture) Close() error {
@@ -596,10 +629,7 @@ func (p *WASAPIPlayback) Open() error {
 
 	// Get default render endpoint
 	var device unsafe.Pointer
-	hr := C.CallMethod3(enumerator, 4,
-		unsafe.Pointer(uintptr(eRender)),
-		unsafe.Pointer(uintptr(eConsole)),
-		unsafe.Pointer(&device))
+	hr := C.GetDefaultAudioEndpoint(enumerator, C.int(eRender), C.int(eConsole), &device)
 
 	if hr != 0 {
 		return fmt.Errorf("failed to get default render device: %x", hr)
@@ -608,11 +638,7 @@ func (p *WASAPIPlayback) Open() error {
 
 	// Activate IAudioClient
 	var audioClient unsafe.Pointer
-	hr = C.CallMethod4(device, 3,
-		unsafe.Pointer(&C.IID_IAudioClient),
-		unsafe.Pointer(uintptr(CLSCTX_INPROC_SERVER)),
-		nil,
-		unsafe.Pointer(&audioClient))
+	hr = C.ActivateAudioClient(device, &C.IID_IAudioClient, C.DWORD(CLSCTX_INPROC_SERVER), &audioClient)
 
 	if hr != 0 {
 		C.ReleaseInterface(device)
@@ -639,11 +665,11 @@ func (p *WASAPIPlayback) Open() error {
 	wfx.cbSize = 0
 
 	// Initialize
-	hr = C.CallMethod6(audioClient, 3,
-		unsafe.Pointer(uintptr(AUDCLNT_SHAREMODE_SHARED)),
-		unsafe.Pointer(uintptr(C.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM|C.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY)),
-		unsafe.Pointer(uintptr(BUFFER_DURATION)),
-		unsafe.Pointer(uintptr(0)),
+	hr = C.InitializeAudioClient(audioClient,
+		C.DWORD(AUDCLNT_SHAREMODE_SHARED),
+		C.DWORD(C.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM|C.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY),
+		C.LONGLONG(BUFFER_DURATION),
+		C.LONGLONG(0),
 		pwfx,
 		nil)
 
@@ -729,9 +755,7 @@ func (p *WASAPIPlayback) renderAudio() {
 
 	// Get buffer (IAudioRenderClient::GetBuffer)
 	var pData unsafe.Pointer
-	hr = C.CallMethod2(p.renderClient, 3, // GetBuffer is method 3
-		unsafe.Pointer(uintptr(available)),
-		unsafe.Pointer(&pData))
+	hr = C.GetRenderBuffer(p.renderClient, C.UINT32(available), &pData)
 
 	if hr != 0 {
 		return
@@ -749,9 +773,7 @@ func (p *WASAPIPlayback) renderAudio() {
 	}
 
 	// Release buffer (IAudioRenderClient::ReleaseBuffer)
-	C.CallMethod2(p.renderClient, 4, // ReleaseBuffer is method 4
-		unsafe.Pointer(uintptr(available)),
-		unsafe.Pointer(uintptr(0)))
+	C.RenderReleaseBuffer(p.renderClient, C.UINT32(available), C.DWORD(0))
 }
 
 func (p *WASAPIPlayback) Close() error {

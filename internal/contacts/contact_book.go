@@ -61,6 +61,11 @@ func NewContactBook() (*ContactBook, error) {
 	return cb, nil
 }
 
+// GetDefaultContactBook returns the default contact book (alias for NewContactBook)
+func GetDefaultContactBook() (*ContactBook, error) {
+	return NewContactBook()
+}
+
 // Add adds a new contact
 func (cb *ContactBook) Add(contact *Contact) error {
 	if contact.ID == "" {
@@ -139,6 +144,27 @@ func (cb *ContactBook) GetByAddress(address string) (*Contact, error) {
 		}
 	}
 	return nil, fmt.Errorf("contact not found: %s", address)
+}
+
+// Resolve resolves a contact name to an address
+func (cb *ContactBook) Resolve(name string) (string, error) {
+	contact, err := cb.GetByName(name)
+	if err != nil {
+		return "", err
+	}
+	return contact.Address, nil
+}
+
+// UpdateLastSeen updates the last call time for a contact
+func (cb *ContactBook) UpdateLastSeen(name string) error {
+	contact, err := cb.GetByName(name)
+	if err != nil {
+		return err
+	}
+	contact.LastCallTime = time.Now()
+	contact.TotalCalls++
+	contact.UpdatedAt = time.Now()
+	return cb.Save()
 }
 
 // GetAll returns all contacts, sorted by name
@@ -303,7 +329,7 @@ func (cb *ContactBook) Export(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Write CSV header
 	header := "ID,Name,Display Name,Address,Email,Phone,Favorite,Notes,Tags,Last Call,Total Calls,Created,Updated\n"

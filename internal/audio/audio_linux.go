@@ -50,7 +50,7 @@ func listCaptureDevicesImpl() ([]DeviceInfo, error) {
 
 			devices = append(devices, DeviceInfo{
 				ID:          deviceID,
-				Name:        fmt.Sprintf("%s", dev.Title),
+				Name:        dev.Title,
 				Type:        "capture",
 				IsDefault:   deviceID == 0,
 				SampleRates: []int{8000, 16000, 44100, 48000},
@@ -86,7 +86,7 @@ func listPlaybackDevicesImpl() ([]DeviceInfo, error) {
 
 			devices = append(devices, DeviceInfo{
 				ID:          deviceID,
-				Name:        fmt.Sprintf("%s", dev.Title),
+				Name:        dev.Title,
 				Type:        "playback",
 				IsDefault:   deviceID == 0,
 				SampleRates: []int{8000, 16000, 44100, 48000},
@@ -113,10 +113,12 @@ func newPlaybackImpl(deviceID int, format AudioFormat) (AudioPlayback, error) {
 	}, nil
 }
 
+//nolint:unused // Used in cross-platform tests
 func newDefaultCaptureImpl() (AudioCapture, error) {
 	return newCaptureImpl(0, DefaultFormat())
 }
 
+//nolint:unused // Used in cross-platform tests
 func newDefaultPlaybackImpl() (AudioPlayback, error) {
 	return newPlaybackImpl(0, DefaultFormat())
 }
@@ -381,7 +383,7 @@ func (a *ALSAPlayback) Write(buffer []int16) (int, error) {
 	// Convert int16 to bytes (little-endian) using bytes.Buffer
 	var buf bytes.Buffer
 	for _, sample := range buffer {
-		binary.Write(&buf, binary.LittleEndian, sample)
+		_ = binary.Write(&buf, binary.LittleEndian, sample)
 	}
 
 	// Write to ALSA device

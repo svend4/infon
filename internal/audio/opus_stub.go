@@ -16,12 +16,10 @@ const (
 
 // OpusEncoder wraps the Opus encoder (stub version - Opus not available)
 type OpusEncoder struct {
-	format AudioFormat
 }
 
 // OpusDecoder wraps the Opus decoder (stub version - Opus not available)
 type OpusDecoder struct {
-	format AudioFormat
 }
 
 // NewOpusEncoder creates a new Opus encoder (stub - returns error)

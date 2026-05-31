@@ -135,8 +135,13 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	// Create temp directory for test
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	// Create and save config
 	cfg1 := DefaultConfig()
@@ -189,8 +194,13 @@ func TestConfig_LoadNonExistent(t *testing.T) {
 	// Create temp directory for test
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	// Load should return default config
 	cfg, err := Load()

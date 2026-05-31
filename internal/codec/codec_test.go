@@ -124,7 +124,7 @@ func TestBaseCodec(t *testing.T) {
 	}
 
 	// Test reset
-	bc.Reset()
+	_ = bc.Reset()
 	stats = bc.GetStatistics()
 	if stats.FramesEncoded != 0 {
 		t.Errorf("After reset, FramesEncoded = %d, expected 0", stats.FramesEncoded)
@@ -159,7 +159,7 @@ func TestCodecFactory(t *testing.T) {
 		t.Errorf("Codec type = %s, expected h264", codec.Type())
 	}
 
-	codec.Close()
+	_ = codec.Close()
 }
 
 func TestGlobalFactory(t *testing.T) {
@@ -180,7 +180,7 @@ func TestGlobalFactory(t *testing.T) {
 		t.Fatal("Created codec is nil")
 	}
 
-	codec.Close()
+	_ = codec.Close()
 }
 
 // H.264 Tests
@@ -192,7 +192,7 @@ func TestH264Codec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create H.264 codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	h264 := codec.(*H264Codec)
 
@@ -238,7 +238,7 @@ func TestH264Codec(t *testing.T) {
 func TestH264SetBitrate(t *testing.T) {
 	cfg := DefaultVideoConfig(CodecTypeH264, 640, 480)
 	codec, _ := NewH264Codec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	h264 := codec.(VideoCodec)
 
@@ -257,7 +257,7 @@ func TestH264SetBitrate(t *testing.T) {
 func TestH264SetResolution(t *testing.T) {
 	cfg := DefaultVideoConfig(CodecTypeH264, 640, 480)
 	codec, _ := NewH264Codec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	h264 := codec.(VideoCodec)
 
@@ -282,7 +282,7 @@ func TestVP8Codec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create VP8 codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	// Test encode
 	yuv := make([]byte, 640*480*3/2)
@@ -317,7 +317,7 @@ func TestVP9Codec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create VP9 codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	if codec.Type() != CodecTypeVP9 {
 		t.Errorf("Codec type = %s, expected vp9", codec.Type())
@@ -344,7 +344,7 @@ func TestOpusCodec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create Opus codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	opus := codec.(*OpusCodec)
 
@@ -385,7 +385,7 @@ func TestOpusCodec(t *testing.T) {
 func TestOpusSetSampleRate(t *testing.T) {
 	cfg := DefaultAudioConfig(CodecTypeOpus)
 	codec, _ := NewOpusCodec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	opus := codec.(AudioCodec)
 
@@ -414,7 +414,7 @@ func TestAACCodec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create AAC codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	// Test encode
 	pcm := make([]byte, 2048*2*2) // 2048 samples * 2 bytes * 2 channels
@@ -460,7 +460,7 @@ func TestPCMCodec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create PCM codec: %v", err)
 	}
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	// Test encode (passthrough)
 	pcm := make([]byte, 1024)
@@ -501,38 +501,38 @@ func TestPCMCodec(t *testing.T) {
 func BenchmarkH264Encode(b *testing.B) {
 	cfg := DefaultVideoConfig(CodecTypeH264, 640, 480)
 	codec, _ := NewH264Codec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	yuv := make([]byte, 640*480*3/2)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		codec.Encode(yuv)
+		_, _ = codec.Encode(yuv)
 	}
 }
 
 func BenchmarkOpusEncode(b *testing.B) {
 	cfg := DefaultAudioConfig(CodecTypeOpus)
 	codec, _ := NewOpusCodec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	pcm := make([]byte, 960*2*2)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		codec.Encode(pcm)
+		_, _ = codec.Encode(pcm)
 	}
 }
 
 func BenchmarkPCMEncode(b *testing.B) {
 	cfg := DefaultAudioConfig(CodecTypePCM)
 	codec, _ := NewPCMCodec(cfg)
-	defer codec.Close()
+	defer func() { _ = codec.Close() }()
 
 	pcm := make([]byte, 1024)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		codec.Encode(pcm)
+		_, _ = codec.Encode(pcm)
 	}
 }

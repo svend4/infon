@@ -311,9 +311,9 @@ func TestBackgroundProcessor_GetStatistics(t *testing.T) {
 	img := createTestImage(320, 240)
 
 	bp.SetMode(BackgroundBlur)
-	bp.Process(img)
-	bp.Process(img)
-	bp.Process(img)
+	_, _ = bp.Process(img)
+	_, _ = bp.Process(img)
+	_, _ = bp.Process(img)
 
 	stats := bp.GetStatistics()
 
@@ -336,8 +336,8 @@ func TestBackgroundProcessor_Reset(t *testing.T) {
 	// Process some frames
 	img := createTestImage(320, 240)
 	bp.SetMode(BackgroundBlur)
-	bp.Process(img)
-	bp.Process(img)
+	_, _ = bp.Process(img)
+	_, _ = bp.Process(img)
 
 	bp.Reset()
 
@@ -453,7 +453,7 @@ func BenchmarkBackgroundProcessor_Process_None(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bp.Process(img)
+		_, _ = bp.Process(img)
 	}
 }
 
@@ -466,7 +466,7 @@ func BenchmarkBackgroundProcessor_Process_Blur(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bp.Process(img)
+		_, _ = bp.Process(img)
 	}
 }
 
@@ -479,7 +479,7 @@ func BenchmarkBackgroundProcessor_Process_Color(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bp.Process(img)
+		_, _ = bp.Process(img)
 	}
 }
 
@@ -494,7 +494,7 @@ func BenchmarkBackgroundProcessor_Process_Image(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bp.Process(img)
+		_, _ = bp.Process(img)
 	}
 }
 

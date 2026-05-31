@@ -31,7 +31,7 @@ func shareScreen(address string, command string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create transport: %w", err)
 	}
-	defer transport.Close()
+	defer func() { _ = transport.Close() }()
 
 	// Create screen share
 	screenShare := screen.NewScreenShare(command, 40, 24)
@@ -51,7 +51,7 @@ func shareScreen(address string, command string) error {
 	if err := screenShare.Start(); err != nil {
 		return fmt.Errorf("failed to start screen sharing: %w", err)
 	}
-	defer screenShare.Stop()
+	defer func() { _ = screenShare.Stop() }()
 
 	fmt.Println("✅ Screen sharing started")
 	fmt.Println("   Press Ctrl+C to stop")
@@ -116,7 +116,7 @@ func shareScreen(address string, command string) error {
 	<-sigChan
 	fmt.Println("\n\n🛑 Stopping screen share...")
 
-	screenShare.Stop()
+	_ = screenShare.Stop()
 	<-doneChan
 
 	// Final stats
@@ -143,7 +143,7 @@ func receiveScreen(port int) error {
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	fmt.Printf("📺 Waiting for screen share on port %d...\n", port)
 	fmt.Println("   Press Ctrl+C to stop")
@@ -298,7 +298,7 @@ func handleShareCommand(args []string) error {
 func handleReceiveScreenCommand(args []string) error {
 	port := 5000
 	if len(args) > 0 {
-		fmt.Sscanf(args[0], "%d", &port)
+		_, _ = fmt.Sscanf(args[0], "%d", &port)
 	}
 
 	return receiveScreen(port)

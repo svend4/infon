@@ -8,6 +8,31 @@
 
 **TVCP** is the first video communication platform designed to work entirely inside a text terminal, using Unicode block elements and ANSI colors to render video at ultra-low bandwidth.
 
+## 🤖 AI integration (tvcp-ai/1)
+
+This repo also includes an **AI layer**: an open **`tvcp-ai/1`** format (JSON over HTTP) that lets **any neural network** be a partner for the terminal — drawing (draw-DSL + a simple sketch format), playing games (tic-tac-toe, Wordle, UNO), reacting with glyph cards, and acting as a video source. Swap brains by changing a URL — a reference brain (no model), local Ollama, or any OpenAI/Anthropic endpoint (demonstrated live with Claude Haiku).
+
+See **[ai/IMPLEMENTED.md](ai/IMPLEMENTED.md)** for everything that was built, **[ai/BRAIN_PROTOCOL.md](ai/BRAIN_PROTOCOL.md)** for the spec, and **[ai/showcase.html](ai/showcase.html)** for a visual gallery. New code lives in `pkg/scene`, `pkg/sketch`, `pkg/brain`, `internal/aisource`, and the `cmd/ai*` commands; `tvcp ai` streams an AI video source.
+
+A **generative graphics pipeline** builds on this: synthesized and model-painted
+video rendered with selectable high-fidelity modes and real pixel protocols.
+
+```bash
+tvcp synth plasma                      # live procedural synthesis
+TVCP_RENDER_MODE=octant tvcp synth ripple   # 2×4 octant glyphs (densest)
+TVCP_KITTY=1 tvcp synth neural "a calm bay" # true bitmap on Kitty terminals
+TVCP_LOCAL_BRAIN=1 tvcp synth neural "a storm at night"  # fully offline
+tvcp avatar send <host:port>           # neural-avatar P2P (talking face, ~35 kbps)
+tvcp game                              # real-time Snake (build with -tags experimental)
+```
+
+- **Render modes** (`TVCP_RENDER_MODE`, else auto-detected): `quadrant`, `perceptual`,
+  `optimal`, `halfblock`, `sextant`, `octant`, `braille`; plus `TVCP_SIXEL=1` / `TVCP_KITTY=1`.
+- **Neural backends** (by env, best first): `IMAGE_API_URL` (raster) → `BRAIN_URL`
+  (sketch) → `TVCP_LOCAL_BRAIN` (offline) → placeholder; optionally wrapped with
+  `DIRECTOR_URL`, `RESTORE_API_URL`, `TVCP_STREAM_COHERENCE`. See
+  [docs/EXTERNAL_MODELS.md](docs/EXTERNAL_MODELS.md) and [docs/NEURAL_GRAPHICS_ROADMAP.md](docs/NEURAL_GRAPHICS_ROADMAP.md).
+
 ## ⚡ Key Features
 
 - **🚀 Ultra-low bandwidth:** 382 kbps total (vs 1.8 Mbps for Zoom)
@@ -47,6 +72,7 @@ Autonomous mesh network, works without infrastructure.
 
 ### Build from Source
 
+**Linux / macOS:**
 ```bash
 # Clone the repository
 git clone https://github.com/svend4/infon.git
@@ -59,13 +85,33 @@ make build
 ./bin/tvcp --help
 ```
 
-📖 **[Complete setup guide →](GETTING_STARTED.md)**
+**Windows (PowerShell):**
+```powershell
+# Clone the repository
+git clone https://github.com/svend4/infon.git
+cd infon
+
+# Run setup script (one-click install)
+.\setup.ps1
+
+# Or build manually
+go build -o bin/tvcp.exe ./cmd/tvcp
+
+# Binary will be available at .\bin\tvcp.exe
+.\bin\tvcp.exe --help
+```
+
+📖 **Platform-specific guides:**
+- **Windows:** [BUILD_WINDOWS.md](BUILD_WINDOWS.md)
+- **Linux/macOS:** [GETTING_STARTED.md](GETTING_STARTED.md)
+- **Android (Termux):** [TERMUX_ANDROID.md](TERMUX_ANDROID.md) 📱
 
 ### Requirements
 - Go 1.21 or higher
 - **Linux:** ALSA audio (libasound2-dev), V4L2 for cameras
 - **macOS:** CoreAudio (built-in), cameras via future implementation
 - **Windows:** WASAPI (built-in), cameras via future implementation
+- **Android (Termux):** Works as relay server (no camera/audio)
 - Terminal with TrueColor support (recommended)
 
 ## 🚀 Quick Start
@@ -176,6 +222,9 @@ Each block = 2×2 pixels encoded as:
 - 🌐 [**Network Streaming**](NETWORK.md) — Stream video over UDP
 - 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video rendering
 - 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering
+- 🧠 [**Generative Graphics**](GENERATIVE.md) — Synthesized frames, render modes (half-block / sextant / octant / Braille / Sixel / Kitty), and neural backends
+- 🗺️ [**Neural Graphics Roadmap**](docs/NEURAL_GRAPHICS_ROADMAP.md) — Design doc + current implementation status (graphics × neural networks)
+- 🔌 [**External Models**](docs/EXTERNAL_MODELS.md) — Wiring real models via HTTP sidecars or cloud APIs
 
 ### Planning & Analysis
 - 📖 [Business Plan](tvcp-business-plan.md) — Full market analysis and roadmap

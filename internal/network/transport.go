@@ -69,7 +69,7 @@ func (t *Transport) ReceivePacket() (*Packet, *net.UDPAddr, error) {
 	buf := make([]byte, MaxPacketSize)
 
 	// Set read timeout
-	t.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = t.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 	n, addr, err := t.conn.ReadFromUDP(buf)
 	if err != nil {

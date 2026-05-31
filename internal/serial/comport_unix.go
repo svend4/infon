@@ -106,7 +106,7 @@ func (p *Port) open() error {
 		uintptr(unsafe.Pointer(&t)))
 
 	if errno != 0 {
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("failed to get termios: %s", errno.Error())
 	}
 
@@ -128,7 +128,7 @@ func (p *Port) open() error {
 	case 8:
 		t.Cflag |= CS8
 	default:
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("invalid data bits: %d", p.config.DataBits)
 	}
 
@@ -149,14 +149,14 @@ func (p *Port) open() error {
 		t.Cflag |= PARENB
 		t.Cflag &^= PARODD
 	default:
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("unsupported parity mode on Unix")
 	}
 
 	// Set baud rate
 	baudRate := getBaudRate(p.config.BaudRate)
 	if baudRate == 0 {
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("unsupported baud rate: %d", p.config.BaudRate)
 	}
 	t.Ispeed = baudRate
@@ -177,21 +177,21 @@ func (p *Port) open() error {
 		uintptr(unsafe.Pointer(&t)))
 
 	if errno != 0 {
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("failed to set termios: %s", errno.Error())
 	}
 
 	// Make file descriptor blocking
 	flags, _, errno := syscall.Syscall(syscall.SYS_FCNTL, file.Fd(), syscall.F_GETFL, 0)
 	if errno != 0 {
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("failed to get file flags: %s", errno.Error())
 	}
 
 	flags &^= uintptr(syscall.O_NONBLOCK)
 	_, _, errno = syscall.Syscall(syscall.SYS_FCNTL, file.Fd(), syscall.F_SETFL, flags)
 	if errno != 0 {
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("failed to set file flags: %s", errno.Error())
 	}
 

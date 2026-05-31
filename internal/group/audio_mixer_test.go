@@ -181,12 +181,7 @@ func TestAudioMixer_Mix_NoOverflow(t *testing.T) {
 
 	mixed := mixer.Mix()
 
-	// Verify no overflow
-	for i, sample := range mixed {
-		if sample > 32767 || sample < -32768 {
-			t.Errorf("Mix() sample[%d] = %d, out of int16 range", i, sample)
-		}
-	}
+	// int16 values are automatically in valid range
 
 	// With soft-clipping, should be at or near max
 	hasNearMax := false
@@ -220,10 +215,6 @@ func TestAudioMixer_Mix_SoftClipping(t *testing.T) {
 
 	// Soft-clipping should prevent overflow and produce reasonable values
 	for i, sample := range mixed {
-		if sample > 32767 || sample < -32768 {
-			t.Errorf("Mix() sample[%d] = %d, overflow detected", i, sample)
-		}
-
 		// With soft-clipping, result should be less than max int16
 		// (simple addition would overflow to negative values)
 		if sample < 0 {

@@ -1,12 +1,10 @@
 //go:build windows
-// +build windows
 
 package serial
 
 import (
 	"fmt"
 	"syscall"
-	"time"
 	"unsafe"
 )
 

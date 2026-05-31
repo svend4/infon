@@ -4,6 +4,7 @@ package whiteboard
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -372,15 +373,13 @@ func TestGetStats(t *testing.T) {
 func TestCallbacks(t *testing.T) {
 	wb := NewWhiteboard("wb1", "Test", 1920, 1080)
 
-	addedCalled := false
-	updatedCalled := false
-	deletedCalled := false
-	clearedCalled := false
+	// Callbacks fire from goroutines; flags are atomic and polled.
+	var addedCalled, updatedCalled, deletedCalled, clearedCalled atomic.Bool
 
-	wb.OnElementAdded = func(e *DrawingElement) { addedCalled = true }
-	wb.OnElementUpdated = func(e *DrawingElement) { updatedCalled = true }
-	wb.OnElementDeleted = func(id string) { deletedCalled = true }
-	wb.OnCleared = func() { clearedCalled = true }
+	wb.OnElementAdded = func(e *DrawingElement) { addedCalled.Store(true) }
+	wb.OnElementUpdated = func(e *DrawingElement) { updatedCalled.Store(true) }
+	wb.OnElementDeleted = func(id string) { deletedCalled.Store(true) }
+	wb.OnCleared = func() { clearedCalled.Store(true) }
 
 	element := &DrawingElement{
 		ID:     "elem1",
@@ -392,23 +391,17 @@ func TestCallbacks(t *testing.T) {
 	}
 
 	wb.AddElement(element)
-	time.Sleep(50 * time.Millisecond)
-
-	if !addedCalled {
+	if !waitFlag(&addedCalled) {
 		t.Error("OnElementAdded should be called")
 	}
 
 	wb.UpdateElement("elem1", func(e *DrawingElement) { e.Color = ColorRed })
-	time.Sleep(50 * time.Millisecond)
-
-	if !updatedCalled {
+	if !waitFlag(&updatedCalled) {
 		t.Error("OnElementUpdated should be called")
 	}
 
 	wb.DeleteElement("elem1", "user1")
-	time.Sleep(50 * time.Millisecond)
-
-	if !deletedCalled {
+	if !waitFlag(&deletedCalled) {
 		t.Error("OnElementDeleted should be called")
 	}
 
@@ -422,9 +415,7 @@ func TestCallbacks(t *testing.T) {
 	})
 
 	wb.Clear("user1")
-	time.Sleep(50 * time.Millisecond)
-
-	if !clearedCalled {
+	if !waitFlag(&clearedCalled) {
 		t.Error("OnCleared should be called")
 	}
 }
@@ -592,4 +583,16 @@ func BenchmarkUndoRedo(b *testing.B) {
 			wb.Redo()
 		}
 	}
+}
+
+// waitFlag polls an atomic flag for up to a second; returns true once set.
+func waitFlag(b *atomic.Bool) bool {
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if b.Load() {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return b.Load()
 }

@@ -582,7 +582,7 @@ func BenchmarkSTUNClient_EncodeMessage(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sc.encodeMessage(msg)
+		_, _ = sc.encodeMessage(msg)
 	}
 }
 
@@ -593,7 +593,7 @@ func BenchmarkSTUNClient_DecodeMessage(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sc.decodeMessage(data)
+		_, _ = sc.decodeMessage(data)
 	}
 }
 

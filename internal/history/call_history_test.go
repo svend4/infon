@@ -9,8 +9,13 @@ import (
 func TestNewCallHistory(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, err := NewCallHistory()
 	if err != nil {
@@ -29,8 +34,13 @@ func TestNewCallHistory(t *testing.T) {
 func TestCallHistory_Add(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, _ := NewCallHistory()
 
@@ -64,8 +74,13 @@ func TestCallHistory_Add(t *testing.T) {
 func TestCallHistory_GetAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, _ := NewCallHistory()
 
@@ -78,7 +93,7 @@ func TestCallHistory_GetAll(t *testing.T) {
 			StartTime:     now.Add(-time.Duration(i) * time.Hour),
 			Duration:      time.Minute,
 		}
-		ch.Add(entry)
+		_ = ch.Add(entry)
 	}
 
 	all := ch.GetAll()
@@ -98,8 +113,13 @@ func TestCallHistory_GetAll(t *testing.T) {
 func TestCallHistory_GetRecent(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, _ := NewCallHistory()
 
@@ -111,7 +131,7 @@ func TestCallHistory_GetRecent(t *testing.T) {
 			StartTime:     time.Now(),
 			Duration:      time.Minute,
 		}
-		ch.Add(entry)
+		_ = ch.Add(entry)
 	}
 
 	recent := ch.GetRecent(3)
@@ -124,14 +144,19 @@ func TestCallHistory_GetRecent(t *testing.T) {
 func TestCallHistory_GetByPeer(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, _ := NewCallHistory()
 
 	// Add entries for different peers
 	for i := 0; i < 3; i++ {
-		ch.Add(&CallEntry{
+		_ = ch.Add(&CallEntry{
 			RemoteAddress: "peer1",
 			StartTime:     time.Now(),
 			Duration:      time.Minute,
@@ -139,7 +164,7 @@ func TestCallHistory_GetByPeer(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ {
-		ch.Add(&CallEntry{
+		_ = ch.Add(&CallEntry{
 			RemoteAddress: "peer2",
 			StartTime:     time.Now(),
 			Duration:      time.Minute,
@@ -160,16 +185,21 @@ func TestCallHistory_GetByPeer(t *testing.T) {
 func TestCallHistory_GetByType(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, _ := NewCallHistory()
 
 	// Add different types
-	ch.Add(&CallEntry{Type: CallTypeOutgoing, StartTime: time.Now(), Duration: time.Minute})
-	ch.Add(&CallEntry{Type: CallTypeIncoming, StartTime: time.Now(), Duration: time.Minute})
-	ch.Add(&CallEntry{Type: CallTypeMissed, StartTime: time.Now(), Duration: 0})
-	ch.Add(&CallEntry{Type: CallTypeOutgoing, StartTime: time.Now(), Duration: time.Minute})
+	_ = ch.Add(&CallEntry{Type: CallTypeOutgoing, StartTime: time.Now(), Duration: time.Minute})
+	_ = ch.Add(&CallEntry{Type: CallTypeIncoming, StartTime: time.Now(), Duration: time.Minute})
+	_ = ch.Add(&CallEntry{Type: CallTypeMissed, StartTime: time.Now(), Duration: 0})
+	_ = ch.Add(&CallEntry{Type: CallTypeOutgoing, StartTime: time.Now(), Duration: time.Minute})
 
 	outgoing := ch.GetByType(CallTypeOutgoing)
 	if len(outgoing) != 2 {
@@ -190,8 +220,13 @@ func TestCallHistory_GetByType(t *testing.T) {
 func TestCallHistory_Delete(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, _ := NewCallHistory()
 
@@ -200,7 +235,7 @@ func TestCallHistory_Delete(t *testing.T) {
 		StartTime: time.Now(),
 		Duration:  time.Minute,
 	}
-	ch.Add(entry)
+	_ = ch.Add(entry)
 
 	if len(ch.entries) != 1 {
 		t.Fatal("Failed to add entry")
@@ -219,14 +254,19 @@ func TestCallHistory_Delete(t *testing.T) {
 func TestCallHistory_Clear(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, _ := NewCallHistory()
 
 	// Add multiple entries
 	for i := 0; i < 5; i++ {
-		ch.Add(&CallEntry{
+		_ = ch.Add(&CallEntry{
 			StartTime: time.Now(),
 			Duration:  time.Minute,
 		})
@@ -245,13 +285,18 @@ func TestCallHistory_Clear(t *testing.T) {
 func TestCallHistory_GetStatistics(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch, _ := NewCallHistory()
 
 	// Add various types of calls
-	ch.Add(&CallEntry{
+	_ = ch.Add(&CallEntry{
 		Type:         CallTypeOutgoing,
 		Direction:    CallDirectionP2P,
 		StartTime:    time.Now(),
@@ -260,7 +305,7 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 		AudioEnabled: true,
 	})
 
-	ch.Add(&CallEntry{
+	_ = ch.Add(&CallEntry{
 		Type:         CallTypeIncoming,
 		Direction:    CallDirectionP2P,
 		StartTime:    time.Now(),
@@ -269,7 +314,7 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 		AudioEnabled: true,
 	})
 
-	ch.Add(&CallEntry{
+	_ = ch.Add(&CallEntry{
 		Type:         CallTypeMissed,
 		Direction:    CallDirectionP2P,
 		StartTime:    time.Now(),
@@ -278,7 +323,7 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 		AudioEnabled: false,
 	})
 
-	ch.Add(&CallEntry{
+	_ = ch.Add(&CallEntry{
 		Type:         CallTypeOutgoing,
 		Direction:    CallDirectionGroup,
 		StartTime:    time.Now(),
@@ -331,8 +376,13 @@ func TestCallHistory_GetStatistics(t *testing.T) {
 func TestCallHistory_SaveAndLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	oldUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("USERPROFILE", tmpDir)
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	}()
 
 	ch1, _ := NewCallHistory()
 
@@ -344,7 +394,7 @@ func TestCallHistory_SaveAndLoad(t *testing.T) {
 		StartTime:     time.Now(),
 		Duration:      10 * time.Minute,
 	}
-	ch1.Add(entry)
+	_ = ch1.Add(entry)
 
 	// Create new instance and load
 	ch2, err := NewCallHistory()

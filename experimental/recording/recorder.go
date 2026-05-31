@@ -130,16 +130,16 @@ func (q RecordingQuality) AudioBitrate() int {
 
 // RecordingConfig holds recording configuration
 type RecordingConfig struct {
-	Format          RecordingFormat
-	Quality         RecordingQuality
-	OutputDir       string
-	MaxDuration     time.Duration // 0 = unlimited
-	MaxFileSize     int64         // bytes, 0 = unlimited
-	RecordAudio     bool
-	RecordVideo     bool
-	RecordScreen    bool
-	SeparateTracks  bool // Record each participant separately
-	AutoStop        bool // Auto-stop when call ends
+	Format         RecordingFormat
+	Quality        RecordingQuality
+	OutputDir      string
+	MaxDuration    time.Duration // 0 = unlimited
+	MaxFileSize    int64         // bytes, 0 = unlimited
+	RecordAudio    bool
+	RecordVideo    bool
+	RecordScreen   bool
+	SeparateTracks bool // Record each participant separately
+	AutoStop       bool // Auto-stop when call ends
 }
 
 // DefaultConfig returns default recording configuration
@@ -162,21 +162,21 @@ func DefaultConfig() *RecordingConfig {
 type Recorder struct {
 	mu sync.RWMutex
 
-	ID            string
-	CallID        string
-	Config        *RecordingConfig
-	State         RecordingState
-	StartTime     time.Time
-	EndTime       time.Time
-	PausedAt      time.Time
-	TotalPaused   time.Duration
-	OutputPath    string
-	FileSize      int64
-	Error         error
+	ID          string
+	CallID      string
+	Config      *RecordingConfig
+	State       RecordingState
+	StartTime   time.Time
+	EndTime     time.Time
+	PausedAt    time.Time
+	TotalPaused time.Duration
+	OutputPath  string
+	FileSize    int64
+	Error       error
 
 	// Tracks
-	audioWriter io.WriteCloser
-	videoWriter io.WriteCloser
+	audioWriter  io.WriteCloser
+	videoWriter  io.WriteCloser
 	screenWriter io.WriteCloser
 
 	// Metadata
@@ -184,13 +184,13 @@ type Recorder struct {
 	Metadata     map[string]interface{}
 
 	// Callbacks
-	OnStart      func()
-	OnStop       func(outputPath string)
-	OnPause      func()
-	OnResume     func()
-	OnError      func(err error)
-	OnSizeLimit  func()
-	OnTimeLimit  func()
+	OnStart     func()
+	OnStop      func(outputPath string)
+	OnPause     func()
+	OnResume    func()
+	OnError     func(err error)
+	OnSizeLimit func()
+	OnTimeLimit func()
 }
 
 // NewRecorder creates a new recorder
@@ -449,24 +449,32 @@ func (r *Recorder) GetFileSize() int64 {
 }
 
 // GetStats returns recording statistics
+// GetState returns the current recording state under the lock, for safe
+// concurrent access (the state is mutated from the limit-monitor goroutine).
+func (r *Recorder) GetState() RecordingState {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.State
+}
+
 func (r *Recorder) GetStats() map[string]interface{} {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	return map[string]interface{}{
-		"id":             r.ID,
-		"call_id":        r.CallID,
-		"state":          r.State.String(),
-		"duration":       r.GetDuration().String(),
-		"file_size":      r.FileSize,
-		"format":         r.Config.Format.String(),
-		"quality":        r.Config.Quality.String(),
-		"output_path":    r.OutputPath,
-		"participants":   len(r.Participants),
-		"started_at":     r.StartTime,
-		"record_audio":   r.Config.RecordAudio,
-		"record_video":   r.Config.RecordVideo,
-		"record_screen":  r.Config.RecordScreen,
+		"id":            r.ID,
+		"call_id":       r.CallID,
+		"state":         r.State.String(),
+		"duration":      r.GetDuration().String(),
+		"file_size":     r.FileSize,
+		"format":        r.Config.Format.String(),
+		"quality":       r.Config.Quality.String(),
+		"output_path":   r.OutputPath,
+		"participants":  len(r.Participants),
+		"started_at":    r.StartTime,
+		"record_audio":  r.Config.RecordAudio,
+		"record_video":  r.Config.RecordVideo,
+		"record_screen": r.Config.RecordScreen,
 	}
 }
 

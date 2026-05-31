@@ -144,7 +144,7 @@ func (ha *HardwareAccelerator) initNVIDIA() error {
 // Intel Quick Sync Video initialization
 func (ha *HardwareAccelerator) initIntelQSV() error {
 	if !isIntelQSVAvailable() {
-		return fmt.Errorf("Intel QSV not available")
+		return fmt.Errorf("intel QSV not available")
 	}
 
 	ha.maxResolution = Resolution{Width: 4096, Height: 4096}

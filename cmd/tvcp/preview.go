@@ -34,7 +34,7 @@ func runPreview() {
 		fmt.Fprintf(os.Stderr, "Error opening camera: %v\n", err)
 		os.Exit(1)
 	}
-	defer camera.Close()
+	defer func() { _ = camera.Close() }()
 
 	fmt.Printf("Camera: %dx%d @ %.0f FPS\n", camera.GetWidth(), camera.GetHeight(), camera.GetFPS())
 	fmt.Printf("Terminal: %dx%d characters\n", width, height)
@@ -100,18 +100,4 @@ func runPreview() {
 			}
 		}
 	}
-}
-
-func runPreviewHelp() {
-	fmt.Println("Usage: tvcp preview [pattern]")
-	fmt.Println("\nAvailable patterns:")
-	fmt.Println("  bounce      Animated bouncing ball (default)")
-	fmt.Println("  gradient    Animated color gradient")
-	fmt.Println("  noise       Random noise (like TV static)")
-	fmt.Println("  colorbar    SMPTE color bars")
-	fmt.Println("\nExamples:")
-	fmt.Println("  tvcp preview")
-	fmt.Println("  tvcp preview gradient")
-	fmt.Println("  tvcp preview noise")
-	fmt.Println("\nPress Ctrl+C to stop preview")
 }

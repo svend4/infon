@@ -28,8 +28,6 @@ type ScreenShare struct {
 	running    bool
 	frameChan  chan *terminal.Frame
 	command    string
-	cursorRow  int
-	cursorCol  int
 	scrollback int // Number of lines in scrollback buffer
 }
 
@@ -203,7 +201,7 @@ func (ss *ScreenShare) Stop() error {
 
 	// Kill command
 	if ss.cmd != nil && ss.cmd.Process != nil {
-		ss.cmd.Process.Kill()
+		_ = ss.cmd.Process.Kill()
 	}
 
 	close(ss.frameChan)
