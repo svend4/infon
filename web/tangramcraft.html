@@ -1,0 +1,114 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Tangram-craft — the glyph gate</title>
+<style>
+body{background:#0a0e1c;color:#dfe6f2;font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;padding:24px;}
+h1{font-size:20px;letter-spacing:.5px;margin:0 0 4px;} .sub{color:#7e8aa6;font-size:13px;margin-bottom:18px;}
+.wrap{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;}
+#board{background:#11162a;border-radius:8px;cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,.4);}
+.col{display:flex;flex-direction:column;gap:14px;max-width:430px;}
+.ring{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;background:#0c1020;padding:10px;border-radius:8px;}
+.gbtn{border:2px solid #1c2238;border-radius:6px;cursor:pointer;background:#0c1020;}
+.gbtn.on{border-color:#46c8b4;box-shadow:0 0 0 2px rgba(70,200,180,.3);}
+#panel{background:#0e1428;border:1px solid #1c2238;border-radius:8px;padding:14px;min-height:120px;}
+.big{font-size:16px;margin-bottom:10px;} .big b{color:#ffd36e;} .sc{color:#46c8b4;font-weight:700;margin-left:6px;}
+.row{display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid #161d36;color:#9fb0cf;font-size:13px;}
+.row b{color:#dfe6f2;} .addr{font-size:18px;letter-spacing:1px;color:#cfe6df;max-width:280px;overflow:hidden;text-overflow:ellipsis;}
+.mono{font-family:ui-monospace,Consolas,monospace;color:#bcd;font-size:12px;}
+.quest{margin-top:10px;padding-top:8px;border-top:1px dashed #2a3457;color:#cfe6df;font-size:14px;} .quest b{color:#ffd36e;}
+.lock{color:#7CFC55;font-weight:700;margin-left:6px;}
+.controls,.book{display:flex;gap:8px;flex-wrap:wrap;}
+button{background:#1a2240;color:#dfe6f2;border:1px solid #2a3457;border-radius:6px;padding:8px 12px;cursor:pointer;font-size:13px;}
+button:hover{background:#23305a;} #dial{background:#0c1020;color:#bcd;border:1px solid #2a3457;border-radius:6px;padding:8px;width:150px;font-family:ui-monospace,monospace;}
+.book button{background:#142036;} .hint{color:#6b779a;font-size:12px;}
+</style></head><body>
+<h1>TANGRAM-CRAFT &mdash; the glyph gate</h1>
+<div class="sub">Pick a glyph from the ring, paint the grid. The AI names what you are becoming, reads your address, and locks the gate on a known creature. Right-click a cell to erase.</div>
+<div class="wrap">
+  <div><canvas id="board"></canvas>
+    <div style="height:12px"></div>
+    <div class="controls"><button id="clear">Clear</button><button id="mir">Mirror</button><button id="rot">Rotate</button>
+      <input id="dial" placeholder="dial a number…"><button id="load">Dial</button></div>
+  </div>
+  <div class="col">
+    <div class="hint">glyph ring (the address alphabet)</div>
+    <div class="ring" id="ring"></div>
+    <div id="panel"></div>
+    <div class="hint">address book — click a creature to set a build challenge</div>
+    <div class="book" id="book"></div>
+    <div><button id="notar">clear challenge</button></div>
+  </div>
+</div>
+<script>
+const ALPHA=["","full","tri-ul","tri-ur","tri-ll","tri-lr","top","bottom","left","right","q-tl","q-tr","q-bl","q-br","diag-/","diag-\\"];
+const RUNE=["","█","◤","◥","◣","◢","▀","▄","▌","▐","▘","▝","▖","▗","▞","▚"];
+const ROT=[0,1,3,5,2,4,9,8,6,7,11,13,10,12,15,14];
+const MIR=[0,1,3,2,5,4,6,7,9,8,11,10,13,12,15,14];
+const CATALOG={"boat":[[0,0,0,0,2,0,0,0,0],[0,0,0,2,1,0,0,0,0],[0,0,2,1,1,0,0,0,0],[0,2,1,1,1,0,0,0,0],[0,0,0,0,8,0,0,0,0],[0,5,1,1,1,1,4,0,0],[1,1,1,1,1,1,1,1,0],[0,0,0,0,0,0,0,0,0]],"cat":[[0,2,0,0,0,0,0,3,0],[0,1,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,0,0],[0,1,1,5,4,1,1,0,0],[0,1,1,1,1,1,1,0,0],[0,3,1,1,1,1,2,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],"house":[[0,0,0,0,0,0,0,0,0],[0,5,1,1,1,1,4,0,0],[0,1,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],"swan":[[0,0,0,0,0,2,0,0,0],[0,0,0,0,2,1,0,0,0],[0,0,0,2,1,0,0,0,0],[0,0,2,1,1,0,0,0,0],[0,1,1,1,1,5,0,0,0],[2,1,1,1,1,1,3,0,0],[1,1,1,1,1,1,1,1,0],[0,0,0,0,0,0,0,0,0]],"tree":[[0,0,0,5,4,0,0,0,0],[0,0,0,1,1,0,0,0,0],[0,0,5,1,1,4,0,0,0],[0,0,1,1,1,1,0,0,0],[0,5,1,1,1,1,4,0,0],[0,0,0,1,1,0,0,0,0],[0,0,0,1,1,0,0,0,0],[0,0,0,0,0,0,0,0,0]]};
+const H=8,W=9, CELL=46;
+let sel=1, board=mk(H,W), target=null, targetName="";
+
+function mk(h,w){return Array.from({length:h},()=>Array(w).fill(0));}
+function cov(d,x,y,S){const h=S>>1;switch(d){case 0:return false;case 1:return true;case 2:return x+y<=S-1;case 3:return x>=y;case 4:return x<=y;case 5:return x+y>=S-1;case 6:return y<h;case 7:return y>=h;case 8:return x<h;case 9:return x>=h;case 10:return x<h&&y<h;case 11:return x>=h&&y<h;case 12:return x<h&&y>=h;case 13:return x>=h&&y>=h;case 14:return (x>=h&&y<h)||(x<h&&y>=h);case 15:return (x<h&&y<h)||(x>=h&&y>=h);}return false;}
+function tri(ctx,a,b,c,d,e,f){ctx.beginPath();ctx.moveTo(a,b);ctx.lineTo(c,d);ctx.lineTo(e,f);ctx.closePath();ctx.fill();}
+function drawGlyph(ctx,ox,oy,s,d,color){if(d===0)return;ctx.fillStyle=color;const h=s/2;switch(d){
+ case 1:ctx.fillRect(ox,oy,s,s);break;
+ case 2:tri(ctx,ox,oy,ox+s,oy,ox,oy+s);break;
+ case 3:tri(ctx,ox,oy,ox+s,oy,ox+s,oy+s);break;
+ case 4:tri(ctx,ox,oy,ox,oy+s,ox+s,oy+s);break;
+ case 5:tri(ctx,ox+s,oy,ox+s,oy+s,ox,oy+s);break;
+ case 6:ctx.fillRect(ox,oy,s,h);break;case 7:ctx.fillRect(ox,oy+h,s,h);break;
+ case 8:ctx.fillRect(ox,oy,h,s);break;case 9:ctx.fillRect(ox+h,oy,h,s);break;
+ case 10:ctx.fillRect(ox,oy,h,h);break;case 11:ctx.fillRect(ox+h,oy,h,h);break;
+ case 12:ctx.fillRect(ox,oy+h,h,h);break;case 13:ctx.fillRect(ox+h,oy+h,h,h);break;
+ case 14:ctx.fillRect(ox+h,oy,h,h);ctx.fillRect(ox,oy+h,h,h);break;
+ case 15:ctx.fillRect(ox,oy,h,h);ctx.fillRect(ox+h,oy+h,h,h);break;}}
+
+function rotG(g){const h=g.length,w=g[0].length,o=mk(w,h);for(let i=0;i<w;i++)for(let j=0;j<h;j++)o[i][j]=ROT[g[h-1-j][i]];return o;}
+function mirG(g){const h=g.length,w=g[0].length,o=mk(h,w);for(let y=0;y<h;y++)for(let x=0;x<w;x++)o[y][x]=MIR[g[y][w-1-x]];return o;}
+function serial(g){let s=("00"+g.length).slice(-3)+":"+("00"+g[0].length).slice(-3)+":";for(const r of g)for(const d of r)s+=String.fromCharCode(97+d);return s;}
+function variants(g){let v=[],c=g;for(let r=0;r<4;r++){v.push(c);v.push(mirG(c));c=rotG(c);}return v;}
+function ham(a,b){let h=0;for(let y=0;y<a.length;y++)for(let x=0;x<a[0].length;x++)if(a[y][x]!==b[y][x])h++;return h;}
+function dist(a,b){let best=-1;for(const v of variants(b))if(v.length===a.length&&v[0].length===a[0].length){const d=ham(a,v);if(best<0||d<best)best=d;}return best;}
+function classify(g){let bn="",bd=1e9;const ks=Object.keys(CATALOG).sort();for(const n of ks){const d=dist(g,CATALOG[n]);if(d>=0&&d<bd){bd=d;bn=n;}}return{name:bn,score:bn?1-bd/(H*W):0};}
+function num(g){let n=0n;for(const r of g)for(const d of r)n=n*16n+BigInt(d);return n;}
+function addr(g){let s="";for(const r of g)for(const d of r)if(d)s+=RUNE[d];return s;}
+function filled(g){let c=0;for(const r of g)for(const d of r)if(d)c++;return c;}
+function maskOn(g,S){const m=mk(H*S,W*S);let on=0;for(let y=0;y<H;y++)for(let x=0;x<W;x++){const d=g[y][x];if(!d)continue;for(let sy=0;sy<S;sy++)for(let sx=0;sx<S;sx++)if(cov(d,sx,sy,S)){m[y*S+sy][x*S+sx]=1;on++;}}return{m,on};}
+function iou(a,b){const S=6,A=maskOn(a,S),B=maskOn(b,S);let inter=0,uni=0;for(let y=0;y<H*S;y++)for(let x=0;x<W*S;x++){const p=A.m[y][x],q=B.m[y][x];if(p&&q)inter++;if(p||q)uni++;}return uni?inter/uni:0;}
+
+let boardCanvas,ringWrap,panel;
+function render(){
+ const ctx=boardCanvas.getContext("2d");
+ ctx.fillStyle="#11162a";ctx.fillRect(0,0,W*CELL,H*CELL);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+   ctx.strokeStyle="#1d2440";ctx.strokeRect(x*CELL,y*CELL,CELL,CELL);
+   if(target&&target[y][x])drawGlyph(ctx,x*CELL,y*CELL,CELL,target[y][x],"rgba(120,140,180,0.20)");
+   if(board[y][x])drawGlyph(ctx,x*CELL,y*CELL,CELL,board[y][x],"#46c8b4");
+ }
+ const c=classify(board), a=addr(board), n=num(board).toString();
+ let html="<div class=big>AI: you are becoming <b>"+(c.name||"—")+"</b> <span class=sc>"+Math.round(c.score*100)+"%</span></div>";
+ html+="<div class=row><span>pieces</span><b>"+filled(board)+"</b></div>";
+ html+="<div class=row><span>address</span><span class=addr>"+(a||"·")+"</span></div>";
+ html+="<div class=row><span>number</span><span class=mono>"+(n.length>22?n.slice(0,11)+"…"+n.slice(-8):n)+"</span></div>";
+ if(target){const q=iou(board,target);const lock=q>=0.85;html+="<div class=quest>Challenge: build <b>"+targetName.toUpperCase()+"</b> &middot; IoU "+Math.round(q*100)+"% "+(lock?"<span class=lock>▶ GATE LOCKED</span>":"")+"</div>";}
+ panel.innerHTML=html;
+}
+function place(x,y,erase){if(erase)board[y][x]=0;else board[y][x]=(board[y][x]===sel?0:sel);render();}
+function init(){
+ boardCanvas=document.getElementById("board");
+ boardCanvas.width=W*CELL;boardCanvas.height=H*CELL;
+ boardCanvas.addEventListener("click",e=>{const r=boardCanvas.getBoundingClientRect();const x=Math.floor((e.clientX-r.left)/CELL),y=Math.floor((e.clientY-r.top)/CELL);if(x>=0&&x<W&&y>=0&&y<H)place(x,y,false);});
+ boardCanvas.addEventListener("contextmenu",e=>{e.preventDefault();const r=boardCanvas.getBoundingClientRect();const x=Math.floor((e.clientX-r.left)/CELL),y=Math.floor((e.clientY-r.top)/CELL);if(x>=0&&x<W&&y>=0&&y<H)place(x,y,true);});
+ ringWrap=document.getElementById("ring");
+ for(let d=1;d<16;d++){const cv=document.createElement("canvas");cv.width=cv.height=34;cv.className="gbtn";cv.title=ALPHA[d];const cx=cv.getContext("2d");cx.fillStyle="#0c1020";cx.fillRect(0,0,34,34);drawGlyph(cx,3,3,28,d,"#cfe6df");cv.onclick=()=>{sel=d;document.querySelectorAll(".gbtn").forEach(b=>b.classList.remove("on"));cv.classList.add("on");};if(d===1)cv.classList.add("on");ringWrap.appendChild(cv);}
+ panel=document.getElementById("panel");
+ const ab=document.getElementById("book");
+ for(const n of Object.keys(CATALOG).sort()){const b=document.createElement("button");b.textContent=n;b.onclick=()=>{target=CATALOG[n];targetName=n;render();};ab.appendChild(b);}
+ document.getElementById("clear").onclick=()=>{board=mk(H,W);render();};
+ document.getElementById("mir").onclick=()=>{board=mirG(board);render();};
+ document.getElementById("rot").onclick=()=>{const g=rotG(board);board=mk(H,W);for(let y=0;y<Math.min(H,g.length);y++)for(let x=0;x<Math.min(W,g[0].length);x++)board[y][x]=g[y][x];render();};
+ document.getElementById("notar").onclick=()=>{target=null;targetName="";render();};
+ document.getElementById("load").onclick=()=>{const n=document.getElementById("dial").value.trim();if(!n)return;try{let v=BigInt(n);const g=mk(H,W);for(let i=H*W-1;i>=0;i--){g[Math.floor(i/W)][i%W]=Number(v%16n);v/=16n;}board=g;render();}catch(e){}};
+ render();
+}
+window.addEventListener("DOMContentLoaded",init);
+</script></body></html>
