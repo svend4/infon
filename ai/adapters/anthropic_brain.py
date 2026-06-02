@@ -40,7 +40,10 @@ SYS = ("You are a game and art partner speaking the tvcp-ai/1 format. Reply with
        "fit the message mood, from: star heart check fire smile sad music sun warning x thumbsup. "
        "kind=move with game=world -> reply a JSON object with integer keys fold, rise, "
        "spin, camera, each -1, 0 or 1 (fold opens the body, rise raises the terrain, spin orbits "
-       "the scene, camera pans); state gives fold_pct, relief_pct, camera_deg to react to.")
+       "the scene, camera pans); state gives fold_pct, relief_pct, camera_deg to react to. "
+       "kind=move with game=rpg -> reply a JSON object with key rpg = a list of {id,dx,dy}, where "
+       "for each of your units (state.units, by id) dx,dy are -1,0,1 stepping toward the nearest "
+       "enemy (state.enemies); combat is automatic on contact.")
 
 IMG_SYS = ("You paint pseudo-images for a terminal. Reply with ONLY one JSON object: no prose, "
            "no description, no markdown, no extra keys. "
@@ -181,6 +184,14 @@ def decide(req):
                                      "spin": _clip(d.get("spin", 0)), "camera": _clip(d.get("camera", 0))}
                     resp["reasoning"] = f"world:{MODEL}"
                     return resp
+                if req.get("game") == "rpg":
+                    mv = m.get("rpg", m)
+                    if isinstance(mv, list):
+                        resp["rpg"] = mv
+                        resp["reasoning"] = f"rpg:{MODEL}"
+                        return resp
+                    last = "no rpg moves"
+                    continue
                 mv = m.get("move", m)
                 if not isinstance(mv, dict):
                     mv = m
@@ -230,6 +241,8 @@ def decide(req):
     if kind == "move":
         if req.get("game") == "world":
             resp["world"] = {"fold": 1, "rise": 1, "spin": 1, "camera": 1}
+        elif req.get("game") == "rpg":
+            resp["rpg"] = []
         elif req.get("game") == "tangram":
             st = req.get("state") or {}
             resp["tangram"] = {"h": st.get("h", 1), "w": st.get("w", 1), "pieces": []}
