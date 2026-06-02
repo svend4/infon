@@ -60,6 +60,7 @@ type Response struct {
 	Image     json.RawMessage `json:"image,omitempty"`   // a pseudo-image spec (pkg/pseudo)
 	Tangram   json.RawMessage `json:"tangram,omitempty"` // a tangram solution (pkg/tangram)
 	World     json.RawMessage `json:"world,omitempty"`   // next-tick world directives (pkg/world)
+	Rpg       json.RawMessage `json:"rpg,omitempty"`     // per-unit rpg moves (pkg/arena)
 	Cards     []string        `json:"cards,omitempty"`   // glyph "cards" for react
 	Reasoning string          `json:"reasoning,omitempty"`
 	Error     string          `json:"error,omitempty"`
@@ -562,6 +563,65 @@ func refWorld(req Request) Response {
 	return Response{Protocol: Protocol, Kind: "move", World: data, Reasoning: "reference world director"}
 }
 
+// refRpg is the reference battlefield commander for game "rpg": each of your
+// units steps toward the nearest enemy. Returns a list of {id,dx,dy}.
+func refRpg(req Request) Response {
+	var b struct {
+		Units []struct {
+			ID int `json:"id"`
+			X  int `json:"x"`
+			Y  int `json:"y"`
+		} `json:"units"`
+		Enemies []struct {
+			X int `json:"x"`
+			Y int `json:"y"`
+		} `json:"enemies"`
+	}
+	_ = json.Unmarshal(req.State, &b)
+	sgn := func(v int) int {
+		if v > 0 {
+			return 1
+		}
+		if v < 0 {
+			return -1
+		}
+		return 0
+	}
+	ab := func(v int) int {
+		if v < 0 {
+			return -v
+		}
+		return v
+	}
+	type mv struct {
+		ID int `json:"id"`
+		DX int `json:"dx"`
+		DY int `json:"dy"`
+	}
+	var moves []mv
+	for _, u := range b.Units {
+		best, bd := -1, 1<<30
+		for k, e := range b.Enemies {
+			if d := ab(u.X-e.X) + ab(u.Y-e.Y); d < bd {
+				bd, best = d, k
+			}
+		}
+		if best < 0 {
+			continue
+		}
+		e := b.Enemies[best]
+		dx, dy := sgn(e.X-u.X), sgn(e.Y-u.Y)
+		if ab(e.X-u.X) >= ab(e.Y-u.Y) {
+			dy = 0
+		} else {
+			dx = 0
+		}
+		moves = append(moves, mv{u.ID, dx, dy})
+	}
+	data, _ := json.Marshal(moves)
+	return Response{Protocol: Protocol, Kind: "move", Rpg: data, Reasoning: "reference rpg commander"}
+}
+
 func Reference(req Request) Response {
 	switch req.Kind {
 	case "move":
@@ -576,6 +636,9 @@ func Reference(req Request) Response {
 		}
 		if req.Game == "world" {
 			return refWorld(req)
+		}
+		if req.Game == "rpg" {
+			return refRpg(req)
 		}
 		return refMove(req)
 	case "draw":

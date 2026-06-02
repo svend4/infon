@@ -94,7 +94,8 @@ func (a *Arena) TotalHP() int {
 // attacks when adjacent. Deterministic, so matches are reproducible.
 type RefCommander struct{}
 
-// Plan implements Commander.
+// Plan implements Commander: every unit steps toward the nearest enemy; combat
+// auto-resolves on contact in Step.
 func (RefCommander) Plan(a *Arena, faction uint8) []Action {
 	var acts []Action
 	for i := range a.Units {
@@ -108,16 +109,11 @@ func (RefCommander) Plan(a *Arena, faction uint8) []Action {
 			if !e.Alive || e.Faction == faction {
 				continue
 			}
-			d := abs(int(u.X)-int(e.X)) + abs(int(u.Y)-int(e.Y))
-			if d < bd {
+			if d := abs(int(u.X)-int(e.X)) + abs(int(u.Y)-int(e.Y)); d < bd {
 				bd, best = d, j
 			}
 		}
 		if best < 0 {
-			continue
-		}
-		if bd == 1 {
-			acts = append(acts, Action{Unit: i, Attack: best})
 			continue
 		}
 		e := a.Units[best]
@@ -132,31 +128,33 @@ func (RefCommander) Plan(a *Arena, faction uint8) []Action {
 	return acts
 }
 
-// Step advances the world one tick: gather both commanders' actions, resolve
-// attacks (from current positions), then moves (into free, in-bounds tiles).
+// Step advances the world one tick: gather both commanders' moves, auto-resolve
+// combat (every living unit strikes one adjacent enemy), then apply the moves
+// into free, in-bounds tiles.
 func (a *Arena) Step(c0, c1 Commander) {
-	acts := append(c0.Plan(a, 0), c1.Plan(a, 1)...)
-	for _, act := range acts {
-		if act.Attack < 0 || !a.Units[act.Unit].Alive {
+	moves := append(c0.Plan(a, 0), c1.Plan(a, 1)...)
+	dmg := make([]int, len(a.Units))
+	for i := range a.Units {
+		if !a.Units[i].Alive {
 			continue
 		}
-		atk := Bestiary[int(a.Units[act.Unit].Kind)%len(Bestiary)].Atk
-		t := &a.Units[act.Attack]
-		if !t.Alive {
-			continue
-		}
-		if t.HP <= atk {
-			t.HP, t.Alive = 0, false
-		} else {
-			t.HP -= atk
+		if j := a.adjacentEnemy(i); j >= 0 {
+			dmg[j] += int(Bestiary[int(a.Units[i].Kind)%len(Bestiary)].Atk)
 		}
 	}
-	for _, act := range acts {
-		if act.Attack >= 0 {
+	for i := range a.Units {
+		if dmg[i] == 0 || !a.Units[i].Alive {
 			continue
 		}
+		if int(a.Units[i].HP) <= dmg[i] {
+			a.Units[i].HP, a.Units[i].Alive = 0, false
+		} else {
+			a.Units[i].HP -= uint8(dmg[i])
+		}
+	}
+	for _, act := range moves {
 		u := &a.Units[act.Unit]
-		if !u.Alive {
+		if !u.Alive || (act.DX == 0 && act.DY == 0) {
 			continue
 		}
 		nx, ny := int(u.X)+act.DX, int(u.Y)+act.DY
@@ -166,6 +164,17 @@ func (a *Arena) Step(c0, c1 Commander) {
 		u.X, u.Y = uint8(nx), uint8(ny)
 	}
 	a.Tick++
+}
+
+func (a *Arena) adjacentEnemy(i int) int {
+	u := a.Units[i]
+	for j := range a.Units {
+		e := a.Units[j]
+		if e.Alive && e.Faction != u.Faction && abs(int(u.X)-int(e.X))+abs(int(u.Y)-int(e.Y)) == 1 {
+			return j
+		}
+	}
+	return -1
 }
 
 // UnitBytes is the wire size of one unit.

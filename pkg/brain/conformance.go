@@ -37,12 +37,14 @@ func ConformanceBattery() []ConformanceCase {
 	uState, _ := json.Marshal(map[string]any{"hand": []string{"Red 5", "Blue 2"}, "color": "Red", "playable": []int{0}})
 	tgState, _ := json.Marshal(PuzzleStateFromFigureTree())
 	wlState, _ := json.Marshal(map[string]int{"fold_pct": 40, "relief_pct": 30, "camera_deg": 0, "orbit_phase": 0})
+	rpgState, _ := json.Marshal(map[string]any{"you": 0, "w": 8, "h": 8, "units": []map[string]int{{"id": 0, "x": 0, "y": 0, "hp": 6}}, "enemies": []map[string]int{{"x": 5, "y": 4, "hp": 6}}})
 	return []ConformanceCase{
 		{"move/tictactoe", Request{Kind: "move", Game: "tictactoe", State: ttState}},
 		{"move/wordle", Request{Kind: "move", Game: "wordle", State: wState}},
 		{"move/uno", Request{Kind: "move", Game: "uno", State: uState}},
 		{"move/tangram", Request{Kind: "move", Game: "tangram", State: tgState}},
 		{"move/world", Request{Kind: "move", Game: "world", State: wlState}},
+		{"move/rpg", Request{Kind: "move", Game: "rpg", State: rpgState}},
 		{"draw", Request{Kind: "draw", Prompt: "a calm harbor at dawn", Canvas: &Canvas{Width: 48, Height: 20}}},
 		{"sketch", Request{Kind: "sketch", Prompt: "sunset over mountains"}},
 		{"image/grid", Request{Kind: "image", Format: "grid", Prompt: "a calm harbor", Canvas: &Canvas{Width: 48, Height: 20}}},
@@ -77,6 +79,13 @@ func CheckResponse(req Request, resp Response) (string, bool) {
 				if v < -1 || v > 1 {
 					return "world: directive out of range", false
 				}
+			}
+			return "", true
+		}
+		if req.Game == "rpg" {
+			var mv []struct{ ID, DX, DY int }
+			if len(resp.Rpg) == 0 || json.Unmarshal(resp.Rpg, &mv) != nil {
+				return "rpg: missing or invalid moves", false
 			}
 			return "", true
 		}
