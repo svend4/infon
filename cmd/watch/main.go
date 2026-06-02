@@ -20,11 +20,13 @@ import (
 	"image/draw"
 	"image/gif"
 	"math/rand"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/svend4/infon/pkg/arena"
 	"github.com/svend4/infon/pkg/arenacast"
+	"github.com/svend4/infon/pkg/brain"
 	"github.com/svend4/infon/pkg/chronicle"
 	"github.com/svend4/infon/pkg/microfont"
 	"github.com/svend4/infon/pkg/pseudo"
@@ -55,19 +57,38 @@ func board() *arena.Arena {
 	return a
 }
 
+// commander returns the blue/red commander: the planner / reference bot by
+// default, or a live tvcp-ai brain when a URL is given.
+func commander(url string, blue bool) arena.Commander {
+	if url == "" {
+		if blue {
+			return arena.Planner{}
+		}
+		return arena.RefCommander{}
+	}
+	return arena.BrainCommander{B: brain.HTTPBrain{URL: url, HTTP: &http.Client{Timeout: 60 * time.Second}}}
+}
+
 func main() {
 	loss := flag.Float64("loss", 0.15, "packet loss")
 	ecc := flag.Int("ecc", 8, "RS parity")
 	gop := flag.Int("gop", 6, "keyframe interval")
 	ticks := flag.Int("ticks", 26, "max ticks")
+	b0 := flag.String("brain0", "", "blue commander brain URL (default: planner)")
+	b1 := flag.String("brain1", "", "red commander brain URL (default: reference)")
 	out := flag.String("out", "_watch", "output directory")
 	flag.Parse()
 	os.MkdirAll(*out, 0o755)
 
-	// 1) run the match, capturing the world and its energy each tick.
+	c0 := commander(*b0, true)
+	c1 := commander(*b1, false)
+
+	// 1) run the match ONCE, capturing the world, its energy, and unit snapshots
+	//    (so the chronicle comes from the same match — works with live brains too).
 	a := board()
 	var truth []pseudo.Spec
 	var hp, a0, a1 []int
+	frames := [][]arena.Unit{append([]arena.Unit(nil), a.Units...)}
 	for f := 0; f < *ticks; f++ {
 		truth = append(truth, arenacast.Spec(a))
 		hp = append(hp, a.TotalHP())
@@ -76,12 +97,13 @@ func main() {
 		if a.AliveCount(0) == 0 || a.AliveCount(1) == 0 {
 			break
 		}
-		a.Step(arena.Planner{}, arena.RefCommander{})
+		a.Step(c0, c1)
+		frames = append(frames, append([]arena.Unit(nil), a.Units...))
 	}
 	n := len(truth)
 
-	// 2) the chronicle (deterministic, so it lines up with the same match).
-	log := chronicle.Record(board(), arena.Planner{}, arena.RefCommander{}, *ticks)
+	// 2) the chronicle, derived from the very frames we just played.
+	log := chronicle.FromFrames(frames)
 	caption := captions(log, n)
 
 	// 3) sonify the match's energy and write the WAV.

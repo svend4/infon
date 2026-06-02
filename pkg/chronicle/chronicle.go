@@ -53,72 +53,92 @@ func abs(x int) int {
 	return x
 }
 
-// striker attributes damage to the strongest enemy that had unit i within its
-// range at the given (pre-step) positions — the likely author of the blow.
-func striker(a *arena.Arena, i int, px, py []int) int {
+// strikerFrame attributes a blow to the strongest enemy that had unit i within
+// its range at the given (pre-step) positions — the likely author of the damage.
+func strikerFrame(pre []arena.Unit, i int) int {
 	best, bestAtk := -1, -1
-	ux, uy := px[i], py[i]
-	for j := range a.Units {
-		e := a.Units[j]
-		if e.Faction == a.Units[i].Faction {
+	ux, uy := int(pre[i].X), int(pre[i].Y)
+	for j := range pre {
+		e := pre[j]
+		if e.Faction == pre[i].Faction {
 			continue
 		}
 		k := arena.Bestiary[int(e.Kind)%len(arena.Bestiary)]
-		if abs(px[j]-ux)+abs(py[j]-uy) <= int(k.Range) && int(k.Atk) > bestAtk {
+		if abs(int(e.X)-ux)+abs(int(e.Y)-uy) <= int(k.Range) && int(k.Atk) > bestAtk {
 			bestAtk, best = int(k.Atk), j
 		}
 	}
 	return best
 }
 
-// Record replays a match between two commanders and returns its chronicle.
-func Record(a *arena.Arena, c0, c1 arena.Commander, maxTicks int) Log {
-	l := Log{W: a.W, H: a.H}
-	for _, u := range a.Units {
+func aliveIn(units []arena.Unit, f uint8) int {
+	n := 0
+	for _, u := range units {
+		if u.Alive && u.Faction == f {
+			n++
+		}
+	}
+	return n
+}
+
+func cloneUnits(u []arena.Unit) []arena.Unit { return append([]arena.Unit(nil), u...) }
+
+// FromFrames builds a chronicle from per-tick unit snapshots (frames[0] = start,
+// frames[t] = the board after t ticks), diffing consecutive frames for strikes
+// and falls. This lets the SAME match that produced the video produce the
+// chronicle — no second (and, for live brains, divergent) run.
+func FromFrames(frames [][]arena.Unit) Log {
+	var l Log
+	if len(frames) == 0 {
+		return l
+	}
+	for _, u := range frames[0] {
 		l.Roster = append(l.Roster, UnitInfo{
 			Name:    arena.Bestiary[int(u.Kind)%len(arena.Bestiary)].Name,
 			Faction: int(u.Faction),
 		})
 	}
-	l.Events = append(l.Events, Event{Tick: 0, Kind: Open, Actor: a.AliveCount(0), Target: a.AliveCount(1)})
-
-	for t := 1; t <= maxTicks; t++ {
-		if a.AliveCount(0) == 0 || a.AliveCount(1) == 0 {
-			break
-		}
-		n := len(a.Units)
-		preHP := make([]int, n)
-		preAlive := make([]bool, n)
-		px := make([]int, n)
-		py := make([]int, n)
-		for i := range a.Units {
-			preHP[i] = int(a.Units[i].HP)
-			preAlive[i] = a.Units[i].Alive
-			px[i] = int(a.Units[i].X)
-			py[i] = int(a.Units[i].Y)
-		}
-		a.Step(c0, c1)
-		for i := range a.Units {
-			if preAlive[i] && int(a.Units[i].HP) < preHP[i] {
-				l.Events = append(l.Events, Event{
-					Tick: t, Kind: Strike,
-					Actor: striker(a, i, px, py), Target: i,
-					Amt: preHP[i] - int(a.Units[i].HP),
-				})
+	l.Events = append(l.Events, Event{Tick: 0, Kind: Open, Actor: aliveIn(frames[0], 0), Target: aliveIn(frames[0], 1)})
+	for t := 1; t < len(frames); t++ {
+		pre, cur := frames[t-1], frames[t]
+		for i := range cur {
+			if i >= len(pre) {
+				continue
 			}
-			if preAlive[i] && !a.Units[i].Alive {
+			if pre[i].Alive && int(cur[i].HP) < int(pre[i].HP) {
+				l.Events = append(l.Events, Event{Tick: t, Kind: Strike,
+					Actor: strikerFrame(pre, i), Target: i, Amt: int(pre[i].HP) - int(cur[i].HP)})
+			}
+			if pre[i].Alive && !cur[i].Alive {
 				l.Events = append(l.Events, Event{Tick: t, Kind: Fall, Target: i})
 			}
 		}
 	}
-	a0, a1 := a.AliveCount(0), a.AliveCount(1)
+	last := frames[len(frames)-1]
+	a0, a1 := aliveIn(last, 0), aliveIn(last, 1)
 	win := -1
 	if a0 > a1 {
 		win = 0
 	} else if a1 > a0 {
 		win = 1
 	}
-	l.Events = append(l.Events, Event{Tick: a.Tick, Kind: Close, Actor: a0, Target: a1, Faction: win})
+	l.Events = append(l.Events, Event{Tick: len(frames) - 1, Kind: Close, Actor: a0, Target: a1, Faction: win})
+	return l
+}
+
+// Record replays a match between two commanders, capturing each tick, and
+// returns its chronicle (via FromFrames).
+func Record(a *arena.Arena, c0, c1 arena.Commander, maxTicks int) Log {
+	frames := [][]arena.Unit{cloneUnits(a.Units)}
+	for t := 1; t <= maxTicks; t++ {
+		if a.AliveCount(0) == 0 || a.AliveCount(1) == 0 {
+			break
+		}
+		a.Step(c0, c1)
+		frames = append(frames, cloneUnits(a.Units))
+	}
+	l := FromFrames(frames)
+	l.W, l.H = a.W, a.H
 	return l
 }
 
