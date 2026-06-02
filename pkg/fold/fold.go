@@ -114,9 +114,15 @@ func Frame(pieces []t7.Piece, t float64) []Face {
 	return faces
 }
 
-// Render rasterises the faces to a pxW x pxH isometric image, painter-sorted
-// back-to-front, each face filled in its shaded colour with a dark edge.
-func Render(faces []Face, pxW, pxH int) image.Image {
+// Render draws the faces in fixed isometric projection.
+func Render(faces []Face, pxW, pxH int) image.Image { return RenderCam(faces, pxW, pxH, 0) }
+
+// RenderCam is Render with a camera yaw: the whole scene is rotated about its
+// vertical (z) axis by yaw radians before the isometric projection, turning the
+// pseudo-3D world into a turntable. The camera is just one more number - a byte
+// in the frame record - so rotation costs nothing in the codec.
+func RenderCam(faces []Face, pxW, pxH int, yaw float64) image.Image {
+	faces = rotZ(faces, yaw)
 	img := image.NewRGBA(image.Rect(0, 0, pxW, pxH))
 	bg := stdcolor.RGBA{245, 245, 248, 255}
 	for y := 0; y < pxH; y++ {
@@ -237,4 +243,37 @@ func sign(a int) int {
 		return -1
 	}
 	return 0
+}
+
+// rotZ rotates every face about the scene's XY centroid by yaw (radians), the
+// camera-yaw transform applied before projection.
+func rotZ(faces []Face, yaw float64) []Face {
+	if yaw == 0 {
+		return faces
+	}
+	var cx, cy float64
+	n := 0
+	for _, f := range faces {
+		for _, p := range f.Pts {
+			cx += p.X
+			cy += p.Y
+			n++
+		}
+	}
+	if n == 0 {
+		return faces
+	}
+	cx /= float64(n)
+	cy /= float64(n)
+	cs, sn := math.Cos(yaw), math.Sin(yaw)
+	out := make([]Face, len(faces))
+	for i, f := range faces {
+		pts := make([]Pt3, len(f.Pts))
+		for j, p := range f.Pts {
+			dx, dy := p.X-cx, p.Y-cy
+			pts[j] = Pt3{X: cx + dx*cs - dy*sn, Y: cy + dx*sn + dy*cs, Z: p.Z}
+		}
+		out[i] = Face{Pts: pts, Color: f.Color, Shade: f.Shade}
+	}
+	return out
 }
