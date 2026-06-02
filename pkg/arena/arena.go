@@ -97,8 +97,9 @@ func (a *Arena) TotalHP() int {
 // attacks when adjacent. Deterministic, so matches are reproducible.
 type RefCommander struct{}
 
-// Plan implements Commander: every unit steps toward the nearest enemy; combat
-// auto-resolves on contact in Step.
+// Plan implements Commander with simple tactics: ranged units kite (back off to
+// keep distance), low-HP units retreat, and everyone else advances on the
+// WEAKEST reachable enemy (focus fire). Combat auto-resolves on contact in Step.
 func (RefCommander) Plan(a *Arena, faction uint8) []Action {
 	var acts []Action
 	for i := range a.Units {
@@ -106,25 +107,45 @@ func (RefCommander) Plan(a *Arena, faction uint8) []Action {
 		if !u.Alive || u.Faction != faction {
 			continue
 		}
-		best, bd := -1, 1<<30
+		k := Bestiary[int(u.Kind)%len(Bestiary)]
+		near, nd := -1, 1<<30
+		weak, whp, wd := -1, 1<<30, 1<<30
 		for j := range a.Units {
 			e := a.Units[j]
 			if !e.Alive || e.Faction == faction {
 				continue
 			}
-			if d := abs(int(u.X)-int(e.X)) + abs(int(u.Y)-int(e.Y)); d < bd {
-				bd, best = d, j
+			d := abs(int(u.X)-int(e.X)) + abs(int(u.Y)-int(e.Y))
+			if d < nd {
+				nd, near = d, j
+			}
+			if int(e.HP) < whp || (int(e.HP) == whp && d < wd) {
+				whp, wd, weak = int(e.HP), d, j
 			}
 		}
-		if best < 0 {
+		if near < 0 {
 			continue
 		}
-		e := a.Units[best]
-		dx, dy := sign(int(e.X)-int(u.X)), sign(int(e.Y)-int(u.Y))
-		if abs(int(e.X)-int(u.X)) >= abs(int(e.Y)-int(u.Y)) {
-			dy = 0
+		ne := a.Units[near]
+		retreat := (int(k.Range) > 1 && nd <= 1) || int(u.HP)*3 <= int(k.HP)
+		var dx, dy int
+		if retreat {
+			dx, dy = sign(int(u.X)-int(ne.X)), sign(int(u.Y)-int(ne.Y))
+			if dx == 0 && dy == 0 {
+				dx = 1
+			}
 		} else {
-			dx = 0
+			t := weak
+			if t < 0 {
+				t = near
+			}
+			e := a.Units[t]
+			dx, dy = sign(int(e.X)-int(u.X)), sign(int(e.Y)-int(u.Y))
+			if abs(int(e.X)-int(u.X)) >= abs(int(e.Y)-int(u.Y)) {
+				dy = 0
+			} else {
+				dx = 0
+			}
 		}
 		acts = append(acts, Action{Unit: i, DX: dx, DY: dy, Attack: -1})
 	}
