@@ -11,6 +11,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 BASE  = os.environ.get("OPENAI_BASE", "https://api.openai.com/v1").rstrip("/")
 KEY   = os.environ.get("OPENAI_API_KEY", "")
+# Or read the key from a file OUTSIDE the repo (never pasted in chat):
+_KF = os.environ.get("OPENAI_KEY_FILE", os.path.expanduser("~/.tvcp_openai.key"))
+if not KEY and os.path.exists(_KF):
+    KEY = open(_KF, encoding="utf-8").read().strip()
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 TAG = "openai"
 
