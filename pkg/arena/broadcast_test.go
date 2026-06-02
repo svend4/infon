@@ -46,3 +46,19 @@ func TestBroadcastSurvivesLoss(t *testing.T) {
 		t.Error("tick 6 should be exact again (delta vs keyframe)")
 	}
 }
+
+func TestSpectatorStreaming(t *testing.T) {
+	fr := match(12)
+	wires := arena.EncodeMatch(fr, 4, 10)
+	sp := arena.NewSpectator(10, len(fr[0]))
+	for i, w := range wires {
+		if i == 5 {
+			sp.Miss() // lose tick 5
+			continue
+		}
+		got, live := sp.Recv(w)
+		if !live || !eq(got, fr[i]) {
+			t.Errorf("tick %d streaming mismatch", i)
+		}
+	}
+}

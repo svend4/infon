@@ -111,3 +111,56 @@ func (a *Arena) LoadSnapshot(b []byte) {
 		a.Units[i] = Unit{Kind: b[o], X: b[o+1], Y: b[o+2], HP: b[o+3], Faction: b[o+4] & 1, Alive: b[o+4]&2 != 0}
 	}
 }
+
+// Spectator is a streaming receiver for a live networked viewer: feed it the
+// packet wires it receives (Recv) and call Miss for ticks it never got; it
+// tracks the current frame, freezing on loss and resyncing at keyframes.
+type Spectator struct {
+	ecc, width int
+	base, last []byte
+}
+
+// NewSpectator makes a streaming receiver for width-byte frames.
+func NewSpectator(ecc, width int) *Spectator { return &Spectator{ecc: ecc, width: width} }
+
+func (s *Spectator) froze() []byte {
+	if s.last != nil {
+		c := make([]byte, len(s.last))
+		copy(c, s.last)
+		return c
+	}
+	return make([]byte, s.width)
+}
+
+// Recv applies one received packet wire and returns the current frame (live =
+// true if the packet decoded and applied).
+func (s *Spectator) Recv(wire []byte) (frame []byte, live bool) {
+	kind, _, payload, ok := parsePacket(wire, s.ecc)
+	if !ok {
+		return s.froze(), false
+	}
+	switch {
+	case kind == pktKey:
+		s.base, s.last = payload, payload
+		return payload, true
+	case s.base != nil:
+		fr := applyDelta(s.base, payload)
+		s.last = fr
+		return fr, true
+	default:
+		return s.froze(), false
+	}
+}
+
+// Miss records a lost tick and returns the frozen frame.
+func (s *Spectator) Miss() (frame []byte, live bool) { return s.froze(), false }
+
+// PacketTick reads the tick number from a wire (or -1 if undecodable), so a
+// receiver can order packets and detect gaps.
+func PacketTick(wire []byte, ecc int) int {
+	_, t, _, ok := parsePacket(wire, ecc)
+	if !ok {
+		return -1
+	}
+	return t
+}
