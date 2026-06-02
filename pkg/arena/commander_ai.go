@@ -39,19 +39,31 @@ type RpgMove struct {
 	DY int `json:"dy"`
 }
 
-// Brief builds the battlefield view for a faction.
+// Vision is the fog-of-war radius: a brain only sees enemies within this
+// Manhattan distance of one of its own units.
+const Vision = 4
+
+// Brief builds the (fogged) battlefield view for a faction: all of its own
+// units, plus only the enemies within Vision of one of them.
 func (a *Arena) Brief(faction uint8) RpgBrief {
 	b := RpgBrief{You: int(faction), W: a.W, H: a.H,
 		Menu: "reply rpg: a list of {id,dx,dy}, dx/dy each -1,0,1, to move your units toward enemies"}
 	for i := range a.Units {
 		u := a.Units[i]
-		if !u.Alive {
+		if u.Alive && u.Faction == faction {
+			b.Units = append(b.Units, RpgUnit{ID: i, Kind: Bestiary[int(u.Kind)%len(Bestiary)].Name, X: int(u.X), Y: int(u.Y), HP: int(u.HP)})
+		}
+	}
+	for j := range a.Units {
+		e := a.Units[j]
+		if !e.Alive || e.Faction == faction {
 			continue
 		}
-		if u.Faction == faction {
-			b.Units = append(b.Units, RpgUnit{ID: i, Kind: Bestiary[int(u.Kind)%len(Bestiary)].Name, X: int(u.X), Y: int(u.Y), HP: int(u.HP)})
-		} else {
-			b.Enemies = append(b.Enemies, RpgFoe{X: int(u.X), Y: int(u.Y), HP: int(u.HP)})
+		for _, ou := range b.Units {
+			if abs(ou.X-int(e.X))+abs(ou.Y-int(e.Y)) <= Vision {
+				b.Enemies = append(b.Enemies, RpgFoe{X: int(e.X), Y: int(e.Y), HP: int(e.HP)})
+				break
+			}
 		}
 	}
 	return b

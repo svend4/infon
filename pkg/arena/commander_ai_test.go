@@ -14,8 +14,8 @@ func TestBrainCommanderFights(t *testing.T) {
 		{Kind: 0, X: 7, Y: 1, HP: arena.Bestiary[0].HP, Faction: 1, Alive: true},
 	}
 	br := a.Brief(0)
-	if len(br.Units) != 1 || len(br.Enemies) != 1 {
-		t.Fatalf("brief: %d units / %d enemies", len(br.Units), len(br.Enemies))
+	if len(br.Units) != 1 {
+		t.Fatalf("brief: %d units", len(br.Units))
 	}
 	c := arena.BrainCommander{B: brain.Local{}}
 	for i := 0; i < 24; i++ {

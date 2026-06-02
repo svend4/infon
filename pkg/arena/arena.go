@@ -12,14 +12,17 @@ import "github.com/svend4/infon/pkg/fold"
 type Kind struct {
 	Name, Color string
 	HP, Atk     uint8
+	Range       uint8 // attack range in tiles (1 = melee)
 }
 
 // Bestiary is the small roster of unit kinds (drawn from the tangram menagerie).
 var Bestiary = []Kind{
-	{"fox", "orange", 6, 3},
-	{"cat", "gold", 9, 2},
-	{"turtle", "darkgreen", 13, 1},
-	{"swan", "skyblue", 5, 3},
+	{"fox", "orange", 6, 3, 1},
+	{"cat", "gold", 9, 2, 1},
+	{"turtle", "darkgreen", 13, 1, 1},
+	{"swan", "skyblue", 5, 3, 2},
+	{"owl", "amber", 5, 2, 3},
+	{"crab", "coral", 8, 2, 2},
 }
 
 // Unit is one placed creature.
@@ -138,9 +141,16 @@ func (a *Arena) Step(c0, c1 Commander) {
 		if !a.Units[i].Alive {
 			continue
 		}
-		if j := a.adjacentEnemy(i); j >= 0 {
-			dmg[j] += int(Bestiary[int(a.Units[i].Kind)%len(Bestiary)].Atk)
+		k := Bestiary[int(a.Units[i].Kind)%len(Bestiary)]
+		j := a.targetInRange(i, int(k.Range))
+		if j < 0 {
+			continue
 		}
+		d := int(k.Atk)
+		if a.height(int(a.Units[i].X), int(a.Units[i].Y)) > a.height(int(a.Units[j].X), int(a.Units[j].Y)) {
+			d++ // high-ground bonus
+		}
+		dmg[j] += d
 	}
 	for i := range a.Units {
 		if dmg[i] == 0 || !a.Units[i].Alive {
@@ -166,15 +176,27 @@ func (a *Arena) Step(c0, c1 Commander) {
 	a.Tick++
 }
 
-func (a *Arena) adjacentEnemy(i int) int {
+func (a *Arena) height(x, y int) int {
+	if x < 0 || y < 0 || x >= a.W || y >= a.H {
+		return 0
+	}
+	return int(a.Terrain[y*a.W+x])
+}
+
+// targetInRange returns the nearest enemy within Manhattan distance r of unit i.
+func (a *Arena) targetInRange(i, r int) int {
 	u := a.Units[i]
+	best, bd := -1, 1<<30
 	for j := range a.Units {
 		e := a.Units[j]
-		if e.Alive && e.Faction != u.Faction && abs(int(u.X)-int(e.X))+abs(int(u.Y)-int(e.Y)) == 1 {
-			return j
+		if !e.Alive || e.Faction == u.Faction {
+			continue
+		}
+		if d := abs(int(u.X)-int(e.X)) + abs(int(u.Y)-int(e.Y)); d <= r && d < bd {
+			bd, best = d, j
 		}
 	}
-	return -1
+	return best
 }
 
 // UnitBytes is the wire size of one unit.
