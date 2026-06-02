@@ -42,3 +42,13 @@ func TestPacketWire(t *testing.T) {
 		t.Fatalf("wire round-trip failed: %+v", q)
 	}
 }
+
+func TestMarksIoU(t *testing.T) {
+	fs := frames()
+	if v := semvideo.MarksIoU(fs[0], fs[0]); v < 0.999 {
+		t.Fatalf("self IoU = %.3f, want 1", v)
+	}
+	if v := semvideo.MarksIoU(fs[0], fs[2]); v <= 0 || v >= 1 {
+		t.Fatalf("different-frame IoU = %.3f, want in (0,1)", v)
+	}
+}

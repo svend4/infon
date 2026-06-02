@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/svend4/infon/pkg/glyphqr"
+	"github.com/svend4/infon/pkg/glyphset"
 	"github.com/svend4/infon/pkg/pseudo"
 	"github.com/svend4/infon/pkg/semframe"
 )
@@ -109,3 +110,42 @@ func (r *Receiver) Apply(p Packet) bool {
 // Frame returns the current displayable frame (the last good one) and whether
 // any frame has been received yet.
 func (r *Receiver) Frame() (pseudo.Spec, bool) { return r.last, r.haveLast }
+
+// MarksIoU is the semantic distortion metric: the sub-cell coverage
+// intersection-over-union between two marks specs of the same shape (1.0 =
+// identical meaning, 0.0 = disjoint). It measures how much MEANING survived,
+// not how many pixels matched.
+func MarksIoU(a, b pseudo.Spec) float64 {
+	if a.Marks == nil || b.Marks == nil {
+		return 0
+	}
+	ar, br := a.Marks.Rows, b.Marks.Rows
+	if len(ar) != len(br) || len(ar) == 0 {
+		return 0
+	}
+	S := glyphset.Sub
+	inter, uni := 0, 0
+	for y := range ar {
+		if len(ar[y]) != len(br[y]) {
+			return 0
+		}
+		for x := range ar[y] {
+			for sy := 0; sy < S; sy++ {
+				for sx := 0; sx < S; sx++ {
+					pa := ar[y][x] != "" && glyphset.Coverage(ar[y][x], sx, sy, S)
+					pb := br[y][x] != "" && glyphset.Coverage(br[y][x], sx, sy, S)
+					if pa && pb {
+						inter++
+					}
+					if pa || pb {
+						uni++
+					}
+				}
+			}
+		}
+	}
+	if uni == 0 {
+		return 1
+	}
+	return float64(inter) / float64(uni)
+}
