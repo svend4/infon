@@ -28,36 +28,12 @@ SYS = ("You are a game and art partner speaking the tvcp-ai/1 format. Reply with
        "\"shapes\":[{\"kind\":K,\"x\":X,\"y\":Y,\"w\":W,\"h\":H,\"color\":NAME,\"s\":TEXT}]}} "
        "where colors are NAMES like orange/navy/gold/darkgreen/white/purple/teal and shape "
        "kind is one of sun/moon/star/hill/mountain/building/cloud/band/text. "
-       "kind=image -> a tiny pseudo-image JSON; honor req.format. Default grid: "
-       "{\"format\":\"grid\",\"grid\":{\"rows\":[[NAME,NAME,...],...]}} an 8-14 wide x 6-9 tall grid "
-       "of color NAMES depicting the scene (sky on top, subject middle, water/ground at bottom). "
-       "Colors: navy/blue/skyblue/teal/green/darkgreen/gold/amber/orange/purple/slate/white/gray/sand. "
-       "format=glyphs -> {\"format\":\"glyphs\",\"glyphs\":{\"bg\":NAME,\"palette\":{\"^\":NAME,\"~\":NAME},\"rows\":[\"..ascii art..\"]}}. "
-       "format=sigils -> {\"format\":\"sigils\",\"sigils\":{\"sky\":NAME,\"ground\":NAME,\"items\":[{\"name\":N,\"x\":0..1,\"y\":0..1,\"color\":NAME}]}} "
-       "where N is sun/moon/star/mountain/cloud/wave/boat/anchor/tree/house/flag. "
        "kind=draw -> {\"scene\":{\"width\":W,\"height\":H,\"ops\":[...]}} with [r,g,b] colors. "
        "kind=react -> {\"cards\":[...]} : pick 3 to 4 DIFFERENT cards (no repeats) that "
-       "fit the message mood, from: star heart check fire smile sad music sun warning x thumbsup.")
-
-IMG_SYS = ("You paint pseudo-images for a terminal. Reply with ONLY one JSON object: no prose, "
-           "no description, no markdown, no extra keys. "
-           "format=grid (default): {\"grid\":{\"rows\":[[C,C,C,...],[...]]}} a grid about 10-12 "
-           "columns by 7-8 rows; each C is a COLOR NAME. Compose top-to-bottom (sky, subject, "
-           "water/ground). Colors: navy blue skyblue teal green darkgreen gold amber orange "
-           "purple slate white gray sand brown pink coral mint. "
-           "format=glyphs: {\"glyphs\":{\"bg\":NAME,\"palette\":{\"#\":NAME,\"~\":NAME},\"rows\":[\"text art lines\"]}}. "
-           "format=sigils: {\"sigils\":{\"sky\":NAME,\"ground\":NAME,\"items\":[{\"name\":sun,\"x\":0.7,\"y\":0.2,\"color\":gold}]}} "
-           "names: sun moon star mountain cloud wave boat anchor tree house flag. "
-           "Output ONLY the JSON for the requested format.")
-
-TANGRAM_SYS = ("You assemble tangram figures from a FIXED set of sub-cell pieces. Reply with ONLY "
-               "one JSON object, no prose, no code fences. The request state has h, w, palette "
-               "(allowed glyph tokens) and target: a grid of glyph tokens where \"\" is an empty "
-               "cell. Reproduce the shape exactly: for EVERY non-empty target cell, emit one piece "
-               "with the SAME glyph token at the SAME y (row 0..h-1) and x (column 0..w-1). Use ONLY "
-               "tokens that appear in palette. Reply "
-               "{\"tangram\":{\"h\":H,\"w\":W,\"pieces\":[{\"glyph\":TOK,\"y\":Y,\"x\":X}]}}. "
-               "Never put two pieces in one cell. Output ONLY that JSON.")
+       "fit the message mood, from: star heart check fire smile sad music sun warning x thumbsup. "
+       "kind=move with game=world -> reply a JSON object with integer keys fold, rise, "
+       "spin, camera, each -1, 0 or 1 (fold opens the body, rise raises the terrain, spin orbits "
+       "the scene, camera pans); state gives fold_pct, relief_pct, camera_deg to react to.")
 
 def extract_json(text):
     t = text.strip()
@@ -70,8 +46,8 @@ def extract_json(text):
         t = t[i:j + 1]
     return json.loads(t)
 
-def ask(req, system=SYS):
-    payload = {"model": MODEL, "max_tokens": 1024, "system": system,
+def ask(req):
+    payload = {"model": MODEL, "max_tokens": 1024, "system": SYS,
                "messages": [{"role": "user", "content": json.dumps(req)},
                             {"role": "assistant", "content": "{"}]}
     r = urllib.request.urlopen(urllib.request.Request(
@@ -114,32 +90,6 @@ SAFE_SKETCH = {"sky": "orange", "ground": "navy", "shapes": [
     {"kind": "sun", "x": 48, "y": 6, "w": 3, "color": "gold"},
     {"kind": "mountain", "x": 18, "h": 8, "color": "darkgreen"},
     {"kind": "text", "x": 2, "y": 1, "s": "(sketch unavailable)", "color": "white"}]}
-SAFE_IMAGE = {"format": "grid", "grid": {"rows": [
-    ["navy", "navy", "purple", "amber", "gold", "amber", "purple", "navy"],
-    ["navy", "purple", "amber", "gold", "white", "gold", "amber", "purple"],
-    ["slate", "amber", "gold", "amber", "teal", "teal", "slate", "slate"],
-    ["teal", "skyblue", "teal", "blue", "teal", "skyblue", "teal", "teal"]]}}
-
-def _norm_image(spec, req):
-    """Coerce a few shapes the model might emit into a valid pseudo spec."""
-    if not isinstance(spec, dict):
-        return None
-    if "format" not in spec:
-        if spec.get("grid"):
-            spec["format"] = "grid"
-        elif spec.get("glyphs"):
-            spec["format"] = "glyphs"
-        elif spec.get("sigils"):
-            spec["format"] = "sigils"
-        elif spec.get("mixed"):
-            spec["format"] = "mixed"
-        elif spec.get("rows"):  # bare {"rows":[...]} -> a grid
-            spec = {"format": "grid", "grid": {"rows": spec["rows"]}}
-        else:
-            return None
-    if req.get("palette") and not spec.get("palette"):
-        spec["palette"] = req["palette"]
-    return spec
 
 def decide(req):
     kind = req.get("kind")
@@ -147,27 +97,24 @@ def decide(req):
     last = ""
     for attempt in range(3):
         try:
-            sysmsg = SYS
-            if kind == "image":
-                sysmsg = IMG_SYS
-            elif kind == "move" and req.get("game") == "tangram":
-                sysmsg = TANGRAM_SYS
-            m = ask(req, sysmsg)
+            m = ask(req)
             if kind == "move":
-                if req.get("game") == "tangram":
-                    fig = m.get("tangram", m)
-                    if isinstance(fig, dict) and fig.get("pieces"):
-                        st = req.get("state") or {}
-                        fig.setdefault("h", st.get("h"))
-                        fig.setdefault("w", st.get("w"))
-                        resp["tangram"] = fig
-                        resp["reasoning"] = f"tangram:{MODEL}"
-                        return resp
-                    last = "no tangram pieces"
-                    continue
                 mv = m.get("move", m)
                 if not isinstance(mv, dict):
                     mv = m
+                if req.get("game") == "world":
+                    d = m.get("world", m)
+                    if not isinstance(d, dict):
+                        d = m
+                    def _clip(v):
+                        try:
+                            return max(-1, min(1, int(v)))
+                        except Exception:
+                            return 0
+                    resp["world"] = {"fold": _clip(d.get("fold", 0)), "rise": _clip(d.get("rise", 0)),
+                                     "spin": _clip(d.get("spin", 0)), "camera": _clip(d.get("camera", 0))}
+                    resp["reasoning"] = f"world:{MODEL}"
+                    return resp
                 if req.get("game") == "tictactoe":
                     if _legal_ok(mv, req.get("state") or {}):
                         resp["move"] = {"row": int(mv["row"]), "col": int(mv["col"])}
@@ -197,14 +144,6 @@ def decide(req):
                     return resp
                 last = "no sketch shapes"
                 continue
-            if kind == "image":
-                spec = _norm_image(m.get("image", m), req)
-                if spec is not None:
-                    resp["image"] = spec
-                    resp["reasoning"] = f"image:{MODEL}"
-                    return resp
-                last = "no usable image"
-                continue
             resp["cards"] = m.get("cards", ["★"])
             resp["reasoning"] = f"anthropic:{MODEL}"
             return resp
@@ -212,9 +151,8 @@ def decide(req):
             last = str(e)
     resp["error"] = last
     if kind == "move":
-        if req.get("game") == "tangram":
-            st = req.get("state") or {}
-            resp["tangram"] = {"h": st.get("h", 1), "w": st.get("w", 1), "pieces": []}
+        if req.get("game") == "world":
+            resp["world"] = {"fold": 1, "rise": 1, "spin": 1, "camera": 1}
         else:
             legal = (req.get("state") or {}).get("legal") or [[1, 1]]
             resp["move"] = {"row": legal[0][0], "col": legal[0][1]}
@@ -222,8 +160,6 @@ def decide(req):
         resp["scene"] = SAFE_SCENE
     elif kind == "sketch":
         resp["sketch"] = SAFE_SKETCH
-    elif kind == "image":
-        resp["image"] = SAFE_IMAGE
     else:
         resp["cards"] = ["★"]
     return resp
