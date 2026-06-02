@@ -36,11 +36,13 @@ func ConformanceBattery() []ConformanceCase {
 	wState, _ := json.Marshal(map[string]any{"length": 5, "guesses": []any{}})
 	uState, _ := json.Marshal(map[string]any{"hand": []string{"Red 5", "Blue 2"}, "color": "Red", "playable": []int{0}})
 	tgState, _ := json.Marshal(PuzzleStateFromFigureTree())
+	wlState, _ := json.Marshal(map[string]int{"fold_pct": 40, "relief_pct": 30, "camera_deg": 0, "orbit_phase": 0})
 	return []ConformanceCase{
 		{"move/tictactoe", Request{Kind: "move", Game: "tictactoe", State: ttState}},
 		{"move/wordle", Request{Kind: "move", Game: "wordle", State: wState}},
 		{"move/uno", Request{Kind: "move", Game: "uno", State: uState}},
 		{"move/tangram", Request{Kind: "move", Game: "tangram", State: tgState}},
+		{"move/world", Request{Kind: "move", Game: "world", State: wlState}},
 		{"draw", Request{Kind: "draw", Prompt: "a calm harbor at dawn", Canvas: &Canvas{Width: 48, Height: 20}}},
 		{"sketch", Request{Kind: "sketch", Prompt: "sunset over mountains"}},
 		{"image/grid", Request{Kind: "image", Format: "grid", Prompt: "a calm harbor", Canvas: &Canvas{Width: 48, Height: 20}}},
@@ -66,6 +68,18 @@ func CheckResponse(req Request, resp Response) (string, bool) {
 	}
 	switch req.Kind {
 	case "move":
+		if req.Game == "world" {
+			var d struct{ Fold, Rise, Spin, Camera int }
+			if len(resp.World) == 0 || json.Unmarshal(resp.World, &d) != nil {
+				return "world: missing or invalid directives", false
+			}
+			for _, v := range []int{d.Fold, d.Rise, d.Spin, d.Camera} {
+				if v < -1 || v > 1 {
+					return "world: directive out of range", false
+				}
+			}
+			return "", true
+		}
 		if req.Game == "tangram" {
 			var ps tangram.PuzzleState
 			if json.Unmarshal(req.State, &ps) != nil {

@@ -59,6 +59,7 @@ type Response struct {
 	Sketch    json.RawMessage `json:"sketch,omitempty"`  // a high-level sketch
 	Image     json.RawMessage `json:"image,omitempty"`   // a pseudo-image spec (pkg/pseudo)
 	Tangram   json.RawMessage `json:"tangram,omitempty"` // a tangram solution (pkg/tangram)
+	World     json.RawMessage `json:"world,omitempty"`   // next-tick world directives (pkg/world)
 	Cards     []string        `json:"cards,omitempty"`   // glyph "cards" for react
 	Reasoning string          `json:"reasoning,omitempty"`
 	Error     string          `json:"error,omitempty"`
@@ -533,6 +534,34 @@ func refTangram(req Request) Response {
 	return Response{Protocol: Protocol, Kind: "move", Tangram: data, Reasoning: "reference best-match solver"}
 }
 
+// refWorld is the reference world director for game "world": given a Brief of
+// the current scene it returns next-tick directives, each in {-1,0,1}.
+func refWorld(req Request) Response {
+	var b struct {
+		FoldPct   int `json:"fold_pct"`
+		ReliefPct int `json:"relief_pct"`
+	}
+	_ = json.Unmarshal(req.State, &b)
+	d := struct {
+		Fold   int `json:"fold"`
+		Rise   int `json:"rise"`
+		Spin   int `json:"spin"`
+		Camera int `json:"camera"`
+	}{Spin: 1, Camera: 1}
+	if b.FoldPct < 80 {
+		d.Fold = 1
+	} else {
+		d.Fold = -1
+	}
+	if b.ReliefPct < 70 {
+		d.Rise = 1
+	} else {
+		d.Rise = -1
+	}
+	data, _ := json.Marshal(d)
+	return Response{Protocol: Protocol, Kind: "move", World: data, Reasoning: "reference world director"}
+}
+
 func Reference(req Request) Response {
 	switch req.Kind {
 	case "move":
@@ -544,6 +573,9 @@ func Reference(req Request) Response {
 		}
 		if req.Game == "tangram" {
 			return refTangram(req)
+		}
+		if req.Game == "world" {
+			return refWorld(req)
 		}
 		return refMove(req)
 	case "draw":
