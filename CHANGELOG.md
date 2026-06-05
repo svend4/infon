@@ -4,6 +4,94 @@ All notable changes to TVCP will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-06-02
+
+### 🧠🌐 tvcp-ai/1 — agents, governance & the semantic substrate (PR #11)
+
+The `feat/ai-next` "second nervous system" matured from a protocol into an open,
+*governed* one: capability negotiation, signing, a federated brain directory and
+discovery; a normative spec bound to the code by a drift test; planning agents
+and an evaluation arena; and a "meaning-not-pixels" transport that reaches from a
+lossy UDP call to deep space. Everything is plain Go (+ stdlib) with optional
+Python brain adapters; `go build ./...` and `go test ./...` are green (65 test
+packages). See [`docs/TVCP_AI_PROTOCOL.md`](docs/TVCP_AI_PROTOCOL.md) (normative
+spec v2) and [`docs/adr/0001-transmit-meaning-not-pixels.md`](docs/adr/0001-transmit-meaning-not-pixels.md).
+
+#### Added — protocol maturation & governance
+- **Normative spec v2** (`docs/TVCP_AI_PROTOCOL.md`) + an **ADR**
+  (`docs/adr/0001-transmit-meaning-not-pixels.md`), bound to the code by a
+  **drift-guard test** (`pkg/brain/speccoverage_test.go`): every advertised kind
+  and game must be exercised by the conformance battery, and vice versa — CI fails
+  if the doc surface, `ReferenceCapabilities` and the battery drift apart.
+- **Capability negotiation** (`pkg/brain/capabilities.go`): `GET /v1/capabilities`,
+  `Capabilities`/`Supports`, a `Mux` serving both `/v1/decide` and
+  `/v1/capabilities`, and a `FetchCapabilities` client. `cmd/capsdemo`.
+- **Streaming transport** (`pkg/stream`): a Server-Sent Events profile — a brain
+  *pushes* a sequence of `Response`s over one HTTP connection; `Subscribe`
+  consumes at the reader's pace (natural backpressure). `cmd/streamdemo`.
+- **Trust & federation**: `pkg/sign` (HMAC-SHA256 over version‖payload,
+  constant-time verify, domain separation), `pkg/registry` (+ `signed` federated
+  brain-directory entries), and `pkg/discovery` (DNS-TXT peer discovery — reach a
+  brain by a handle like `alice@example.com`). `GOVERNANCE.md`, `SECURITY.md`.
+
+#### Added — agents, games & evaluation
+- **Unified session runner** (`pkg/session`): one turn-based engine where every
+  player is a `Participant` (human / bot / live tvcp-ai brain) and any game is a
+  `Game[S]`, all over the same tvcp-ai request. Worked games: tic-tac-toe,
+  **Wordle**, **UNO** (hidden information + chance), **Connect Four**.
+  `cmd/sessiondemo`, `wordledemo`, `unodemo`, `connect4demo`.
+- **Round-robin league** (`pkg/tournament`): home-and-away standings (win 3, draw
+  1) over the session runner — the spectated AI tournament. `cmd/tournament`.
+- **Judged AI debates** (`pkg/debate`): two `Debater`s argue a topic over rounds,
+  a `Judge` scores; returns transcript + verdict. `cmd/debate`.
+- **Planning commander** (`pkg/arena` `Planner`): a non-reactive commander that
+  rolls the exchange out through the *real* combat rules (one-ply lookahead +
+  coordinate-ascent over its units) and out-trades the reactive reference
+  (`TestPlannerBeatsReference`). Exposed as a tvcp-ai brain reachable by URL
+  (`pkg/planbrain`). `cmd/arenaplan`, `planbrain`.
+- **Multiagent negotiation** (`pkg/acl`): a FIPA-ACL **Contract Net**
+  (cfp → propose/refuse → accept/reject → inform) so agents *negotiate* rather
+  than merely compete; bidders are an interface (scripted or live brains).
+  `cmd/aclnegotiate`.
+- **Emergent narrative** (`pkg/chronicle`): diff the few-byte arena state between
+  ticks into an event log, then retell it as prose (number → image → world →
+  story). `cmd/arenatale`.
+- **Live AI war as one tiny call**: `cmd/watch` / `arenacall` / `arenacast` /
+  `arenammo` — watch two brains fight, broadcast to spectators over the lossy
+  semantic channel.
+
+#### Added — "meaning, not pixels" transport
+- **Semantic B-frames** (`pkg/semvideo`): bidirectional deltas of meaning, plus a
+  lossy-channel model (`channel.go`).
+- **Rate-distortion of meaning** (`pkg/semdist` + `docs/SEMANTIC_RATEDISTORTION.md`):
+  a reproducible benchmark. `cmd/semdistdemo`, `bmeaning`.
+- **Delay-tolerant ("deep space") profile** (`pkg/dtn`): each semantic packet is a
+  store-and-forward bundle delivered only during contact windows and dropped past
+  its TTL; surviving keyframes still reconstruct the world. `cmd/dtncast`.
+- **Self-describing Lingua Cosmica frame** (`pkg/lincos` + `pkg/arecibo`): a
+  bitstream that teaches a receiver to read it from first principles — radix, grid
+  size and checksum are bootstrapped from the stream itself, **no shared key**
+  (in the spirit of Freudenthal's Lincos / CosmicOS). `cmd/linguaframe`,
+  `areciboframe`.
+
+#### Added — symbolic substrate & rendering
+- `pkg/sona` — **sonify** a tangram figure's number into a melody (see, hear,
+  summon). `cmd/tangramsong`.
+- `pkg/painter` — an on-device, network-free pseudo-image painter brain.
+  `cmd/paint`, `imagine`.
+- `pkg/anyorder` — MDLM any-order anchored reconstruction over the address book.
+  `cmd/anyorderdemo`.
+- `pkg/vocab` — a plural, localizable symbol vocabulary. `cmd/vocabdemo`.
+- **Accessibility**: `pkg/alttext` (self-describing alt-text), `pkg/braille` (a
+  Braille bridge), `pkg/microfont` (a mask font); `pkg/automode` (auto
+  triangle/quadrant glyph selection, `cmd/autodemo`).
+- `pkg/glyphqr` — an optical finder pattern + auto-rotation
+  (`EncodeFramed`/`DecodeFramed`). `cmd/glyphqrscan`.
+
+#### Engineering
+- **Fuzz targets** (`pkg/glyphqr`, `pkg/lincos`) and benchmarks added (the
+  engineering-hygiene debt the audit flagged); the full suite is green.
+
 ## [Unreleased] - 2026-05-31
 
 ### 🎨🤖 Generative Graphics × Neural Networks (PR #8)
