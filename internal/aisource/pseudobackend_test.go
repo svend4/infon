@@ -58,7 +58,7 @@ func TestPseudoBackendPromptFile(t *testing.T) {
 	}
 	_, _ = f.WriteString("live harbor at dusk\n")
 	_ = f.Close()
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	t.Setenv("TVCP_PROMPT_FILE", f.Name())
 
 	b := NewPseudoBackend(srv.URL, pseudo.FormatGrid)

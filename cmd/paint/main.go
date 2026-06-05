@@ -21,7 +21,7 @@ import (
 func main() {
 	out := flag.String("out", "_pseudo", "output directory")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	prompts := []string{
 		"a calm harbor at sunset",

@@ -22,7 +22,7 @@ import (
 
 func main() {
 	out := "_orbit"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H, N = 420, 420, 24
 
 	cat := tangram.Cat()
@@ -47,10 +47,10 @@ func main() {
 		g.Delay = append(g.Delay, 7)
 	}
 	fp, _ := os.Create(out + "/cat_turntable.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 	hp, _ := os.Create(out + "/cat_turn45.png")
-	png.Encode(hp, fold.RenderCam(faces, W, H, math.Pi/4))
+	_ = png.Encode(hp, fold.RenderCam(faces, W, H, math.Pi/4))
 	hp.Close()
 	fmt.Printf("wrote %s/cat_turntable.gif and cat_turn45.png\n", out)
 }

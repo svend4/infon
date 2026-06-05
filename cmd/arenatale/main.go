@@ -35,7 +35,7 @@ func main() {
 	out := flag.String("out", "_arena", "output directory")
 	ticks := flag.Int("ticks", 60, "max ticks")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	l := chronicle.Record(board(), arena.Planner{}, arena.RefCommander{}, *ticks)
 	story := l.Narrate()

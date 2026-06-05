@@ -22,7 +22,7 @@ func main() {
 	}
 	srv := &http.Server{Handler: brain.Mux(brain.ReferenceCapabilities())}
 	go func() { _ = srv.Serve(ln) }()
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	base := "http://" + ln.Addr().String()
 	caps, err := brain.FetchCapabilities(base + "/v1/capabilities")

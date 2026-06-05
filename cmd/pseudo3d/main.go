@@ -106,7 +106,7 @@ func renderFrame(fr []byte) image.Image {
 
 func main() {
 	out := "_pseudo3d"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 
 	anim := deltastream.Anim{Width: width}
 	for f := 0; f < NF; f++ {
@@ -149,10 +149,10 @@ func main() {
 		g.Delay = append(g.Delay, 8)
 	}
 	fp, _ := os.Create(out + "/pseudo3d.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 	hp, _ := os.Create(out + "/pseudo3d_hero.png")
-	png.Encode(hp, renderFrame(got.Frames[len(got.Frames)-1]))
+	_ = png.Encode(hp, renderFrame(got.Frames[len(got.Frames)-1]))
 	hp.Close()
 	fmt.Printf("wrote %s/pseudo3d.gif and pseudo3d_hero.png\n", out)
 }

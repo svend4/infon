@@ -26,7 +26,7 @@ func main() {
 	n := flag.Int("n", 24, "ticks")
 	flag.Parse()
 	out := "_worldai"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H = 560, 420
 
 	var b brain.Brain = brain.Local{}
@@ -55,10 +55,10 @@ func main() {
 		g.Delay = append(g.Delay, 8)
 	}
 	fp, _ := os.Create(out + "/worldai.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 	hp, _ := os.Create(out + "/worldai_hero.png")
-	png.Encode(hp, world.Init().Render(W, H))
+	_ = png.Encode(hp, world.Init().Render(W, H))
 	hp.Close()
 	fmt.Printf("brain emitted %d decisions = %d-byte control track (1 byte/tick)\n", *n, len(track))
 	fmt.Printf("wrote %s/worldai.gif\n", out)

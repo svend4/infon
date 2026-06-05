@@ -35,9 +35,9 @@ func main() {
 		cx, cy := (i%cols)*cell+6, (i/cols)*cell+6
 		draw.Draw(sheet, image.Rect(cx, cy, cx+cell-12, cy+cell-12), img, image.Point{}, draw.Src)
 	}
-	os.MkdirAll("_zoo", 0o755)
+	_ = os.MkdirAll("_zoo", 0o755)
 	fp, _ := os.Create("_zoo/addressbook.png")
-	png.Encode(fp, sheet)
+	_ = png.Encode(fp, sheet)
 	fp.Close()
 	fmt.Printf("wrote %d figures to _zoo/addressbook.png\n", len(order))
 }

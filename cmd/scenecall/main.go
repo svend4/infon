@@ -29,7 +29,7 @@ func clamp(v float64) byte {
 
 func main() {
 	out := "_scene"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H = 440, 440
 	const ni, N = 7, 20
 
@@ -88,11 +88,11 @@ func main() {
 		g.Delay = append(g.Delay, 7)
 	}
 	fp, _ := os.Create(out + "/scenecall.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 	if len(got.Frames) > 0 {
 		hp, _ := os.Create(out + "/scene_hero.png")
-		png.Encode(hp, scene3d.Render(got.Frames[len(got.Frames)/3], W, H))
+		_ = png.Encode(hp, scene3d.Render(got.Frames[len(got.Frames)/3], W, H))
 		hp.Close()
 	}
 	fmt.Printf("wrote %s/scenecall.gif and scene_hero.png\n", out)

@@ -191,8 +191,7 @@ func Render(pieces []Piece, pxW, pxH int) image.Image {
 	toPix := func(p Pt) (float64, float64) { return ox + (p.X-minx)*sc, oy + (p.Y-miny)*sc }
 
 	for _, pc := range pieces {
-		col := color.RGB{}
-		col = pseudo.Color(pc.Color, color.RGB{R: 120, G: 120, B: 130})
+		col := pseudo.Color(pc.Color, color.RGB{R: 120, G: 120, B: 130})
 		px := make([]Pt, len(pc.Shape))
 		var mnx, mny, mxx, mxy = math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
 		for i, q := range pc.Shape {

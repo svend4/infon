@@ -25,7 +25,7 @@ func save(name string, img image.Image) {
 
 func main() {
 	out := "_t7fig"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const cell = 360
 	names := t.FigureNames()
 	sheet := image.NewRGBA(image.Rect(0, 0, cell*len(names), cell))

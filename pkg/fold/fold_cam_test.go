@@ -9,7 +9,7 @@ import (
 
 func TestRotZIdentityAndMove(t *testing.T) {
 	f := []Face{{Pts: []Pt3{{X: 2, Y: 0, Z: 1}, {X: 0, Y: 2, Z: 0}, {X: 0, Y: 0, Z: 0}}, Color: "red", Shade: 1}}
-	if z := rotZ(f, 0); &z[0] != &z[0] || z[0].Pts[0] != f[0].Pts[0] {
+	if z := rotZ(f, 0); len(z) != len(f) || z[0].Pts[0] != f[0].Pts[0] {
 		t.Error("yaw 0 must be identity")
 	}
 	r := rotZ(f, math.Pi/2)

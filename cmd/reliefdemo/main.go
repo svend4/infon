@@ -21,12 +21,12 @@ import (
 func savePNG(name string, img image.Image) {
 	fp, _ := os.Create(name)
 	defer fp.Close()
-	png.Encode(fp, img)
+	_ = png.Encode(fp, img)
 }
 
 func main() {
 	out := "_relief"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 
 	names := []string{"cat", "fox", "owl", "turtle"}
 	const cell = 300
@@ -66,7 +66,7 @@ func main() {
 		g.Delay = append(g.Delay, 7)
 	}
 	fp, _ := os.Create(out + "/cat_rise.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 	fmt.Printf("wrote sheet, hero still and rise GIF to %s/\n", out)
 }

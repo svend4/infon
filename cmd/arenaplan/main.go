@@ -41,7 +41,7 @@ func main() {
 	ticks := flag.Int("ticks", 60, "max ticks")
 	out := flag.String("out", "_arena", "output directory")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	a := board()
 	g := &gif.GIF{}

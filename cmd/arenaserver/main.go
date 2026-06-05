@@ -24,7 +24,7 @@ import (
 
 func main() {
 	out := "_arena"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const MW, MH, W, H = 10, 8, 660, 430
 	const gop, ecc = 4, 10
 
@@ -75,7 +75,7 @@ func main() {
 			defer wg.Done()
 			buf := make([]byte, 4096)
 			for {
-				conn.SetReadDeadline(time.Now().Add(700 * time.Millisecond))
+				_ = conn.SetReadDeadline(time.Now().Add(700 * time.Millisecond))
 				n, _, err := conn.ReadFromUDP(buf)
 				if err != nil {
 					return
@@ -96,12 +96,12 @@ func main() {
 			if rng.Float64() < 0.15 {
 				continue
 			}
-			sender.WriteToUDP(wire, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
+			_, _ = sender.WriteToUDP(wire, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
 			sent[si]++
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	sender.Close()
+	_ = sender.Close()
 	wg.Wait()
 
 	fmt.Printf("tick-server: %d ticks, %d packets/tick-stream, %d spectators\n", nT, len(wires), len(ports))
@@ -137,7 +137,7 @@ func main() {
 				g.Delay = append(g.Delay, 10)
 			}
 			fp, _ := os.Create(out + "/arenaserver.gif")
-			gif.EncodeAll(fp, g)
+			_ = gif.EncodeAll(fp, g)
 			fp.Close()
 		}
 	}

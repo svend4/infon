@@ -44,7 +44,7 @@ func main() {
 	b1 := flag.String("brain1", "", "red commander brain URL")
 	flag.Parse()
 	out := "_arena"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const MW, MH, W, H, gop, ecc = 10, 8, 660, 430, 4, 10
 
 	a := &arena.Arena{W: MW, H: MH, Terrain: make([]uint8, MW*MH)}
@@ -99,7 +99,7 @@ func main() {
 			defer wg.Done()
 			buf := make([]byte, 4096)
 			for {
-				conn.SetReadDeadline(time.Now().Add(700 * time.Millisecond))
+				_ = conn.SetReadDeadline(time.Now().Add(700 * time.Millisecond))
 				n, _, err := conn.ReadFromUDP(buf)
 				if err != nil {
 					return
@@ -118,11 +118,11 @@ func main() {
 			if rng.Float64() < 0.15 {
 				continue
 			}
-			sender.WriteToUDP(wire, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
+			_, _ = sender.WriteToUDP(wire, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	sender.Close()
+	_ = sender.Close()
 	wg.Wait()
 
 	winner := "draw"
@@ -162,7 +162,7 @@ func main() {
 				g.Delay = append(g.Delay, 10)
 			}
 			fp, _ := os.Create(out + "/arenammo.gif")
-			gif.EncodeAll(fp, g)
+			_ = gif.EncodeAll(fp, g)
 			fp.Close()
 		}
 	}

@@ -78,7 +78,7 @@ func main() {
 	b1 := flag.String("brain1", "", "red commander brain URL (default: reference)")
 	out := flag.String("out", "_watch", "output directory")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	c0 := commander(*b0, true)
 	c1 := commander(*b1, false)

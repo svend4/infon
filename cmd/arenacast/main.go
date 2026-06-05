@@ -20,7 +20,7 @@ import (
 
 func main() {
 	out := "_arena"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H = 660, 430
 	const MW, MH = 10, 8
 
@@ -105,7 +105,7 @@ func main() {
 		g.Delay = append(g.Delay, 10)
 	}
 	fp, _ := os.Create(out + "/arenacast.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 
 	fmt.Printf("broadcast: %d ticks, %d packets (gop=%d, ecc=%d), %d bytes total (%.1f bytes/tick)\n",
