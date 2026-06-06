@@ -13,8 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/svend4/infon/pkg/pseudo"
 	"github.com/svend4/infon/pkg/scene"
 	"github.com/svend4/infon/pkg/sketch"
+	"github.com/svend4/infon/pkg/tangram"
 )
 
 // Protocol is the format version string.
@@ -23,11 +25,13 @@ const Protocol = "tvcp-ai/1"
 // Request is what we ask a brain to decide.
 type Request struct {
 	Protocol string          `json:"protocol"`
-	Kind     string          `json:"kind"`            // "move" | "draw" | "react"
+	Kind     string          `json:"kind"`            // "move" | "draw" | "sketch" | "image" | "react"
 	Game     string          `json:"game,omitempty"`  // e.g. "tictactoe"
 	State    json.RawMessage `json:"state,omitempty"` // game-specific state
 	Prompt   string          `json:"prompt,omitempty"`
 	Canvas   *Canvas         `json:"canvas,omitempty"`
+	Format   string          `json:"format,omitempty"`  // image kind: grid|pixels|glyphs|sigils|vector|sketch|mixed|marks
+	Palette  string          `json:"palette,omitempty"` // optional mood preset for image kind
 }
 
 // Canvas is the target size for a draw request (in terminal cells).
@@ -51,9 +55,13 @@ type Response struct {
 	Protocol  string          `json:"protocol"`
 	Kind      string          `json:"kind"`
 	Move      *Move           `json:"move,omitempty"`
-	Scene     json.RawMessage `json:"scene,omitempty"`  // a draw-DSL document
-	Sketch    json.RawMessage `json:"sketch,omitempty"` // a high-level sketch
-	Cards     []string        `json:"cards,omitempty"` // glyph "cards" for react
+	Scene     json.RawMessage `json:"scene,omitempty"`   // a draw-DSL document
+	Sketch    json.RawMessage `json:"sketch,omitempty"`  // a high-level sketch
+	Image     json.RawMessage `json:"image,omitempty"`   // a pseudo-image spec (pkg/pseudo)
+	Tangram   json.RawMessage `json:"tangram,omitempty"` // a tangram solution (pkg/tangram)
+	World     json.RawMessage `json:"world,omitempty"`   // next-tick world directives (pkg/world)
+	Rpg       json.RawMessage `json:"rpg,omitempty"`     // per-unit rpg moves (pkg/arena)
+	Cards     []string        `json:"cards,omitempty"`   // glyph "cards" for react
 	Reasoning string          `json:"reasoning,omitempty"`
 	Error     string          `json:"error,omitempty"`
 }
@@ -265,6 +273,154 @@ func refSketch(req Request) Response {
 	return Response{Protocol: Protocol, Kind: "sketch", Sketch: data, Reasoning: "reference sketch"}
 }
 
+// refImage answers a kind:"image" request with a pkg/pseudo spec. It proves the
+// whole point of pseudo-images: even a backend with NO image model (this one)
+// can "paint" by emitting a few tokens of structured JSON. The Format field of
+// the request selects the encoding; the default is the pseudo-diffusion grid.
+func refImage(req Request) Response {
+	cols, rows := 64, 28
+	if req.Canvas != nil {
+		if req.Canvas.Width > 0 {
+			cols = req.Canvas.Width
+		}
+		if req.Canvas.Height > 0 {
+			rows = req.Canvas.Height
+		}
+	}
+	hs := 0
+	for _, ch := range req.Prompt {
+		hs += int(ch)
+	}
+	spec := pseudo.Spec{Cols: cols, Rows: rows, Title: req.Prompt}
+	spec.Palette = req.Palette
+	switch strings.ToLower(strings.TrimSpace(req.Format)) {
+	case "sketch":
+		spec.Format = pseudo.FormatSketch
+		spec.Sketch = refSketch(req).Sketch
+	case "vector":
+		spec.Format = pseudo.FormatVector
+		spec.Vector = refDraw(req).Scene
+	case "pixels":
+		spec.Format = pseudo.FormatPixels
+		spec.Pixels = refGridSeed(hs)
+	case "marks":
+		spec.Format = pseudo.FormatMarks
+		spec.Marks = refMarks(hs)
+	case "sigils":
+		spec.Format = pseudo.FormatSigils
+		spec.Sigils = refSigilScene(hs)
+	case "glyphs":
+		spec.Format = pseudo.FormatGlyphs
+		spec.Glyphs = refGlyphArt()
+	case "mixed":
+		spec.Format = pseudo.FormatMixed
+		spec.Mixed = refMixed(hs)
+	default: // "grid" or unspecified -> pseudo-diffusion
+		spec.Format = pseudo.FormatGrid
+		spec.Grid = refGridSeed(hs)
+	}
+	data, _ := json.Marshal(spec)
+	return Response{Protocol: Protocol, Kind: "image", Image: data, Reasoning: "reference pseudo-image (" + string(spec.Format) + ")"}
+}
+
+// refGridSeed builds a tiny 12x8 landscape seed (sky + sun glow + water) that the
+// pseudo-diffusion renderer upscales and blurs into a painterly image.
+func refGridSeed(hs int) *pseudo.Grid {
+	skies := [][2]string{{"navy", "purple"}, {"dusk", "navy"}, {"navy", "blue"}, {"purple", "navy"}}
+	waters := []string{"teal", "blue", "skyblue"}
+	s := skies[hs%len(skies)]
+	w := waters[hs%len(waters)]
+	sun := 3 + hs%6
+	rows := make([][]string, 8)
+	for y := 0; y < 8; y++ {
+		row := make([]string, 12)
+		for x := 0; x < 12; x++ {
+			switch {
+			case y >= 5:
+				row[x] = w
+				if (x+y)%3 == 0 {
+					row[x] = "skyblue"
+				}
+			case y == 4:
+				row[x] = "slate"
+			default:
+				d := x - sun
+				if d < 0 {
+					d = -d
+				}
+				switch {
+				case d+y <= 2:
+					row[x] = "gold"
+				case d+y <= 4:
+					row[x] = "amber"
+				case x < 6:
+					row[x] = s[0]
+				default:
+					row[x] = s[1]
+				}
+			}
+		}
+		rows[y] = row
+	}
+	return &pseudo.Grid{Rows: rows}
+}
+
+func refMarks(hs int) *pseudo.MarkArt {
+	return &pseudo.MarkArt{
+		Bg: "navy", Fg: "white",
+		Rows: [][]string{
+			{"", "", "", "tri-ul", "tri-ur", "", "", ""},
+			{"", "", "tri-ul", "full", "full", "tri-ur", "", ""},
+			{"", "tri-ul", "full", "full", "full", "full", "tri-ur", ""},
+			{"tri-ul", "full", "full", "full", "full", "full", "full", "tri-ur"},
+		},
+	}
+}
+
+func refSigilScene(hs int) *pseudo.SigilScene {
+	skies := []string{"navy", "dusk", "purple"}
+	return &pseudo.SigilScene{
+		Sky:    skies[hs%len(skies)],
+		Ground: "teal",
+		Items: []pseudo.Sigil{
+			{Name: "sun", X: 0.72, Y: 0.24, Color: "gold"},
+			{Name: "cloud", X: 0.3, Y: 0.18, Color: "gray"},
+			{Name: "star", X: 0.12, Y: 0.12, Color: "white"},
+			{Name: "mountain", X: 0.24, Y: 0.58, Color: "slate"},
+			{Name: "mountain", X: 0.36, Y: 0.62, Color: "dusk"},
+			{Name: "anchor", X: 0.62, Y: 0.82, Color: "white"},
+		},
+	}
+}
+
+func refGlyphArt() *pseudo.GlyphArt {
+	return &pseudo.GlyphArt{
+		Bg: "navy", Fg: "white",
+		Palette: map[string]string{"*": "gold", "^": "slate", "~": "skyblue", "=": "teal"},
+		Rows: []string{
+			"          *           ",
+			"     ^^        ^^^     ",
+			"   ^^^^^^^^^^^^^^^^^^  ",
+			" ==~~==~~==~~==~~==~~= ",
+			"~~==~~==~~==~~==~~==~~~",
+		},
+	}
+}
+
+func refMixed(hs int) *pseudo.Mixed {
+	return &pseudo.Mixed{
+		Grid: refGridSeed(hs),
+		Sigils: []pseudo.Sigil{
+			{Name: "sun", X: 0.72, Y: 0.22, Color: "gold"},
+			{Name: "star", X: 0.12, Y: 0.14, Color: "white"},
+			{Name: "anchor", X: 0.6, Y: 0.82, Color: "white"},
+		},
+		Labels: []pseudo.Label{
+			{Text: "tvcp-ai", X: 0.04, Y: 0.9, Color: "white"},
+		},
+	}
+}
+
 var wordleWords = []string{
 	"WATER", "CRANE", "SLATE", "ROBOT", "PIXEL", "LIGHT", "SOUND", "BRAIN", "CLOUD", "STONE",
 	"RIVER", "OCEAN", "PLANT", "HOUSE", "MUSIC", "DREAM", "FLAME", "GHOST", "KNIFE", "LEMON",
@@ -277,8 +433,8 @@ type wMark struct {
 	Marks []string `json:"marks"`
 }
 type wState struct {
-	Length  int      `json:"length"`
-	Guesses []wMark  `json:"guesses"`
+	Length  int     `json:"length"`
+	Guesses []wMark `json:"guesses"`
 }
 
 func wConsistent(word, guess string, marks []string) bool {
@@ -364,6 +520,108 @@ func refUno(req Request) Response {
 
 // Reference is a self-contained brain implementing tvcp-ai/1. Any other backend
 // (Ollama, OpenAI, Anthropic, this model) just needs to produce the same shapes.
+// refTangram solves a tangram puzzle from Request.State with the reference
+// best-match solver and returns the placements in Response.Tangram.
+func refTangram(req Request) Response {
+	var ps tangram.PuzzleState
+	if err := json.Unmarshal(req.State, &ps); err != nil {
+		return Response{Protocol: Protocol, Kind: "move", Error: "tangram: bad state: " + err.Error()}
+	}
+	sol := tangram.Solve(ps)
+	data, err := json.Marshal(sol)
+	if err != nil {
+		return Response{Protocol: Protocol, Kind: "move", Error: "tangram: " + err.Error()}
+	}
+	return Response{Protocol: Protocol, Kind: "move", Tangram: data, Reasoning: "reference best-match solver"}
+}
+
+// refWorld is the reference world director for game "world": given a Brief of
+// the current scene it returns next-tick directives, each in {-1,0,1}.
+func refWorld(req Request) Response {
+	var b struct {
+		FoldPct   int `json:"fold_pct"`
+		ReliefPct int `json:"relief_pct"`
+	}
+	_ = json.Unmarshal(req.State, &b)
+	d := struct {
+		Fold   int `json:"fold"`
+		Rise   int `json:"rise"`
+		Spin   int `json:"spin"`
+		Camera int `json:"camera"`
+	}{Spin: 1, Camera: 1}
+	if b.FoldPct < 80 {
+		d.Fold = 1
+	} else {
+		d.Fold = -1
+	}
+	if b.ReliefPct < 70 {
+		d.Rise = 1
+	} else {
+		d.Rise = -1
+	}
+	data, _ := json.Marshal(d)
+	return Response{Protocol: Protocol, Kind: "move", World: data, Reasoning: "reference world director"}
+}
+
+// refRpg is the reference battlefield commander for game "rpg": each of your
+// units steps toward the nearest enemy. Returns a list of {id,dx,dy}.
+func refRpg(req Request) Response {
+	var b struct {
+		Units []struct {
+			ID int `json:"id"`
+			X  int `json:"x"`
+			Y  int `json:"y"`
+		} `json:"units"`
+		Enemies []struct {
+			X int `json:"x"`
+			Y int `json:"y"`
+		} `json:"enemies"`
+	}
+	_ = json.Unmarshal(req.State, &b)
+	sgn := func(v int) int {
+		if v > 0 {
+			return 1
+		}
+		if v < 0 {
+			return -1
+		}
+		return 0
+	}
+	ab := func(v int) int {
+		if v < 0 {
+			return -v
+		}
+		return v
+	}
+	type mv struct {
+		ID int `json:"id"`
+		DX int `json:"dx"`
+		DY int `json:"dy"`
+	}
+	var moves []mv
+	for _, u := range b.Units {
+		best, bd := -1, 1<<30
+		for k, e := range b.Enemies {
+			if d := ab(u.X-e.X) + ab(u.Y-e.Y); d < bd {
+				bd, best = d, k
+			}
+		}
+		if best < 0 {
+			continue
+		}
+		e := b.Enemies[best]
+		dx, dy := sgn(e.X-u.X), sgn(e.Y-u.Y)
+		if ab(e.X-u.X) >= ab(e.Y-u.Y) {
+			dy = 0
+		} else {
+			dx = 0
+		}
+		moves = append(moves, mv{u.ID, dx, dy})
+	}
+	data, _ := json.Marshal(moves)
+	return Response{Protocol: Protocol, Kind: "move", Rpg: data, Reasoning: "reference rpg commander"}
+}
+
 func Reference(req Request) Response {
 	switch req.Kind {
 	case "move":
@@ -373,11 +631,22 @@ func Reference(req Request) Response {
 		if req.Game == "uno" {
 			return refUno(req)
 		}
+		if req.Game == "tangram" {
+			return refTangram(req)
+		}
+		if req.Game == "world" {
+			return refWorld(req)
+		}
+		if req.Game == "rpg" {
+			return refRpg(req)
+		}
 		return refMove(req)
 	case "draw":
 		return refDraw(req)
 	case "sketch":
 		return refSketch(req)
+	case "image":
+		return refImage(req)
 	case "react":
 		return refReact(req)
 	default:

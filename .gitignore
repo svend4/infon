@@ -90,3 +90,20 @@ ai/previews/
 __pycache__/
 *.pyc
 *.pyo
+
+# TVCP-AI pseudo-image — secrets and local scratch (never commit)
+.tvcp_anthropic.key
+*.api.key
+_pseudo/
+_pseudo_go/
+_blazon/
+ai/adapters/last_raw.txt
+_glyph/
+_solan/
+_tangram_go/
+_tangram/
+_tangram_bench/
+_gallery/
+_semvideo/
+_semcall/
+_tangram7/

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/svend4/infon/ai/schema/tvcp-ai.request.schema.json",
+  "title": "tvcp-ai Request",
+  "type": "object",
+  "required": [
+    "kind"
+  ],
+  "properties": {
+    "protocol": {
+      "type": "string",
+      "pattern": "^tvcp-ai/[0-9]+$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "move",
+        "draw",
+        "sketch",
+        "image",
+        "react"
+      ]
+    },
+    "game": {
+      "type": "string",
+      "enum": [
+        "tictactoe",
+        "wordle",
+        "uno"
+      ]
+    },
+    "state": {
+      "type": "object"
+    },
+    "prompt": {
+      "type": "string"
+    },
+    "canvas": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "grid",
+        "pixels",
+        "glyphs",
+        "sigils",
+        "vector",
+        "sketch",
+        "mixed",
+        "marks"
+      ]
+    },
+    "palette": {
+      "type": "string",
+      "enum": [
+        "dawn",
+        "dusk",
+        "neon",
+        "mono",
+        "forest",
+        "ocean"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "move"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "game"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": true
+}

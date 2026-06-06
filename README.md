@@ -10,7 +10,7 @@
 
 ## 🤖 AI integration (tvcp-ai/1)
 
-This repo also includes an **AI layer**: an open **`tvcp-ai/1`** format (JSON over HTTP) that lets **any neural network** be a partner for the terminal — drawing (draw-DSL + a simple sketch format), playing games (tic-tac-toe, Wordle, UNO), reacting with glyph cards, and acting as a video source. Swap brains by changing a URL — a reference brain (no model), local Ollama, or any OpenAI/Anthropic endpoint (demonstrated live with Claude Haiku).
+This repo also includes an **AI layer**: an open **`tvcp-ai/1`** format (JSON over HTTP) that lets **any neural network** be a partner for the terminal — drawing (draw-DSL + a simple sketch format), playing games (tic-tac-toe, Wordle, UNO), reacting with glyph cards, and acting as a video source. Swap brains by changing a URL — a reference brain (no model), local Ollama, or any OpenAI/Anthropic endpoint (demonstrated live with Claude Haiku). Even a plain text model (no diffusion, no image head) can paint via **[pseudo-images](PSEUDO_IMAGE.md)** — a tiny JSON color grid, glyph art, sigils, or vector shapes expanded into terminal frames.
 
 See **[ai/IMPLEMENTED.md](ai/IMPLEMENTED.md)** for everything that was built, **[ai/BRAIN_PROTOCOL.md](ai/BRAIN_PROTOCOL.md)** for the spec, and **[ai/showcase.html](ai/showcase.html)** for a visual gallery. New code lives in `pkg/scene`, `pkg/sketch`, `pkg/brain`, `internal/aisource`, and the `cmd/ai*` commands; `tvcp ai` streams an AI video source.
 
@@ -223,6 +223,7 @@ Each block = 2×2 pixels encoded as:
 - 🎥 [**Live Video Preview**](PREVIEW.md) — Real-time video rendering
 - 🎨 [**Proof-of-Concept Demo**](DEMO.md) — Static image rendering
 - 🧠 [**Generative Graphics**](GENERATIVE.md) — Synthesized frames, render modes (half-block / sextant / octant / Braille / Sixel / Kitty), and neural backends
+- 🖌️ [**Pseudo-Images**](PSEUDO_IMAGE.md) — Let a plain text model paint without a diffusion model: pseudo-diffusion grid, glyph art, sigils, and vector shapes
 - 🗺️ [**Neural Graphics Roadmap**](docs/NEURAL_GRAPHICS_ROADMAP.md) — Design doc + current implementation status (graphics × neural networks)
 - 🔌 [**External Models**](docs/EXTERNAL_MODELS.md) — Wiring real models via HTTP sidecars or cloud APIs
 

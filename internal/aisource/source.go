@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/svend4/infon/internal/device"
+	"github.com/svend4/infon/pkg/pseudo"
 )
 
 // BuildSource returns a device.Camera for a named synthesized source, so the
@@ -81,6 +82,16 @@ func pickBackend() device.NeuralBackend {
 		return ib
 	}
 	if url := os.Getenv("BRAIN_URL"); url != "" {
+		// TVCP_PSEUDO routes the brain through pkg/pseudo (kind:"image"): a plain
+		// text model paints via a coarse color grid / glyphs / sigils / vectors —
+		// no diffusion model. The value names the format ("1"/"true" = grid).
+		if pf, ok := os.LookupEnv("TVCP_PSEUDO"); ok {
+			switch pf {
+			case "1", "true", "yes", "on":
+				pf = ""
+			}
+			return NewPseudoBackend(url, pseudo.Format(pf))
+		}
 		return NewBrainBackend(url)
 	}
 	if os.Getenv("TVCP_LOCAL_BRAIN") == "1" {

@@ -3,6 +3,7 @@ package babe
 import (
 	"image"
 
+	"github.com/svend4/infon/pkg/glyphset"
 	"github.com/svend4/infon/pkg/terminal"
 )
 
@@ -32,6 +33,9 @@ const (
 	// densest glyph mode (A2 extended). Needs Unicode 16 support; gate via
 	// Capability.
 	ModeOctant
+	// ModeTriangle renders diagonal/triangle glyphs (◤◥◣◢) chosen by best-match,
+	// for crisp slanted edges (mountains, sails, sun discs). From pkg/glyphset.
+	ModeTriangle
 )
 
 // String returns the mode's CLI name.
@@ -49,6 +53,8 @@ func (m RenderMode) String() string {
 		return "optimal"
 	case ModeOctant:
 		return "octant"
+	case ModeTriangle:
+		return "triangle"
 	default:
 		return "quadrant"
 	}
@@ -71,6 +77,8 @@ func ParseRenderMode(name string) (RenderMode, bool) {
 		return ModeOptimal, true
 	case "octant", "oct":
 		return ModeOctant, true
+	case "triangle", "tri", "diagonal", "diag":
+		return ModeTriangle, true
 	default:
 		return ModeQuadrant, false
 	}
@@ -92,6 +100,8 @@ func ImageToFrameMode(img image.Image, w, h int, mode RenderMode) *terminal.Fram
 		return imageToFrameWithEncoder(img, w, h, EncodeBlockOptimal)
 	case ModeOctant:
 		return ImageToFrameOctant(img, w, h)
+	case ModeTriangle:
+		return glyphset.RenderTriangles(img, w, h)
 	default:
 		return ImageToFrame(img, w, h)
 	}

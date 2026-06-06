@@ -313,18 +313,30 @@ func (ns *NetworkSimulator) Reset() {
 	ns.lastBandwidthUpdate = time.Now()
 }
 
-// CorruptPacket corrupts a packet by flipping random bits
+// CorruptPacket corrupts a packet by flipping random bits. The flipped bit
+// positions are distinct, so the packet is always changed: flipping the same
+// bit twice would XOR it back to its original value, which previously let a
+// "corrupted" packet occasionally come back identical (a flaky no-op).
 func (ns *NetworkSimulator) CorruptPacket(data []byte) {
 	if len(data) == 0 {
 		return
 	}
 
-	// Flip 1-5 random bits
+	totalBits := len(data) * 8
+	// Flip 1-5 distinct bits (never more than the packet actually has).
 	numBits := 1 + ns.rng.Intn(5)
-	for i := 0; i < numBits; i++ {
-		byteIndex := ns.rng.Intn(len(data))
-		bitIndex := ns.rng.Intn(8)
-		data[byteIndex] ^= 1 << uint(bitIndex)
+	if numBits > totalBits {
+		numBits = totalBits
+	}
+	flipped := make(map[int]bool, numBits)
+	for i := 0; i < numBits; {
+		bit := ns.rng.Intn(totalBits)
+		if flipped[bit] {
+			continue
+		}
+		flipped[bit] = true
+		data[bit/8] ^= 1 << uint(bit%8)
+		i++
 	}
 }
 
