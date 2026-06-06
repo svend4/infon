@@ -42,7 +42,7 @@ func main() {
 	b1 := flag.String("brain1", "", "tvcp-ai brain URL commanding red (default: reference)")
 	flag.Parse()
 	out := "_arena"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H = 660, 430
 	const MW, MH, N = 10, 8, 28
 
@@ -98,10 +98,10 @@ func main() {
 		winner = "red"
 	}
 	fpg, _ := os.Create(out + "/arenaai.gif")
-	gif.EncodeAll(fpg, g)
+	_ = gif.EncodeAll(fpg, g)
 	fpg.Close()
 	hp, _ := os.Create(out + "/arenaai_hero.png")
-	png.Encode(hp, fold.Render(arena.Faces(a), W, H))
+	_ = png.Encode(hp, fold.Render(arena.Faces(a), W, H))
 	hp.Close()
 	fmt.Printf("\nwinner: %s (units %d v %d); match raw=%d wire=%d bytes\n",
 		winner, a.AliveCount(0), a.AliveCount(1), deltastream.RawSize(anim), len(wire))

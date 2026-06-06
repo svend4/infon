@@ -21,14 +21,14 @@ import (
 func savePNG(name string, img image.Image) {
 	fp, _ := os.Create(name)
 	defer fp.Close()
-	png.Encode(fp, img)
+	_ = png.Encode(fp, img)
 }
 
 func ease(i, n int) float64 { return (1 - math.Cos(math.Pi*float64(i)/float64(n))) / 2 }
 
 func main() {
 	out := "_fold"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H = 380, 380
 
 	figs := map[string][]t7.Piece{"square": t7.Square(), "cat": t7.Figures()["cat"]}
@@ -53,7 +53,7 @@ func main() {
 			g.Delay = append(g.Delay, 6)
 		}
 		fp, _ := os.Create(fmt.Sprintf("%s/%s_fold.gif", out, name))
-		gif.EncodeAll(fp, g)
+		_ = gif.EncodeAll(fp, g)
 		fp.Close()
 
 		spec := fold.SpecFor(pieces)

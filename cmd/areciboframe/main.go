@@ -25,7 +25,7 @@ func main() {
 	figName := flag.String("fig", "cat", "figure name")
 	out := flag.String("out", "_lincos", "output directory")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	f, ok := tangram.Named(*figName)
 	if !ok {
@@ -42,8 +42,8 @@ func main() {
 	if len(num) > 12 {
 		num = num[:12] + "…"
 	}
-	fmt.Printf("arecibo frame for %q: %d bytes, radix %d, %dx%d, legend of %d symbols, checksum %v\n",
-		*figName, len(frame), m.Radix, m.H, m.W, m.Radix, m.OK)
+	fmt.Printf("arecibo frame for %q: %d bytes, radix %d, %dx%d, number %s, legend of %d symbols, checksum %v\n",
+		*figName, len(frame), m.Radix, m.H, m.W, num, m.Radix, m.OK)
 
 	img := render(m)
 	path := fmt.Sprintf("%s/arecibo_%s.png", *out, *figName)

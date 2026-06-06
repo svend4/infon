@@ -47,7 +47,7 @@ func EncodeFrames(specs []pseudo.Spec, ecc, gop int) []Packet {
 				prev = s
 				continue
 			}
-			key = true // shape changed -> force a keyframe
+			// shape changed -> fall through and emit a keyframe
 		}
 		b, _ := json.Marshal(s)
 		out = append(out, Packet{uint16(i), KeyFrame, glyphqr.RSEncodeBytes(b, ecc)})

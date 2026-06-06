@@ -21,7 +21,7 @@ import (
 
 func main() {
 	out := "_arena"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H = 660, 430
 	const MW, MH, N = 10, 8, 28
 
@@ -93,11 +93,11 @@ func main() {
 		winner = "red"
 	}
 	fpg, _ := os.Create(out + "/arena.gif")
-	gif.EncodeAll(fpg, g)
+	_ = gif.EncodeAll(fpg, g)
 	fpg.Close()
 	hero := fold.Render(arena.Faces(a), W, H)
 	hp, _ := os.Create(out + "/arena_hero.png")
-	png.Encode(hp, hero)
+	_ = png.Encode(hp, hero)
 	hp.Close()
 
 	fmt.Printf("\nwinner: %s  (units %d v %d)\n", winner, a.AliveCount(0), a.AliveCount(1))

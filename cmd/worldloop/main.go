@@ -19,7 +19,7 @@ import (
 
 func main() {
 	out := "_world"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H, N = 560, 420, 24
 
 	states := world.Loop(world.RefBrain{}, world.State{}, N)
@@ -62,10 +62,10 @@ func main() {
 		g.Delay = append(g.Delay, 8)
 	}
 	fp, _ := os.Create(out + "/worldloop.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 	hp, _ := os.Create(out + "/world_hero.png")
-	png.Encode(hp, world.FromBytes(got.Frames[len(got.Frames)/2]).Render(W, H))
+	_ = png.Encode(hp, world.FromBytes(got.Frames[len(got.Frames)/2]).Render(W, H))
 	hp.Close()
 	fmt.Printf("wrote %s/worldloop.gif and world_hero.png\n", out)
 }

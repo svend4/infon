@@ -54,13 +54,13 @@ func coverage(r rune, x, y, S int) bool {
 	case '▚': // tl + br
 		return (x < h && y < h) || (x >= h && y >= h)
 	case '▛': // all but br
-		return !(x >= h && y >= h)
+		return x < h || y < h
 	case '▜': // all but bl
-		return !(x < h && y >= h)
+		return x >= h || y < h
 	case '▙': // all but tr
-		return !(x >= h && y < h)
+		return x < h || y >= h
 	case '▟': // all but tl
-		return !(x < h && y < h)
+		return x >= h || y >= h
 	case '◤': // upper-left triangle (hypotenuse = anti-diagonal)
 		return x+y <= S-1
 	case '◢': // lower-right triangle (complement of ◤)

@@ -20,7 +20,7 @@ import (
 
 func main() {
 	out := "_arena"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const MW, MH, W, H = 10, 8, 660, 430
 
 	roster := []struct {
@@ -66,7 +66,7 @@ func main() {
 		a.Step(c, c)
 	}
 	fp, _ := os.Create(out + "/arenasummon.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 	fmt.Printf("winner: blue=%d red=%d; wrote %s/arenasummon.gif\n", a.AliveCount(0), a.AliveCount(1), out)
 }

@@ -49,7 +49,7 @@ func main() {
 	fps := flag.Int("fps", 6, "ticks per second (for the bytes/second figure)")
 	out := flag.String("out", "_arena", "output directory")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	const MW, MH = 10, 8
 	a := &arena.Arena{W: MW, H: MH, Terrain: make([]uint8, MW*MH)}

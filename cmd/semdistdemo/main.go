@@ -22,7 +22,7 @@ import (
 func main() {
 	out := flag.String("out", "_bench", "output directory")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	s := semdist.Scene(24, 12, 8)
 	gop := semdist.GopCurve(s, []int{1, 2, 4, 8, 16}, 6, 0.25, 7)

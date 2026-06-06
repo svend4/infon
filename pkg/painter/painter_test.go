@@ -43,7 +43,7 @@ func TestPaintReflectsPrompt(t *testing.T) {
 		t.Fatal("night scene should have a navy sky and white stars")
 	}
 	sunsetSea := Paint("a harbor at sunset", 48, 24)
-	if !(gridHas(sunsetSea.Grid, "orange") || gridHas(sunsetSea.Grid, "dusk")) {
+	if !gridHas(sunsetSea.Grid, "orange") && !gridHas(sunsetSea.Grid, "dusk") {
 		t.Fatal("sunset sky should be orange/dusk")
 	}
 	if !gridHas(sunsetSea.Grid, "teal") && !gridHas(sunsetSea.Grid, "skyblue") {

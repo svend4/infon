@@ -42,7 +42,7 @@ func main() {
 	b1 := flag.String("brain1", "", "red commander brain URL")
 	flag.Parse()
 	out := "_arena"
-	os.MkdirAll(out, 0o755)
+	_ = os.MkdirAll(out, 0o755)
 	const W, H = 660, 430
 	const MW, MH, N = 10, 8, 26
 
@@ -124,12 +124,12 @@ func main() {
 		g.Delay = append(g.Delay, 10)
 	}
 	fp, _ := os.Create(out + "/arenalive.gif")
-	gif.EncodeAll(fp, g)
+	_ = gif.EncodeAll(fp, g)
 	fp.Close()
 	if len(recon) > 0 {
 		spec.LoadSnapshot(recon[len(recon)-1])
 		hp, _ := os.Create(out + "/arenalive_hero.png")
-		png.Encode(hp, fold.Render(arena.Faces(spec), W, H))
+		_ = png.Encode(hp, fold.Render(arena.Faces(spec), W, H))
 		hp.Close()
 	}
 

@@ -46,7 +46,7 @@ func maxi(a, b int) int {
 func main() {
 	out := flag.String("out", "_glyph", "output directory")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	const cols, rows, cellPx = 30, 18, 9
 	S := glyphset.Sub

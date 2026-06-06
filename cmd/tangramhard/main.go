@@ -11,7 +11,7 @@ import (
 	"github.com/svend4/infon/pkg/tangram"
 )
 
-type acc struct{ iou, overflow, recall float64 }
+type acc struct{ iou, overflow float64 }
 
 func main() {
 	cat := tangram.Catalog()

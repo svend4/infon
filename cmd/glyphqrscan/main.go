@@ -27,7 +27,7 @@ func main() {
 	cell := flag.Int("cell", 18, "pixels per glyph cell in the GIF")
 	out := flag.String("out", "_glyphqr", "output directory")
 	flag.Parse()
-	os.MkdirAll(*out, 0o755)
+	_ = os.MkdirAll(*out, 0o755)
 
 	framed, err := glyphqr.EncodeTextFramed(*msg, *ecc)
 	if err != nil {

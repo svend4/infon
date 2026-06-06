@@ -39,7 +39,7 @@ func main() {
 	}
 	srv := &http.Server{Handler: stream.Handler(gen)}
 	go func() { _ = srv.Serve(ln) }()
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	url := "http://" + ln.Addr().String() + "/v1/stream"
 	fmt.Printf("tvcp-ai stream (SSE) at %s\n", url)

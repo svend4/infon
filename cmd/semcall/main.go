@@ -82,12 +82,12 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	defer rx.Close()
+	defer func() { _ = rx.Close() }()
 	tx, err := net.DialUDP("udp", nil, rx.LocalAddr().(*net.UDPAddr))
 	if err != nil {
 		fail(err)
 	}
-	defer tx.Close()
+	defer func() { _ = tx.Close() }()
 
 	arrived := make(chan semvideo.Packet, 256)
 	go func() {
