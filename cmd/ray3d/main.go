@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 
+	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/pkg/raytrace"
 	"github.com/svend4/infon/pkg/terminal"
 )
@@ -60,6 +61,7 @@ func main() {
 	pngPath := flag.String("png", "", "export a PNG (720x480) instead of drawing")
 	gifPath := flag.String("gif", "", "export an orbit GIF instead of drawing")
 	frames := flag.Int("frames", 24, "frames in the GIF orbit")
+	mode := flag.String("mode", "auto", "terminal mode: auto|halfblock|sextant|octant|braille|perceptual|optimal|quadrant|sixel|kitty")
 	flag.Parse()
 
 	w := demoWire()
@@ -85,10 +87,34 @@ func main() {
 		img := raytrace.Render(scene, orbitCam(*angle), 720, 480, raytrace.Options{Samples: max(*spp, 2)})
 		writePNG(*pngPath, img)
 	default:
-		img := raytrace.Render(scene, orbitCam(*angle), *cols, *rows*2, raytrace.Options{Samples: *spp})
-		fmt.Print(terminal.HalfBlock(img, *cols, *rows).Render())
-		fmt.Printf("scene-over-RS: %d bytes (ecc=%d) for %d spheres + camera; ray-traced locally\n",
-			len(wire), ecc, len(w.Spheres))
+		fmt.Print(renderToTerminal(scene, orbitCam(*angle), *cols, *rows, *spp, *mode))
+		fmt.Printf("scene-over-RS: %d bytes (ecc=%d) for %d spheres + camera; mode=%s; ray-traced locally\n",
+			len(wire), ecc, len(w.Spheres), *mode)
+	}
+}
+
+// renderToTerminal ray-traces the scene and converts the image to a terminal
+// string in the requested mode. "auto" picks the best glyph mode for this
+// terminal; "sixel"/"kitty" emit true bitmaps; everything else is a glyph mode
+// (the perceptual/optimal ones cluster colours in OKLab).
+func renderToTerminal(scene *raytrace.Scene, cam raytrace.Camera, cols, rows, spp int, mode string) string {
+	switch mode {
+	case "kitty":
+		img := raytrace.Render(scene, cam, cols*8, rows*16, raytrace.Options{Samples: spp})
+		return terminal.EncodeKitty(img)
+	case "sixel":
+		img := raytrace.Render(scene, cam, cols*6, rows*12, raytrace.Options{Samples: spp})
+		return terminal.EncodeSixel(img, 256)
+	default:
+		name := mode
+		if name == "" || name == "auto" {
+			name = terminal.DetectCapability().BestBlitMode()
+		}
+		rm, _ := babe.ParseRenderMode(name)
+		// Render extra sub-cell resolution so denser glyph modes (sextant 2x3,
+		// octant/braille 2x4) have real pixels to cluster.
+		img := raytrace.Render(scene, cam, cols*2, rows*4, raytrace.Options{Samples: spp})
+		return babe.ImageToFrameMode(img, cols, rows, rm).Render()
 	}
 }
 
