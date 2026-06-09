@@ -1,14 +1,15 @@
 // Command ray3d renders a small CPU ray-traced scene — spheres on a checkerboard
-// floor with Lambert shading, hard shadows and a mirror — into the terminal using
-// truecolor half-blocks: the pkg/raytrace engine driven through infon's own
-// renderer (no ASCII ramp). It can instead export a PNG or an orbit GIF, add an
-// .obj mesh, and it demonstrates the "scene over Reed-Solomon" codec: the whole
-// world is shipped as ~100 bytes and ray-traced locally.
+// floor with Lambert/Blinn-Phong shading, hard shadows, a mirror and glass —
+// into the terminal using truecolor glyph modes (no ASCII ramp). With -path it
+// switches to the Monte-Carlo path tracer (global illumination). It can instead
+// export a PNG or an orbit GIF, add an .obj mesh, and it demonstrates the "scene
+// over Reed-Solomon" codec: the whole world is shipped as ~100 bytes.
 //
-//	go run ./cmd/ray3d                      # render to the terminal
-//	go run ./cmd/ray3d -spp 2 -w 120 -h 60  # anti-aliased, larger
+//	go run ./cmd/ray3d                      # raster render to the terminal
+//	go run ./cmd/ray3d -path -spp 64        # path-traced global illumination
 //	go run ./cmd/ray3d -png out.png         # export a still
 //	go run ./cmd/ray3d -gif orbit.gif       # export a turntable
+//	go run ./cmd/ray3d -mode sextant        # denser glyph mode
 //	go run ./cmd/ray3d -obj model.obj       # drop a mesh into the scene
 package main
 
@@ -52,21 +53,37 @@ func orbitCam(angle float64) raytrace.Camera {
 	}
 }
 
+type opts struct {
+	spp   int
+	path  bool
+	depth int
+}
+
+// renderImage picks the raster or the path tracer.
+func renderImage(scene *raytrace.Scene, cam raytrace.Camera, w, h int, o opts) image.Image {
+	if o.path {
+		return raytrace.PathRender(scene, cam, w, h, raytrace.PathOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1})
+	}
+	return raytrace.Render(scene, cam, w, h, raytrace.Options{Samples: o.spp})
+}
+
 func main() {
 	cols := flag.Int("w", 90, "width in terminal cells")
 	rows := flag.Int("h", 45, "height in terminal cells")
-	spp := flag.Int("spp", 1, "anti-aliasing samples per axis (1 = off)")
+	spp := flag.Int("spp", 1, "samples per pixel (AA for raster; paths for -path)")
 	angle := flag.Float64("angle", 0.6, "orbit angle in radians")
 	objPath := flag.String("obj", "", "optional .obj mesh to add to the scene")
 	pngPath := flag.String("png", "", "export a PNG (720x480) instead of drawing")
 	gifPath := flag.String("gif", "", "export an orbit GIF instead of drawing")
 	frames := flag.Int("frames", 24, "frames in the GIF orbit")
 	mode := flag.String("mode", "auto", "terminal mode: auto|halfblock|sextant|octant|braille|perceptual|optimal|quadrant|sixel|kitty")
+	pathT := flag.Bool("path", false, "use the Monte-Carlo path tracer (global illumination)")
+	depth := flag.Int("depth", 6, "path tracer max bounces")
 	flag.Parse()
 
+	o := opts{spp: *spp, path: *pathT, depth: *depth}
 	w := demoWire()
 
-	// Showcase the semantic codec: encode -> bytes over RS -> decode -> render.
 	const ecc = 10
 	wire := raytrace.Encode(w, ecc)
 	dec, err := raytrace.Decode(wire, ecc)
@@ -75,6 +92,7 @@ func main() {
 		dec = w
 	}
 	scene := dec.Build(0.14)
+	scene.BuildBVH()
 
 	if *objPath != "" {
 		addOBJ(scene, *objPath)
@@ -82,38 +100,42 @@ func main() {
 
 	switch {
 	case *gifPath != "":
-		writeGIF(*gifPath, scene, *cols, *rows, *spp, *frames)
+		writeGIF(*gifPath, scene, *cols, *rows, *frames, o)
 	case *pngPath != "":
-		img := raytrace.Render(scene, orbitCam(*angle), 720, 480, raytrace.Options{Samples: max(*spp, 2)})
-		writePNG(*pngPath, img)
+		so := o
+		if !so.path && so.spp < 2 {
+			so.spp = 2
+		}
+		writePNG(*pngPath, renderImage(scene, orbitCam(*angle), 720, 480, so))
 	default:
-		fmt.Print(renderToTerminal(scene, orbitCam(*angle), *cols, *rows, *spp, *mode))
-		fmt.Printf("scene-over-RS: %d bytes (ecc=%d) for %d spheres + camera; mode=%s; ray-traced locally\n",
-			len(wire), ecc, len(w.Spheres), *mode)
+		fmt.Print(renderToTerminal(scene, orbitCam(*angle), *cols, *rows, *mode, o))
+		fmt.Printf("scene-over-RS: %d bytes (ecc=%d) for %d spheres + camera; mode=%s%s; ray-traced locally\n",
+			len(wire), ecc, len(w.Spheres), *mode, pathTag(o))
 	}
 }
 
-// renderToTerminal ray-traces the scene and converts the image to a terminal
-// string in the requested mode. "auto" picks the best glyph mode for this
-// terminal; "sixel"/"kitty" emit true bitmaps; everything else is a glyph mode
-// (the perceptual/optimal ones cluster colours in OKLab).
-func renderToTerminal(scene *raytrace.Scene, cam raytrace.Camera, cols, rows, spp int, mode string) string {
+func pathTag(o opts) string {
+	if o.path {
+		return fmt.Sprintf(" (path tracer, %d spp)", o.spp)
+	}
+	return ""
+}
+
+// renderToTerminal ray-traces and converts to a terminal string in the requested
+// mode ("auto" picks the best glyph mode; "sixel"/"kitty" emit true bitmaps).
+func renderToTerminal(scene *raytrace.Scene, cam raytrace.Camera, cols, rows int, mode string, o opts) string {
 	switch mode {
 	case "kitty":
-		img := raytrace.Render(scene, cam, cols*8, rows*16, raytrace.Options{Samples: spp})
-		return terminal.EncodeKitty(img)
+		return terminal.EncodeKitty(renderImage(scene, cam, cols*8, rows*16, o))
 	case "sixel":
-		img := raytrace.Render(scene, cam, cols*6, rows*12, raytrace.Options{Samples: spp})
-		return terminal.EncodeSixel(img, 256)
+		return terminal.EncodeSixel(renderImage(scene, cam, cols*6, rows*12, o), 256)
 	default:
 		name := mode
 		if name == "" || name == "auto" {
 			name = terminal.DetectCapability().BestBlitMode()
 		}
 		rm, _ := babe.ParseRenderMode(name)
-		// Render extra sub-cell resolution so denser glyph modes (sextant 2x3,
-		// octant/braille 2x4) have real pixels to cluster.
-		img := raytrace.Render(scene, cam, cols*2, rows*4, raytrace.Options{Samples: spp})
+		img := renderImage(scene, cam, cols*2, rows*4, o)
 		return babe.ImageToFrameMode(img, cols, rows, rm).Render()
 	}
 }
@@ -131,6 +153,7 @@ func addOBJ(scene *raytrace.Scene, path string) {
 		return
 	}
 	scene.Objects = append(scene.Objects, m)
+	scene.BuildBVH()
 	fmt.Fprintf(os.Stderr, "loaded %s (%d triangles)\n", path, len(m.Tris))
 }
 
@@ -145,11 +168,11 @@ func writePNG(path string, img image.Image) {
 	fmt.Printf("wrote %s\n", path)
 }
 
-func writeGIF(path string, scene *raytrace.Scene, cols, rows, spp, frames int) {
+func writeGIF(path string, scene *raytrace.Scene, cols, rows, frames int, o opts) {
 	g := &gif.GIF{}
 	for i := 0; i < frames; i++ {
 		ang := 2 * math.Pi * float64(i) / float64(frames)
-		img := raytrace.Render(scene, orbitCam(ang), cols, rows*2, raytrace.Options{Samples: spp})
+		img := renderImage(scene, orbitCam(ang), cols*2, rows*4, o)
 		pal := image.NewPaletted(img.Bounds(), palette.Plan9)
 		draw.FloydSteinberg.Draw(pal, img.Bounds(), img, image.Point{})
 		g.Image = append(g.Image, pal)
