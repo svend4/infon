@@ -54,17 +54,25 @@ func orbitCam(angle float64) raytrace.Camera {
 }
 
 type opts struct {
-	spp   int
-	path  bool
-	depth int
+	spp     int
+	path    bool
+	depth   int
+	nee     bool
+	denoise int
 }
 
-// renderImage picks the raster or the path tracer.
+// renderImage picks the raster or the path tracer, then optionally denoises.
 func renderImage(scene *raytrace.Scene, cam raytrace.Camera, w, h int, o opts) image.Image {
+	var img image.Image
 	if o.path {
-		return raytrace.PathRender(scene, cam, w, h, raytrace.PathOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1})
+		img = raytrace.PathRender(scene, cam, w, h, raytrace.PathOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1, NEE: o.nee})
+	} else {
+		img = raytrace.Render(scene, cam, w, h, raytrace.Options{Samples: o.spp})
 	}
-	return raytrace.Render(scene, cam, w, h, raytrace.Options{Samples: o.spp})
+	if o.denoise > 0 {
+		img = raytrace.Denoise(img, o.denoise, 0.12)
+	}
+	return img
 }
 
 func main() {
@@ -79,9 +87,11 @@ func main() {
 	mode := flag.String("mode", "auto", "terminal mode: auto|halfblock|sextant|octant|braille|perceptual|optimal|quadrant|sixel|kitty")
 	pathT := flag.Bool("path", false, "use the Monte-Carlo path tracer (global illumination)")
 	depth := flag.Int("depth", 6, "path tracer max bounces")
+	nee := flag.Bool("nee", true, "path tracer: next-event estimation (direct light sampling)")
+	denoise := flag.Int("denoise", 0, "à-trous denoiser passes applied to the result (0 = off)")
 	flag.Parse()
 
-	o := opts{spp: *spp, path: *pathT, depth: *depth}
+	o := opts{spp: *spp, path: *pathT, depth: *depth, nee: *nee, denoise: *denoise}
 	w := demoWire()
 
 	const ecc = 10
