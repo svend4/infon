@@ -39,6 +39,11 @@ type Material struct {
 	Metal    float64 // metalness for the path tracer's GGX lobe (0 = dielectric .. 1 = metal)
 	Disperse float64 // glass only: per-channel IOR spread (chromatic dispersion); 0 = none
 	Tex      Texture // optional surface texture; overrides Color when set
+
+	// Principled selects the unified Disney-style BSDF (path tracer): one surface
+	// blending a Lambert diffuse lobe and a GGX specular lobe, driven by Metal and
+	// Rough, instead of choosing a single Reflect/Metal/diffuse behaviour.
+	Principled bool
 }
 
 // Hit records the nearest intersection along a ray.

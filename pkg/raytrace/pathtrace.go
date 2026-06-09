@@ -170,6 +170,42 @@ pathLoop:
 				r = s.scatterGlass(r, h, rg)
 			}
 			specularPrev = true
+		case h.Mat.Principled:
+			// Disney-style: stochastically pick the diffuse or the GGX specular
+			// lobe and divide by its selection probability (unbiased).
+			m := h.Mat.Metal
+			alb := h.albedo()
+			f0 := Vec3{X: 0.04, Y: 0.04, Z: 0.04}.Scale(1 - m).Add(alb.Scale(m))
+			pSpec := 0.2 + 0.7*m
+			if pSpec < 0.1 {
+				pSpec = 0.1
+			} else if pSpec > 0.95 {
+				pSpec = 0.95
+			}
+			if rg.f() < pSpec {
+				V := r.Dir.Neg()
+				hv := sampleGGX(h.N, h.Mat.Rough, rg)
+				vh := V.Dot(hv)
+				wi := r.Dir.Reflect(hv).Norm()
+				nl := h.N.Dot(wi)
+				nv := h.N.Dot(V)
+				nh := h.N.Dot(hv)
+				if vh <= 0 || nl <= 0 || nv*nh < geomEps {
+					break pathLoop
+				}
+				a := h.Mat.Rough * h.Mat.Rough
+				if a < 1e-3 {
+					a = 1e-3
+				}
+				g := g1ggx(nv, a) * g1ggx(nl, a)
+				throughput = throughput.Mul(schlickV(f0, vh)).Scale(g * vh / (nv * nh) / pSpec)
+				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: wi}
+				specularPrev = true
+			} else {
+				throughput = throughput.Mul(alb.Scale((1 - m) / (1 - pSpec)))
+				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: cosineSample(h.N, rg)}
+				specularPrev = false
+			}
 		case h.Mat.Metal > 0:
 			// GGX microfacet metal: importance-sample the half-vector, reflect,
 			// and weight by F*G*(V·H)/((N·V)(N·H)) (the BRDF*cos/pdf for D-sampling).
