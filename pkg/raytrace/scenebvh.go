@@ -26,6 +26,26 @@ func objectBounds(o Object) (aabb, bool) {
 		c, r := v.Bound()
 		rr := Vec3{X: r, Y: r, Z: r}
 		return aabb{min: c.Sub(rr), max: c.Add(rr)}, true
+	case *Instance:
+		lb, ok := objectBounds(v.obj)
+		if !ok {
+			return aabb{}, false
+		}
+		box := emptyAABB()
+		for i := 0; i < 8; i++ {
+			corner := Vec3{X: lb.min.X, Y: lb.min.Y, Z: lb.min.Z}
+			if i&1 != 0 {
+				corner.X = lb.max.X
+			}
+			if i&2 != 0 {
+				corner.Y = lb.max.Y
+			}
+			if i&4 != 0 {
+				corner.Z = lb.max.Z
+			}
+			box = box.expand(v.m.mul(corner).Add(v.t))
+		}
+		return box, true
 	default:
 		return aabb{}, false
 	}
