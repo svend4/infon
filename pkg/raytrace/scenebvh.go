@@ -22,6 +22,9 @@ func objectBounds(o Object) (aabb, bool) {
 		return b0.union(b1), true
 	case Triangle:
 		return triBounds(v), true
+	case Marched:
+		rr := Vec3{X: v.Radius, Y: v.Radius, Z: v.Radius}
+		return aabb{min: v.Center.Sub(rr), max: v.Center.Add(rr)}, true
 	case *Mesh:
 		c, r := v.Bound()
 		rr := Vec3{X: r, Y: r, Z: r}
