@@ -309,6 +309,19 @@ pathLoop:
 			throughput = throughput.Mul(schlickV(f0, vh)).Scale(g * vh / (nv * nh))
 			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: wi, Time: tm}
 			specularPrev = true
+		case h.Mat.Film > 0:
+			// Iridescent thin-film mirror: reflect, tinted by interference.
+			cosI := math.Min(1, math.Max(0, -r.Dir.Dot(h.N)))
+			throughput = throughput.Mul(thinFilmTint(cosI, h.Mat.Film, h.Mat.FilmIOR))
+			dir := r.Dir.Reflect(h.N).Norm()
+			if h.Mat.Rough > 0 {
+				dir = dir.Add(rg.unit().Scale(h.Mat.Rough)).Norm()
+				if dir.Dot(h.N) < 0 {
+					dir = dir.Reflect(h.N)
+				}
+			}
+			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: dir, Time: tm}
+			specularPrev = true
 		case h.Mat.Reflect > 0:
 			dir := r.Dir.Reflect(h.N).Norm()
 			if h.Mat.Rough > 0 {

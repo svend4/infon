@@ -62,6 +62,13 @@ type Material struct {
 	SSS       float64
 	SSSColor  Vec3
 	SSSRadius float64
+
+	// Thin-film interference (iridescence): Film is the film thickness in
+	// nanometres (0 = off; ~100-600 for soap/oil), FilmIOR its refractive index
+	// (default 1.33). The surface reflects like a mirror, tinted by the
+	// angle/thickness-dependent interference colour.
+	Film    float64
+	FilmIOR float64
 }
 
 // Hit records the nearest intersection along a ray.
