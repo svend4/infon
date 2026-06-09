@@ -278,6 +278,11 @@ type Scene struct {
 	AOSamples int
 	AORadius  float64
 
+	// Distance fog (aerial perspective): a hit fades toward FogColor with the
+	// ray-segment length (Beer-Lambert). FogDensity <= 0 disables it.
+	FogDensity float64
+	FogColor   Vec3
+
 	sbvh *objBVH  // optional top-level acceleration structure (see BuildBVH)
 	emit []Sphere // emissive spheres, cached for next-event estimation
 }
@@ -318,6 +323,15 @@ func (s *Scene) anyHit(r Ray, tMin, tMax float64) bool {
 		}
 	}
 	return false
+}
+
+// fog blends a colour toward FogColor by the transmittance over distance t.
+func (s *Scene) fog(col Vec3, t float64) Vec3 {
+	if s.FogDensity <= 0 {
+		return col
+	}
+	tr := math.Exp(-s.FogDensity * t)
+	return col.Scale(tr).Add(s.FogColor.Scale(1 - tr))
 }
 
 func (s *Scene) sky(dir Vec3) Vec3 {
@@ -405,7 +419,7 @@ func (s *Scene) shade(r Ray, depth int) Vec3 {
 
 	// Dielectric (glass): mix Fresnel reflection and refraction.
 	if depth > 0 && h.Mat.Glass > 0 {
-		return s.dielectric(r, h, depth)
+		return s.fog(s.dielectric(r, h, depth), h.T)
 	}
 
 	alb := h.albedo()
@@ -438,7 +452,7 @@ func (s *Scene) shade(r Ray, depth int) Vec3 {
 		refl := s.shade(Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: rdir}, depth-1)
 		col = col.Scale(1 - h.Mat.Reflect).Add(refl.Scale(h.Mat.Reflect))
 	}
-	return col
+	return s.fog(col, h.T)
 }
 
 // dielectric shades a glass surface: a Fresnel-weighted mix of the reflected and
