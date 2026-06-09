@@ -22,21 +22,25 @@ type SceneSpec struct {
 // index, metalness, mirror reflectance, roughness). For a box, S is the
 // half-extents (falling back to a cube of half-size R); for a sphere, R is the
 // radius.
+// JSON fields use omitempty so a spec stays compact on the wire — only the
+// non-zero fields of each object are sent, keeping a region inside one UDP packet
+// (and true to "meaning, not pixels"). Arrays (s/color/emit) can't be omitted by
+// encoding/json, so they always serialise.
 type ObjSpec struct {
-	Kind    string     `json:"kind"`
-	Name    string     `json:"name"` // for kind "mesh": the named model to instance
-	Tex     string     `json:"tex"`  // optional named surface texture (checker, marble, wood, stone, clouds, or a loaded image)
-	X       float64    `json:"x"`
-	Y       float64    `json:"y"`
-	Z       float64    `json:"z"`
-	R       float64    `json:"r"`
-	S       [3]float64 `json:"s"` // box half-extents (x,y,z)
-	Color   [3]float64 `json:"color"`
-	Emit    [3]float64 `json:"emit"`
-	Glass   float64    `json:"glass"`
-	Metal   float64    `json:"metal"`
-	Reflect float64    `json:"reflect"`
-	Rough   float64    `json:"rough"`
+	Kind    string     `json:"kind,omitempty"`
+	Name    string     `json:"name,omitempty"` // for kind "mesh"/"fractal": the named model/form
+	Tex     string     `json:"tex,omitempty"`  // optional named surface texture
+	X       float64    `json:"x,omitempty"`
+	Y       float64    `json:"y,omitempty"`
+	Z       float64    `json:"z,omitempty"`
+	R       float64    `json:"r,omitempty"`
+	S       [3]float64 `json:"s,omitempty"` // box half-extents (x,y,z)
+	Color   [3]float64 `json:"color,omitempty"`
+	Emit    [3]float64 `json:"emit,omitempty"`
+	Glass   float64    `json:"glass,omitempty"`
+	Metal   float64    `json:"metal,omitempty"`
+	Reflect float64    `json:"reflect,omitempty"`
+	Rough   float64    `json:"rough,omitempty"`
 }
 
 // refRayScene is the reference scenographer for game "rayscene": it authors a
@@ -70,7 +74,7 @@ func refRayScene(req Request) Response {
 	}
 	if hl := math.Hypot(p.Heading[0], p.Heading[2]); hl > 1e-6 {
 		ux, uz := p.Heading[0]/hl, p.Heading[2]/hl
-		for k := 1; k <= 4; k++ {
+		for k := 1; k <= 3; k++ {
 			d := 2.0 * float64(k)
 			spec.Objects = append(spec.Objects, ObjSpec{
 				Kind: "cylinder", X: -ux * d, Z: -uz * d, R: 0.4,
