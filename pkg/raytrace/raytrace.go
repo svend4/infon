@@ -1,11 +1,13 @@
 // Package raytrace is a small, dependency-light CPU ray tracer that renders to an
 // image.Image — the same output type as the isometric pkg/fold renderer — so it
 // drops straight into every existing consumer: PNG/GIF export, the
-// half-block/sixel/kitty terminal encoders, and the orbit demos. It implements
-// analytic spheres, an infinite checkerboard floor and triangle meshes
-// (Möller–Trumbore with a bounding-sphere reject), Lambertian shading with hard
-// shadow rays and distance attenuation, optional one-bounce-or-more reflection
-// and supersampled anti-aliasing, and a parallel per-row render loop.
+// half-block/sextant/octant/braille/sixel/kitty terminal encoders, and the orbit
+// demos. It implements analytic spheres, an infinite checkerboard floor and
+// triangle meshes (Möller–Trumbore, smooth vertex normals, a BVH acceleration
+// structure), Lambert + Blinn-Phong shading with hard or soft shadow rays,
+// ambient occlusion, distance attenuation, emissive and dielectric (glass)
+// materials with Schlick-Fresnel reflection/refraction, supersampled
+// anti-aliasing, ACES tone mapping and a parallel per-row render loop.
 //
 // It is a clean-room implementation written from scratch (no third-party or
 // copied code), so it carries the repository's own licence.
@@ -25,19 +27,23 @@ type Ray struct{ Origin, Dir Vec3 }
 // At returns the point at parameter t along the ray.
 func (r Ray) At(t float64) Vec3 { return r.Origin.Add(r.Dir.Scale(t)) }
 
-// Material describes a surface: a base colour (channels 0..1) and a mirror
-// fraction (0 = matte, 1 = perfect mirror).
+// Material describes a surface.
 type Material struct {
-	Color   Vec3
-	Reflect float64
+	Color   Vec3    // base (diffuse) colour, channels 0..1
+	Reflect float64 // mirror fraction, 0 = matte .. 1 = perfect mirror
+	Spec    float64 // Blinn-Phong specular strength (0 = none)
+	Shine   float64 // specular exponent (default 32 when Spec > 0)
+	Emit    Vec3    // emissive colour added regardless of lighting
+	Glass   float64 // refractive index (0 = opaque; ~1.5 = glass)
 }
 
 // Hit records the nearest intersection along a ray.
 type Hit struct {
-	T   float64 // ray parameter
-	P   Vec3    // world-space hit point
-	N   Vec3    // unit normal, oriented against the incoming ray
-	Mat Material
+	T     float64 // ray parameter
+	P     Vec3    // world-space hit point
+	N     Vec3    // unit shading normal, oriented against the incoming ray
+	Front bool    // true if the ray struck the outward-facing side
+	Mat   Material
 }
 
 // Object is anything a ray can intersect. Intersect reports the nearest hit with
@@ -50,7 +56,17 @@ const (
 	geomEps   = 1e-9
 	shadowEps = 1e-4
 	tFar      = 1e9
+	goldenAng = 2.399963229728653 // radians, for low-discrepancy disk/hemisphere sampling
 )
+
+// orient flips n to face against the ray direction and reports whether it was
+// already front-facing.
+func orient(n, dir Vec3) (Vec3, bool) {
+	if n.Dot(dir) > 0 {
+		return n.Neg(), false
+	}
+	return n, true
+}
 
 // ---------- sphere ----------
 
@@ -78,34 +94,35 @@ func (s Sphere) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 		}
 	}
 	p := r.At(t)
-	n := p.Sub(s.Center).Norm()
-	if n.Dot(r.Dir) > 0 {
-		n = n.Neg()
-	}
-	return Hit{T: t, P: p, N: n, Mat: s.Mat}, true
+	n, front := orient(p.Sub(s.Center).Norm(), r.Dir)
+	return Hit{T: t, P: p, N: n, Front: front, Mat: s.Mat}, true
 }
 
-// sphereOverlaps reports whether ray r's [tMin,tMax] segment crosses the sphere
-// (center,radius). Used for bounding-sphere rejection of meshes.
+// sphereOverlaps reports whether ray r's [tMin,tMax] segment crosses the sphere.
 func sphereOverlaps(r Ray, center Vec3, radius, tMin, tMax float64) bool {
 	oc := r.Origin.Sub(center)
 	b := oc.Dot(r.Dir)
-	c := oc.LenSq() - radius*radius
-	disc := b*b - c
+	disc := b*b - (oc.LenSq() - radius*radius)
 	if disc < 0 {
 		return false
 	}
 	sq := math.Sqrt(disc)
-	t0, t1 := -b-sq, -b+sq
-	return t0 <= tMax && t1 >= tMin
+	return -b-sq <= tMax && -b+sq >= tMin
 }
 
 // ---------- triangle ----------
 
-// Triangle is a single flat triangle.
+// Triangle is a single triangle. If Na/Nb/Nc are non-zero the shading normal is
+// barycentrically interpolated (smooth shading); otherwise the flat face normal
+// is used.
 type Triangle struct {
-	A, B, C Vec3
-	Mat     Material
+	A, B, C    Vec3
+	Na, Nb, Nc Vec3
+	Mat        Material
+}
+
+func (tr Triangle) smooth() bool {
+	return tr.Na.LenSq() > 0 && tr.Nb.LenSq() > 0 && tr.Nc.LenSq() > 0
 }
 
 // Intersect implements the Möller–Trumbore ray/triangle test.
@@ -115,7 +132,7 @@ func (tr Triangle) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 	pv := r.Dir.Cross(e2)
 	det := e1.Dot(pv)
 	if det > -geomEps && det < geomEps {
-		return Hit{}, false // ray parallel to the triangle plane
+		return Hit{}, false
 	}
 	inv := 1 / det
 	tv := r.Origin.Sub(tr.A)
@@ -132,63 +149,14 @@ func (tr Triangle) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 	if t <= tMin || t > tMax {
 		return Hit{}, false
 	}
-	n := e1.Cross(e2).Norm()
-	if n.Dot(r.Dir) > 0 {
-		n = n.Neg()
+	var ng Vec3
+	if tr.smooth() {
+		ng = tr.Na.Scale(1 - u - v).Add(tr.Nb.Scale(u)).Add(tr.Nc.Scale(v)).Norm()
+	} else {
+		ng = e1.Cross(e2).Norm()
 	}
-	return Hit{T: t, P: r.At(t), N: n, Mat: tr.Mat}, true
-}
-
-// ---------- mesh ----------
-
-// Mesh is a triangle soup with a precomputed bounding sphere for quick rejection.
-type Mesh struct {
-	Tris   []Triangle
-	center Vec3
-	radius float64
-}
-
-// NewMesh builds a mesh and computes its bounding sphere.
-func NewMesh(tris []Triangle) *Mesh {
-	m := &Mesh{Tris: tris}
-	if len(tris) == 0 {
-		return m
-	}
-	var sum Vec3
-	for _, t := range tris {
-		sum = sum.Add(t.A).Add(t.B).Add(t.C)
-	}
-	c := sum.Scale(1 / float64(3*len(tris)))
-	var rad float64
-	for _, t := range tris {
-		for _, v := range [3]Vec3{t.A, t.B, t.C} {
-			if d := v.Sub(c).Len(); d > rad {
-				rad = d
-			}
-		}
-	}
-	m.center, m.radius = c, rad
-	return m
-}
-
-// Bound returns the mesh bounding sphere (centre, radius).
-func (m *Mesh) Bound() (Vec3, float64) { return m.center, m.radius }
-
-// Intersect implements Object: reject against the bounding sphere, then test
-// every triangle, keeping the nearest.
-func (m *Mesh) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
-	if len(m.Tris) == 0 || !sphereOverlaps(r, m.center, m.radius, tMin, tMax) {
-		return Hit{}, false
-	}
-	var best Hit
-	found := false
-	closest := tMax
-	for _, t := range m.Tris {
-		if h, ok := t.Intersect(r, tMin, closest); ok {
-			best, found, closest = h, true, h.T
-		}
-	}
-	return best, found
+	n, front := orient(ng, r.Dir)
+	return Hit{T: t, P: r.At(t), N: n, Front: front, Mat: tr.Mat}, true
 }
 
 // ---------- plane (checkerboard floor) ----------
@@ -199,6 +167,7 @@ type Plane struct {
 	Y      float64
 	Size   float64
 	C1, C2 Vec3
+	Mat    Material // Reflect/Spec/etc. apply; Color is taken from the checker
 }
 
 // Intersect implements Object for the floor plane.
@@ -217,15 +186,13 @@ func (p Plane) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 	}
 	cx := int(math.Floor(hp.X / sz))
 	cz := int(math.Floor(hp.Z / sz))
-	col := p.C1
+	mat := p.Mat
+	mat.Color = p.C1
 	if (cx+cz)&1 == 0 {
-		col = p.C2
+		mat.Color = p.C2
 	}
-	n := Vec3{0, 1, 0}
-	if r.Dir.Y > 0 {
-		n = Vec3{0, -1, 0}
-	}
-	return Hit{T: t, P: hp, N: n, Mat: Material{Color: col}}, true
+	n, front := orient(Vec3{0, 1, 0}, r.Dir)
+	return Hit{T: t, P: hp, N: n, Front: front, Mat: mat}, true
 }
 
 // ---------- camera ----------
@@ -263,7 +230,6 @@ func (c Camera) basis(pxW, pxH int) camBasis {
 	return camBasis{c.Pos, forward, right, up, halfW, halfH, float64(pxW), float64(pxH)}
 }
 
-// ray generates the primary ray through sub-pixel coordinate (px,py).
 func (b camBasis) ray(px, py float64) Ray {
 	ndcX := (2*px/b.pxW - 1) * b.halfW
 	ndcY := (1 - 2*py/b.pxH) * b.halfH
@@ -273,8 +239,7 @@ func (b camBasis) ray(px, py float64) Ray {
 
 // ---------- scene & shading ----------
 
-// Scene is the world: objects, one point light, an ambient floor, a sky gradient
-// and a reflection-bounce budget.
+// Scene is the world.
 type Scene struct {
 	Objects   []Object
 	Light     Vec3
@@ -282,8 +247,17 @@ type Scene struct {
 	Ambient   float64 // 0..1 ambient term
 	SkyTop    Vec3    // looking up
 	SkyBottom Vec3    // looking toward the horizon/down
-	MaxBounce int     // reflection bounces (0 = none)
+	MaxBounce int     // reflection/refraction bounce budget (0 = none)
 	AttenK    float64 // linear distance attenuation coefficient (0 = none)
+
+	// Soft shadows: a light of radius LightRadius sampled ShadowSamples times.
+	LightRadius   float64
+	ShadowSamples int
+
+	// Ambient occlusion: AOSamples hemisphere rays of length AORadius darken the
+	// ambient term in creases (0 samples = off).
+	AOSamples int
+	AORadius  float64
 }
 
 func (s *Scene) closest(r Ray, tMin, tMax float64) (Hit, bool) {
@@ -298,9 +272,81 @@ func (s *Scene) closest(r Ray, tMin, tMax float64) (Hit, bool) {
 	return best, found
 }
 
+func (s *Scene) anyHit(r Ray, tMin, tMax float64) bool {
+	for _, o := range s.Objects {
+		if _, ok := o.Intersect(r, tMin, tMax); ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Scene) sky(dir Vec3) Vec3 {
 	t := 0.5 * (dir.Y + 1)
 	return s.SkyBottom.Scale(1 - t).Add(s.SkyTop.Scale(t))
+}
+
+// basisAround returns two unit vectors tangent and bitangent to n.
+func basisAround(n Vec3) (Vec3, Vec3) {
+	up := Vec3{0, 1, 0}
+	if math.Abs(n.Y) > 0.99 {
+		up = Vec3{1, 0, 0}
+	}
+	t := up.Cross(n).Norm()
+	return t, n.Cross(t).Norm()
+}
+
+// visibility returns the fraction of the light reaching p (1 = fully lit). With
+// LightRadius>0 and ShadowSamples>1 it integrates a disk light (soft shadows).
+func (s *Scene) visibility(p, n Vec3) float64 {
+	sorig := p.Add(n.Scale(shadowEps))
+	if s.LightRadius <= 0 || s.ShadowSamples <= 1 {
+		toL := s.Light.Sub(sorig)
+		d := toL.Len()
+		if s.anyHit(Ray{Origin: sorig, Dir: toL.Scale(1 / d)}, shadowEps, d-2*shadowEps) {
+			return 0
+		}
+		return 1
+	}
+	ld := s.Light.Sub(sorig).Norm()
+	tu, tv := basisAround(ld)
+	k := s.ShadowSamples
+	vis := 0.0
+	for i := 0; i < k; i++ {
+		rr := math.Sqrt((float64(i) + 0.5) / float64(k))
+		th := float64(i) * goldenAng
+		off := tu.Scale(rr * math.Cos(th) * s.LightRadius).Add(tv.Scale(rr * math.Sin(th) * s.LightRadius))
+		target := s.Light.Add(off)
+		toL := target.Sub(sorig)
+		d := toL.Len()
+		if !s.anyHit(Ray{Origin: sorig, Dir: toL.Scale(1 / d)}, shadowEps, d-2*shadowEps) {
+			vis++
+		}
+	}
+	return vis / float64(k)
+}
+
+// ao returns an ambient-occlusion factor in [0,1] (1 = open) from AOSamples
+// cosine-weighted hemisphere rays.
+func (s *Scene) ao(p, n Vec3) float64 {
+	if s.AOSamples <= 0 || s.AORadius <= 0 {
+		return 1
+	}
+	tu, tv := basisAround(n)
+	orig := p.Add(n.Scale(shadowEps))
+	open := 0.0
+	k := s.AOSamples
+	for i := 0; i < k; i++ {
+		rr := math.Sqrt((float64(i) + 0.5) / float64(k))
+		th := float64(i) * goldenAng
+		x, y := rr*math.Cos(th), rr*math.Sin(th)
+		z := math.Sqrt(math.Max(0, 1-rr*rr))
+		dir := tu.Scale(x).Add(tv.Scale(y)).Add(n.Scale(z)).Norm()
+		if !s.anyHit(Ray{Origin: orig, Dir: dir}, shadowEps, s.AORadius) {
+			open++
+		}
+	}
+	return open / float64(k)
 }
 
 func (s *Scene) shade(r Ray, depth int) Vec3 {
@@ -312,7 +358,13 @@ func (s *Scene) shade(r Ray, depth int) Vec3 {
 	if li == 0 {
 		li = 1
 	}
-	col := h.Mat.Color.Scale(s.Ambient)
+
+	// Dielectric (glass): mix Fresnel reflection and refraction.
+	if depth > 0 && h.Mat.Glass > 0 {
+		return s.dielectric(r, h, depth)
+	}
+
+	col := h.Mat.Color.Scale(s.Ambient * s.ao(h.P, h.N)).Add(h.Mat.Emit)
 
 	toL := s.Light.Sub(h.P)
 	dist := toL.Len()
@@ -320,10 +372,18 @@ func (s *Scene) shade(r Ray, depth int) Vec3 {
 		L := toL.Scale(1 / dist)
 		diff := h.N.Dot(L)
 		if diff > 0 {
-			sorig := h.P.Add(h.N.Scale(shadowEps))
-			if _, blocked := s.closest(Ray{Origin: sorig, Dir: L}, shadowEps, dist-2*shadowEps); !blocked {
-				atten := li / (1 + s.AttenK*dist)
+			if vis := s.visibility(h.P, h.N); vis > 0 {
+				atten := vis * li / (1 + s.AttenK*dist)
 				col = col.Add(h.Mat.Color.Scale((1 - s.Ambient) * diff * atten))
+				if h.Mat.Spec > 0 {
+					shine := h.Mat.Shine
+					if shine <= 0 {
+						shine = 32
+					}
+					half := L.Sub(r.Dir).Norm() // L + viewDir, viewDir = -r.Dir
+					spec := math.Pow(math.Max(0, h.N.Dot(half)), shine)
+					col = col.Add(Vec3{1, 1, 1}.Scale(h.Mat.Spec * spec * atten))
+				}
 			}
 		}
 	}
@@ -336,8 +396,34 @@ func (s *Scene) shade(r Ray, depth int) Vec3 {
 	return col
 }
 
-// Trace returns the colour seen along a single ray (channels 0..1, unclamped
-// callers should clamp). Exposed for testing and custom pipelines.
+// dielectric shades a glass surface: a Fresnel-weighted mix of the reflected and
+// refracted rays (Schlick approximation), with total internal reflection handled.
+func (s *Scene) dielectric(r Ray, h Hit, depth int) Vec3 {
+	n := h.N // faces the ray
+	ior := h.Mat.Glass
+	eta := 1 / ior
+	if !h.Front {
+		eta = ior
+	}
+	cosI := math.Min(1, math.Max(0, -r.Dir.Dot(n)))
+
+	reflDir := r.Dir.Reflect(n).Norm()
+	refl := s.shade(Ray{Origin: h.P.Add(n.Scale(shadowEps)), Dir: reflDir}, depth-1)
+
+	k := 1 - eta*eta*(1-cosI*cosI)
+	if k < 0 {
+		return refl.Add(h.Mat.Emit) // total internal reflection
+	}
+	refrDir := r.Dir.Scale(eta).Add(n.Scale(eta*cosI - math.Sqrt(k))).Norm()
+	refr := s.shade(Ray{Origin: h.P.Sub(n.Scale(shadowEps)), Dir: refrDir}, depth-1)
+
+	r0 := (1 - ior) / (1 + ior)
+	r0 *= r0
+	fr := r0 + (1-r0)*math.Pow(1-cosI, 5)
+	return refl.Scale(fr).Add(refr.Scale(1 - fr)).Add(h.Mat.Emit)
+}
+
+// Trace returns the (clamped) colour seen along a single ray. Exposed for tests.
 func (s *Scene) Trace(r Ray) Vec3 { return clampVec(s.shade(r, s.MaxBounce)) }
 
 // ---------- render ----------
@@ -411,9 +497,14 @@ func clamp01(x float64) float64 {
 
 func clampVec(v Vec3) Vec3 { return Vec3{clamp01(v.X), clamp01(v.Y), clamp01(v.Z)} }
 
-// toRGBA clamps and applies an approximate gamma (2.0) for pleasant midtones.
+// aces is the Narkowicz ACES filmic tone-mapping curve (compresses highlights).
+func aces(x float64) float64 {
+	const a, b, c, d, e = 2.51, 0.03, 2.43, 0.59, 0.14
+	return clamp01((x * (a*x + b)) / (x*(c*x+d) + e))
+}
+
+// toRGBA tone-maps (ACES) and applies an approximate gamma (2.0).
 func toRGBA(v Vec3) color.RGBA {
-	v = clampVec(v)
-	g := func(x float64) uint8 { return uint8(math.Sqrt(x)*255 + 0.5) }
+	g := func(x float64) uint8 { return uint8(math.Sqrt(aces(x))*255 + 0.5) }
 	return color.RGBA{R: g(v.X), G: g(v.Y), B: g(v.Z), A: 255}
 }
