@@ -57,7 +57,10 @@ adopting, and it was reimplemented better).
 - **AI integration** (`pkg/raydir`, `internal/raysource`): the ray world as a
   tvcp camera (`tvcp call --ray`), the brain driving the camera/world
   (`game:ray`), and the brain **authoring a full material scene from a prompt**
-  (`game:rayscene`, formalised in the tvcp-ai/1 protocol + adapters).
+  (`game:rayscene`, formalised in the tvcp-ai/1 protocol + adapters). The scene
+  graph now includes **box geometry** (`kind:"box"` with half-extents `s`, 12
+  triangles), so the director can build recognizable structures — walls, towers,
+  pedestals — not just spheres.
 - **The experience — walk a world the AI dreams up** (`cmd/rayexplore`,
   `pkg/raydir/fly.go`): a free-fly camera through a `World` the brain authors and
   **extends on the fly** — walk forward and new regions are composed ahead of you,

@@ -64,18 +64,9 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 	w.chunks = len(w.seen)
 	n := 0
 	for _, o := range spec.Objects {
-		if o.Kind == "plane" {
-			continue // a single shared floor for the whole world
-		}
-		rad := o.R
-		if rad <= 0 {
-			rad = 1
-		}
-		w.props = append(w.props, raytrace.Sphere{
-			Center: raytrace.Vec3{X: o.X + at.X, Y: o.Y + at.Y, Z: o.Z + at.Z},
-			Radius: rad, Mat: objMaterial(o),
-		})
-		n++
+		objs := objectsFromSpec(o, at, false) // one shared floor: planes are skipped
+		w.props = append(w.props, objs...)
+		n += len(objs)
 	}
 	return n
 }

@@ -16,15 +16,18 @@ type SceneSpec struct {
 	SkyBot  [3]float64 `json:"skyBottom"`
 }
 
-// ObjSpec is one object in a SceneSpec: a sphere (default) or an infinite plane,
-// with a material from the renderer's full set (colour, emission, glass index,
-// metalness, mirror reflectance, roughness).
+// ObjSpec is one object in a SceneSpec: a sphere (default), a box, or an infinite
+// plane, with a material from the renderer's full set (colour, emission, glass
+// index, metalness, mirror reflectance, roughness). For a box, S is the
+// half-extents (falling back to a cube of half-size R); for a sphere, R is the
+// radius.
 type ObjSpec struct {
 	Kind    string     `json:"kind"`
 	X       float64    `json:"x"`
 	Y       float64    `json:"y"`
 	Z       float64    `json:"z"`
 	R       float64    `json:"r"`
+	S       [3]float64 `json:"s"` // box half-extents (x,y,z)
 	Color   [3]float64 `json:"color"`
 	Emit    [3]float64 `json:"emit"`
 	Glass   float64    `json:"glass"`
@@ -61,6 +64,22 @@ func refRayScene(req Request) Response {
 		spec.SkyTop = [3]float64{0.02, 0.03, 0.06}
 		spec.SkyBot = [3]float64{0.04, 0.04, 0.07}
 	}
+	if hasAny(p.Prompt, "box", "tower", "wall", "build", "pillar", "monolith") {
+		// a recognizable structure, not just spheres.
+		spec.Objects = append(spec.Objects, ObjSpec{
+			Kind: "box", X: 0, Y: 1.5, Z: -1, S: [3]float64{0.8, 1.5, 0.8},
+			Color: [3]float64{0.6, 0.6, 0.65}, Rough: 0.4,
+		})
+	}
 	data, _ := json.Marshal(spec)
 	return Response{Protocol: Protocol, Kind: "move", Ray: data, Reasoning: "reference scene author"}
+}
+
+func hasAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
