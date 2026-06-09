@@ -8,10 +8,13 @@
 // otherwise the built-in reference brain composes scenes offline.
 //
 //	go run ./cmd/rayexplore                         # walk a reference-authored world
+//	go run ./cmd/rayexplore -path -grade            # path-traced, cinematically graded
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
 //
 // Controls (type, then Enter; combine letters): w/s walk, a/d strafe, q/e turn,
-// r/f look, g grow a new region now, p toggle path tracer, x quit.
+// r/f look, g grow a new region now, t step time of day, p toggle path tracer,
+// x quit. In path mode, press Enter (no movement) to let the view refine (it
+// converges to a clean render while you hold still); -grade adds bloom/vignette/AgX.
 package main
 
 import (
@@ -34,6 +37,7 @@ func main() {
 	prompt := flag.String("prompt", "a calm world of spheres", "seed prompt for the AI director")
 	modeFlag := flag.String("mode", "auto", "terminal render mode (auto|halfblock|sextant|braille|ascii|...)")
 	pathT := flag.Bool("path", false, "use the path tracer (prettier, slower) instead of the raster preview")
+	grade := flag.Bool("grade", false, "post: bloom + vignette + AgX tone map for a cinematic frame")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -69,6 +73,9 @@ func main() {
 	world.SetTime(dayT)
 	scene := world.Scene()
 	pathOpt := raytrace.PathOptions{Samples: 4, MaxDepth: 5, Seed: 1, NEE: true, MIS: true, Sobol: true}
+	// progressive refinement: stand still (press Enter) and the path-traced view
+	// keeps sharpening toward a clean render; moving or growing restarts it.
+	refiner := raydir.NewRefiner(pxW, pxH, 4, 256, pathOpt)
 
 	// grow authors a new region ahead and rebuilds the scene.
 	grow := func() {
@@ -81,20 +88,26 @@ func main() {
 		}
 		_ = n
 		scene = world.Scene()
+		refiner.Reset() // the scene changed
 	}
 
 	render := func() {
 		c := cam.Camera()
 		var im image.Image
+		spp := 1
 		if *pathT {
-			im = raytrace.PathRender(scene, c, pxW, pxH, pathOpt)
+			im = refiner.Frame(scene, c)
+			spp = refiner.Samples()
 		} else {
 			im = raytrace.Render(scene, c, pxW, pxH, raytrace.Options{Samples: 1})
 		}
+		if *grade {
+			im = raytrace.Grade(im, raytrace.GradeOptions{BloomThresh: 1.0, BloomStrength: 0.4, Vignette: 0.35, AgX: true})
+		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
 		mins := int((dayT - math.Floor(dayT)) * 24 * 60)
-		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f  g=grow t=time p=path x=quit] ",
-			who, world.Chunks(), world.Props(), mins/60, mins%60, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
+		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f  g=grow t=time p=path Enter=refine x=quit] ",
+			who, world.Chunks(), world.Props(), mins/60, mins%60, spp, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
 	}
 
 	fmt.Printf("rayexplore — walking a world authored by %s. Each region is shipped as a tiny scene description and ray-traced locally.\n", who)
@@ -126,8 +139,10 @@ func main() {
 				dayT += 0.06 // step the day forward
 				world.SetTime(dayT)
 				scene = world.Scene()
+				refiner.Reset()
 			case 'p':
 				*pathT = !*pathT
+				refiner.Reset()
 			case 'x':
 				return
 			}

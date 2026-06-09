@@ -30,6 +30,7 @@ type ObjSpec struct {
 	Kind    string     `json:"kind,omitempty"`
 	Name    string     `json:"name,omitempty"` // for kind "mesh"/"fractal": the named model/form
 	Tex     string     `json:"tex,omitempty"`  // optional named surface texture
+	Bump    string     `json:"bump,omitempty"` // optional named bump/normal map (ripple, waves, bumps)
 	X       float64    `json:"x,omitempty"`
 	Y       float64    `json:"y,omitempty"`
 	Z       float64    `json:"z,omitempty"`

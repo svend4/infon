@@ -41,6 +41,27 @@ func TextureFor(name string) raytrace.Texture {
 	return texReg[strings.ToLower(name)]
 }
 
+var bumpReg = map[string]raytrace.Texture{}
+
+// RegisterBump adds (or replaces) a named bump/normal map (assigned to
+// Material.Bump). Like textures, bumps are procedural and reconstructed from a
+// name — surface detail for nothing on the wire.
+func RegisterBump(name string, t raytrace.Texture) {
+	if t == nil {
+		return
+	}
+	texMu.Lock()
+	bumpReg[strings.ToLower(name)] = t
+	texMu.Unlock()
+}
+
+// BumpFor returns the named bump map, or nil if unknown.
+func BumpFor(name string) raytrace.Texture {
+	texMu.RLock()
+	defer texMu.RUnlock()
+	return bumpReg[strings.ToLower(name)]
+}
+
 // LoadTextureDir registers every .png/.jpg/.jpeg in dir under its base name as a
 // UV-sampled (wrapping) image texture, so custom textures need no code change.
 func LoadTextureDir(dir string) (int, error) {
@@ -85,4 +106,8 @@ func init() {
 	RegisterTexture("clouds", raytrace.NoiseTex{
 		A: raytrace.Vec3{X: 0.45, Y: 0.55, Z: 0.8}, B: raytrace.Vec3{X: 1, Y: 1, Z: 1}, Scale: 1.6, Octaves: 6,
 	})
+	// procedural bump/normal maps (Material.Bump)
+	RegisterBump("ripple", raytrace.WaveNormalTex{Freq: 6, Amp: 0.25})
+	RegisterBump("waves", raytrace.WaveNormalTex{Freq: 4, Amp: 0.3})
+	RegisterBump("bumps", raytrace.WaveNormalTex{Freq: 14, Amp: 0.18})
 }

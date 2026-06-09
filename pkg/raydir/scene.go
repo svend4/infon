@@ -30,6 +30,11 @@ func objMaterial(o brain.ObjSpec) raytrace.Material {
 			m.Tex = t
 		}
 	}
+	if o.Bump != "" { // a named bump/normal map adds surface relief
+		if b := BumpFor(o.Bump); b != nil {
+			m.Bump = b
+		}
+	}
 	return m
 }
 
@@ -121,7 +126,8 @@ func specScale(o brain.ObjSpec) float64 {
 func specHasMaterial(o brain.ObjSpec) bool {
 	return o.Color != [3]float64{} || o.Emit != [3]float64{} ||
 		o.Glass != 0 || o.Metal != 0 || o.Reflect != 0 || o.Rough != 0 ||
-		(o.Tex != "" && TextureFor(o.Tex) != nil)
+		(o.Tex != "" && TextureFor(o.Tex) != nil) ||
+		(o.Bump != "" && BumpFor(o.Bump) != nil)
 }
 
 // maxRegionObjects caps how many objects one authored scene may contribute, so a

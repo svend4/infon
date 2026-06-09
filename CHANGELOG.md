@@ -88,7 +88,15 @@ adopting, and it was reimplemented better).
   (`.png`/`.jpg`) for real image textures. Works on any surface (the OBJ loader
   already parses `vt`, so loaded meshes carry UVs); on a `mesh` the texture rides
   the same per-instance override. Unknown texture names are ignored (the surface
-  stays flat-coloured, never dropped).
+  stays flat-coloured, never dropped). A `bump` field names a procedural normal map
+  (`ripple`, `waves`, `bumps`) for surface relief without geometry.
+- **A prettier walk** (`pkg/raydir/refine.go`, `pkg/raytrace/postprocess.go`,
+  `cmd/rayexplore`): progressive refinement (`Refiner`) folds a small batch of
+  samples into a running average each frame and restarts when the camera moves — so
+  the walk stays responsive while moving and converges to a clean render the moment
+  you hold still (press Enter to refine; `spp` shown in the HUD). A post-grade
+  pipeline (`Grade`) adds a vignette and an **AgX** filmic tone curve alongside the
+  existing auto-exposure and bloom (`-grade`), for a cinematic frame.
 - **Ray-marched art — fractals, mandalas, surreal forms** (`pkg/raytrace/sdf.go`,
   `pkg/raydir`): a sphere-traced signed-distance object (`Marched`) renders shapes
   triangles can't — **Mandelbulb**, **Menger sponge**, **Sierpinski** (fractals),
