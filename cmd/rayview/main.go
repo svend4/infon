@@ -35,7 +35,7 @@ func main() {
 	denoise := 0
 	mode := terminal.DetectCapability().BestBlitMode()
 	dr := terminal.NewDiffRenderer()
-	pathOpt := raytrace.PathOptions{Samples: 6, MaxDepth: 5, Seed: 1, MIS: true}
+	pathOpt := raytrace.PathOptions{Samples: 6, MaxDepth: 5, Seed: 1, MIS: true, Sobol: true}
 	var acc *raytrace.Accumulator
 
 	camera := func() raytrace.Camera {

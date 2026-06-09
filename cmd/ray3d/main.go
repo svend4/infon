@@ -69,7 +69,7 @@ type opts struct {
 func renderImage(scene *raytrace.Scene, cam raytrace.Camera, w, h int, o opts) image.Image {
 	var img image.Image
 	if o.path {
-		img = raytrace.PathRender(scene, cam, w, h, raytrace.PathOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1, NEE: o.nee, MIS: o.mis})
+		img = raytrace.PathRender(scene, cam, w, h, raytrace.PathOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1, NEE: o.nee, MIS: o.mis, Sobol: true})
 	} else {
 		img = raytrace.Render(scene, cam, w, h, raytrace.Options{Samples: o.spp})
 	}

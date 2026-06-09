@@ -18,14 +18,36 @@ import (
 	"sync"
 )
 
-// rng is a tiny, fast, deterministic xorshift64* generator.
-type rng struct{ s uint64 }
+// rng is a tiny, fast, deterministic xorshift64* generator. When qmc is set it
+// also serves Owen-scrambled Sobol (0,2) samples for the primary 2-D domains
+// (pixel AA, lens) via qmc2; everything else still draws from the PRNG.
+type rng struct {
+	s     uint64 // xorshift state
+	qmc   bool   // low-discrepancy primary sampling enabled
+	qidx  uint32 // sample index within the pixel (the Sobol point index)
+	qseed uint32 // per-pixel scramble base (decorrelates pixels)
+}
 
 func newRNG(seed uint64) *rng {
 	if seed == 0 {
 		seed = 0x9e3779b97f4a7c15
 	}
 	return &rng{s: seed}
+}
+
+// qmc2 returns the current sample's 2-D point for the given padding group
+// (0 = pixel AA, 1 = lens). With qmc off it falls back to two PRNG draws, so the
+// stream is byte-for-byte the legacy behaviour. Each group gets an independent
+// Owen scramble, so groups are decorrelated but each is individually stratified.
+func (r *rng) qmc2(group uint32) (float64, float64) {
+	if !r.qmc {
+		return r.f(), r.f()
+	}
+	s0 := hashU32(r.qseed + group*0x9e3779b9)
+	s1 := hashU32(r.qseed + group*0x9e3779b9 + 1)
+	a := owenScramble(sobolDim0(r.qidx), s0)
+	b := owenScramble(sobolDim1(r.qidx), s1)
+	return float64(a) * sobolInv, float64(b) * sobolInv
 }
 
 func (r *rng) next() uint64 {
@@ -91,6 +113,7 @@ type PathOptions struct {
 	Seed     uint64 // base seed for reproducibility
 	NEE      bool   // next-event estimation: sample emissive spheres directly
 	MIS      bool   // combine light- and BSDF-sampling with the power heuristic
+	Sobol    bool   // Owen-scrambled Sobol (0,2) sampling of pixel AA + lens (less noise per spp)
 }
 
 func (o PathOptions) mode() int {
@@ -420,9 +443,10 @@ func (b camBasis) lensRayAt(px, py, time float64, cam Camera, rg *rng) Ray {
 		}
 	}
 	focal := base.Origin.Add(base.Dir.Scale(focus / base.Dir.Dot(b.forward)))
-	// sample a disk on the lens
-	rr := cam.Aperture * math.Sqrt(rg.f())
-	th := 2 * math.Pi * rg.f()
+	// sample a disk on the lens (group 1; stratified under Sobol)
+	lu, lv := rg.qmc2(1)
+	rr := cam.Aperture * math.Sqrt(lu)
+	th := 2 * math.Pi * lv
 	off := b.right.Scale(rr * math.Cos(th)).Add(b.up.Scale(rr * math.Sin(th)))
 	orig := base.Origin.Add(off)
 	return Ray{Origin: orig, Dir: focal.Sub(orig).Norm(), Time: base.Time}
@@ -478,10 +502,14 @@ func pathSumRays(s *Scene, pxW, pxH int, opt PathOptions, gen func(u, v float64,
 					// deterministic per-pixel seed (splitmix-style mix).
 					seed := opt.Seed*0x9e3779b97f4a7c15 + uint64(y)*0x100000001b3 + uint64(x)*0x85ebca6b + 1
 					rg := newRNG(seed)
+					rg.qmc = opt.Sobol
+					rg.qseed = uint32(seed) ^ uint32(seed>>32)
 					var acc Vec3
 					for i := 0; i < spp; i++ {
-						u := float64(x) + rg.f()
-						v := float64(y) + rg.f()
+						rg.qidx = uint32(i)
+						du, dv := rg.qmc2(0) // stratified pixel anti-aliasing
+						u := float64(x) + du
+						v := float64(y) + dv
 						acc = acc.Add(s.radiance(gen(u, v, rg), depth, rg, mode))
 					}
 					buf[y*pxW+x] = acc
