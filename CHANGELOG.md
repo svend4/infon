@@ -186,6 +186,14 @@ adopting, and it was reimplemented better).
   re-authoring, and a world becomes something you can copy and share. Saved
   atomically (temp + rename), only when the world grows; reloaded regions reach
   guests through the existing ack gap-fill. Round-trip and rebuild are tested.
+- **Record & replay a session** (`cmd/raymeet -record`, `cmd/rayplay`,
+  `pkg/raydir/replay.go`): the host can record the whole shared session — the
+  regions that appear, the walkers' poses, the chat and the time of day, each
+  stamped with when it happened — to a tiny file (a 6 s walk is ~3 KB: meaning, not
+  pixels). `rayplay` replays it in the terminal from a participant's point of view,
+  reconstructing the world, avatars and chat over time with a `Player` (with a
+  `-speed` control). Round-trip and reconstruction are tested; verified live:
+  record a session, replay it, the placed crystal and chat reappear.
 - **Hardening against a live model** (`pkg/raydir`): the director's output is
   sanitised so a sloppy or adversarial brain can't crash or corrupt the world —
   unknown object kinds and non-finite coordinates are dropped, sizes/emission/

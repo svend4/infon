@@ -60,6 +60,7 @@ func main() {
 	cols := flag.Int("w", 80, "width in cells")
 	rows := flag.Int("h", 36, "height in cells")
 	worldFile := flag.String("world", "", "host: persist the authored world to this file (load on start, save as it grows)")
+	recordFile := flag.String("record", "", "host: record the session (regions, poses, chat, time) to a file for rayplay")
 	flag.Parse()
 	args := flag.Args()
 	pxW, pxH := *cols*2, *rows*4
@@ -94,6 +95,19 @@ func main() {
 	chat := raydir.NewChatLog(6)
 	var chatMu sync.Mutex
 	csync := raydir.NewChatSync(selfID, *host) // reliable chat: ids + dedup + re-broadcast
+
+	// optional session recorder (host): timestamp events from here for rayplay.
+	var rec *raydir.Recorder
+	sessionStart := time.Now()
+	ms := func() uint32 { return uint32(time.Since(sessionStart).Milliseconds()) }
+	if *recordFile != "" && *host {
+		rec = raydir.NewRecorder()
+		defer func() {
+			if err := rec.Save(*recordFile); err == nil {
+				fmt.Println("recorded session to", *recordFile)
+			}
+		}()
+	}
 
 	// director's brain (host only): reference offline, or a live endpoint via BRAIN_URL.
 	var b brain.Brain = brain.Local{}
@@ -177,6 +191,9 @@ func main() {
 		chatMu.Lock()
 		chat.Add(name, msg)
 		chatMu.Unlock()
+		if rec != nil {
+			rec.Chat(ms(), []raydir.ChatMsg{m})
+		}
 	}
 	if !*host {
 		sendTo(hubAddr, network.PacketTypeHandshake, []byte("raymeet")) // announce to the hub
@@ -244,6 +261,9 @@ func main() {
 				break
 			}
 			regions = append(regions, reg)
+			if rec != nil {
+				rec.Region(ms(), reg)
+			}
 			for _, a := range addrs {
 				sendTo(a, network.PacketTypeScreen, reg.Encode())
 			}
@@ -261,6 +281,9 @@ func main() {
 		reg := raydir.Region{Index: len(regions), At: at, Spec: spec}
 		regions = append(regions, reg)
 		world.AddRegion(reg)
+		if rec != nil {
+			rec.Region(ms(), reg)
+		}
 		if *worldFile != "" {
 			_ = raydir.SaveWorld(*worldFile, regions)
 		}
@@ -357,6 +380,9 @@ func main() {
 					}
 					if len(fresh) > 0 {
 						relayToOthers(addr, network.PacketTypeTextChat, raydir.EncodeChatMsgs(fresh))
+						if rec != nil {
+							rec.Chat(ms(), fresh)
+						}
 					}
 				}
 			case network.PacketTypeAudio:
@@ -498,6 +524,10 @@ func main() {
 				front = math.Max(front, p.Pos.Z)
 			}
 			setBytes := poses.Encode()
+			if rec != nil && tick%4 == 0 { // record the timeline (throttled) for replay
+				rec.Poses(ms(), poses)
+				rec.Env(ms(), dayTime)
+			}
 			addrs := make([]*net.UDPAddr, 0, len(peers))
 			for _, a := range peers {
 				addrs = append(addrs, a)

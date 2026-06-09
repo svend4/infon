@@ -110,6 +110,9 @@ it idempotently and ack what they have, so loss and late joins self-heal.
   softer from behind) — mono presence, not stereo panning.
 - The world is co-created: besides the director, any walker can `/place` objects,
   which travel as ordinary regions (broadcast, ack-healed, persisted).
+- A session can be **recorded and replayed**: `raymeet -host -record walk.rrec`
+  saves the timeline (regions, poses, chat, time) to a tiny file; `rayplay
+  walk.rrec` re-watches the walk from a participant's view.
 - Reliability is ack-based for regions (the state that must persist) and id-based
   for chat (`ChatSync`: unique ids, dedup, hub re-broadcast — so a dropped line
   self-heals without double-display); poses stay loss-tolerant (replaced next
