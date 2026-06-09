@@ -64,7 +64,10 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 	w.seen[index] = true
 	w.chunks = len(w.seen)
 	n := 0
-	for _, o := range spec.Objects {
+	for i, o := range spec.Objects {
+		if i >= maxRegionObjects { // cap so a runaway model can't flood the world
+			break
+		}
 		objs := objectsFromSpec(o, at, false) // one shared floor: planes are skipped
 		w.props = append(w.props, objs...)
 		n += len(objs)

@@ -100,6 +100,12 @@ adopting, and it was reimplemented better).
   that guest, instead of blasting everything to everyone. New regions are still
   pushed immediately; gaps (loss or late join) self-heal. Verified live: a guest
   that joins after authoring reaches the full world purely via ack gap-fill.
+- **Hardening against a live model** (`pkg/raydir`): the director's output is
+  sanitised so a sloppy or adversarial brain can't crash or corrupt the world —
+  unknown object kinds and non-finite coordinates are dropped, sizes/emission/
+  material weights are clamped, the object count is capped, and broken JSON or an
+  empty/unrenderable response falls back to a safe region (so the world never
+  stalls). Ready to drive with a real `BRAIN_URL` model.
 - **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
   exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
 
