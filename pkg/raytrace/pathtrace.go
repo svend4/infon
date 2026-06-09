@@ -22,10 +22,11 @@ import (
 // also serves Owen-scrambled Sobol (0,2) samples for the primary 2-D domains
 // (pixel AA, lens) via qmc2; everything else still draws from the PRNG.
 type rng struct {
-	s     uint64 // xorshift state
-	qmc   bool   // low-discrepancy primary sampling enabled
-	qidx  uint32 // sample index within the pixel (the Sobol point index)
-	qseed uint32 // per-pixel scramble base (decorrelates pixels)
+	s     uint64    // xorshift state
+	qmc   bool      // low-discrepancy primary sampling enabled
+	qidx  uint32    // sample index within the pixel (the Sobol point index)
+	qseed uint32    // per-pixel scramble base (decorrelates pixels)
+	pss   *pssState // when set, f()/next() draw from mutatable primary samples (PSSMLT)
 }
 
 func newRNG(seed uint64) *rng {
@@ -51,6 +52,9 @@ func (r *rng) qmc2(group uint32) (float64, float64) {
 }
 
 func (r *rng) next() uint64 {
+	if r.pss != nil {
+		return uint64(r.pss.next() * 4294967296.0)
+	}
 	r.s ^= r.s << 13
 	r.s ^= r.s >> 7
 	r.s ^= r.s << 17
@@ -58,7 +62,12 @@ func (r *rng) next() uint64 {
 }
 
 // f returns a float64 in [0,1).
-func (r *rng) f() float64 { return float64(r.next()>>11) / float64(uint64(1)<<53) }
+func (r *rng) f() float64 {
+	if r.pss != nil {
+		return r.pss.next()
+	}
+	return float64(r.next()>>11) / float64(uint64(1)<<53)
+}
 
 // unit returns a uniformly random point on the unit sphere.
 func (r *rng) unit() Vec3 {
