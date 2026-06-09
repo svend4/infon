@@ -131,9 +131,10 @@ func sphereOverlaps(r Ray, center Vec3, radius, tMin, tMax float64) bool {
 // barycentrically interpolated (smooth shading); otherwise the flat face normal
 // is used.
 type Triangle struct {
-	A, B, C    Vec3
-	Na, Nb, Nc Vec3
-	Mat        Material
+	A, B, C       Vec3
+	Na, Nb, Nc    Vec3       // optional vertex normals (smooth shading)
+	UVa, UVb, UVc [2]float64 // optional texture coordinates
+	Mat           Material
 }
 
 func (tr Triangle) smooth() bool {
@@ -164,14 +165,17 @@ func (tr Triangle) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 	if t <= tMin || t > tMax {
 		return Hit{}, false
 	}
+	w0 := 1 - u - v
 	var ng Vec3
 	if tr.smooth() {
-		ng = tr.Na.Scale(1 - u - v).Add(tr.Nb.Scale(u)).Add(tr.Nc.Scale(v)).Norm()
+		ng = tr.Na.Scale(w0).Add(tr.Nb.Scale(u)).Add(tr.Nc.Scale(v)).Norm()
 	} else {
 		ng = e1.Cross(e2).Norm()
 	}
+	hu := w0*tr.UVa[0] + u*tr.UVb[0] + v*tr.UVc[0]
+	hv := w0*tr.UVa[1] + u*tr.UVb[1] + v*tr.UVc[1]
 	n, front := orient(ng, r.Dir)
-	return Hit{T: t, P: r.At(t), N: n, Front: front, Mat: tr.Mat}, true
+	return Hit{T: t, P: r.At(t), N: n, U: hu, V: hv, Front: front, Mat: tr.Mat}, true
 }
 
 // ---------- plane (checkerboard floor) ----------

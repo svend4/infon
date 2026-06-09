@@ -59,3 +59,31 @@ func TestLoadOBJFaceFormats(t *testing.T) {
 		t.Fatalf("tris = %d, want 1", len(m.Tris))
 	}
 }
+
+func TestTriangleUVInterpolation(t *testing.T) {
+	tr := Triangle{
+		A: Vec3{-1, -1, 5}, B: Vec3{1, -1, 5}, C: Vec3{0, 1, 5},
+		UVa: [2]float64{0, 0}, UVb: [2]float64{1, 0}, UVc: [2]float64{0, 1},
+	}
+	h, ok := tr.Intersect(Ray{Origin: Vec3{0, -0.3333, 0}, Dir: Vec3{0, 0, 1}}, 1e-4, 1e9)
+	if !ok {
+		t.Fatal("ray should hit the triangle near its centroid")
+	}
+	if h.U < 0.28 || h.U > 0.39 || h.V < 0.28 || h.V > 0.39 {
+		t.Errorf("centroid UV = (%.3f,%.3f), want ~(0.33,0.33)", h.U, h.V)
+	}
+}
+
+func TestLoadOBJTextureCoords(t *testing.T) {
+	obj := "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 0.5\nf 1/1 2/2 3/3\n"
+	m, err := LoadOBJ(strings.NewReader(obj), Material{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Tris) != 1 {
+		t.Fatalf("tris = %d, want 1", len(m.Tris))
+	}
+	if m.Tris[0].UVb != ([2]float64{1, 0}) || m.Tris[0].UVc != ([2]float64{0, 0.5}) {
+		t.Errorf("UVs not parsed: %+v %+v", m.Tris[0].UVb, m.Tris[0].UVc)
+	}
+}
