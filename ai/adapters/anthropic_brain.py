@@ -41,6 +41,8 @@ SYS = ("You are a game and art partner speaking the tvcp-ai/1 format. Reply with
        "kind=move with game=world -> reply a JSON object with integer keys fold, rise, "
        "spin, camera, each -1, 0 or 1 (fold opens the body, rise raises the terrain, spin orbits "
        "the scene, camera pans); state gives fold_pct, relief_pct, camera_deg to react to. "
+       "kind=move with game=ray -> reply a JSON object with key ray = a list of {id,dx,dy,dz}, "
+       "moving each sphere in state.spheres (by id); dx,dy,dz each -1,0,1. "
        "kind=move with game=rpg -> reply a JSON object with key rpg = a list of {id,dx,dy}, where "
        "for each of your units (state.units, by id) dx,dy are -1,0,1 stepping toward the nearest "
        "enemy (state.enemies); combat is automatic on contact.")
@@ -184,6 +186,14 @@ def decide(req):
                                      "spin": _clip(d.get("spin", 0)), "camera": _clip(d.get("camera", 0))}
                     resp["reasoning"] = f"world:{MODEL}"
                     return resp
+                if req.get("game") == "ray":
+                    mv = m.get("ray", m)
+                    if isinstance(mv, list):
+                        resp["ray"] = mv
+                        resp["reasoning"] = "ray"
+                        return resp
+                    last = "no ray moves"
+                    continue
                 if req.get("game") == "rpg":
                     mv = m.get("rpg", m)
                     if isinstance(mv, list):
@@ -243,6 +253,8 @@ def decide(req):
             resp["world"] = {"fold": 1, "rise": 1, "spin": 1, "camera": 1}
         elif req.get("game") == "rpg":
             resp["rpg"] = []
+        elif req.get("game") == "ray":
+            resp["ray"] = []
         elif req.get("game") == "tangram":
             st = req.get("state") or {}
             resp["tangram"] = {"h": st.get("h", 1), "w": st.get("w", 1), "pieces": []}

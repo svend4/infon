@@ -57,3 +57,16 @@ func TestChoreographProducesAnim(t *testing.T) {
 		t.Error("spheres should have moved across the animation")
 	}
 }
+
+func TestRaySphereDirectorGathers(t *testing.T) {
+	d := RaySphereDirector{B: brain.Local{}}
+	sph := startSpheres() // two spheres at x = -1.5 and x = +1.5
+	d0 := sph[0].Center.Sub(sph[1].Center).Len()
+	for i := 0; i < 10; i++ {
+		sph = d.NextWorld(sph)
+	}
+	d1 := sph[0].Center.Sub(sph[1].Center).Len()
+	if d1 >= d0 {
+		t.Errorf("game:ray reference should gather the spheres: %.2f -> %.2f", d0, d1)
+	}
+}

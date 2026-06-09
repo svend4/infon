@@ -96,6 +96,7 @@ it filled in by `HTTPBrain.Decide`; a server always stamps it on the way out.
   "tangram":   { ... },   // move/tangram: a solution figure
   "world":     { ... },   // move/world: next-tick directives
   "rpg":       [ ... ],    // move/rpg: per-unit moves
+  "ray":       [ ... ],    // move/ray: per-sphere 3-D scene moves
   "cards":     ["★","♥"],  // react
   "reasoning": "optional human-readable rationale",
   "error":     ""          // non-empty iff the brain failed the request
@@ -122,7 +123,7 @@ The `move` object covers every board/word/card game:
 
 | Kind | Response payload | Validated by §8 as |
 |---|---|---|
-| `move` | `move` / `tangram` / `world` / `rpg` | legal for the named game |
+| `move` | `move` / `tangram` / `world` / `rpg` / `ray` | legal for the named game |
 | `draw` | `scene` | a `scene.Scene` with ≥1 op |
 | `sketch` | `sketch` | a `sketch.Sketch` with ≥1 shape |
 | `image` | `image` | a `pseudo.Spec` that renders to a non-empty frame |
@@ -140,6 +141,7 @@ The `move` object covers every board/word/card game:
 | `tangram` | a `tangram.PuzzleState` | `tangram` (placements) |
 | `world` | scene brief (`fold_pct`, `relief_pct`, …) | `world` (4 directives ∈ `{-1,0,1}`) |
 | `rpg` | `you`, `w`, `h`, `units[]`, `enemies[]` | `rpg` (`[]{id,dx,dy}`) |
+| `ray` | `spheres[]{id,x,y,z}` | `ray` (`[]{id,dx,dy,dz}`, each ∈ `{-1,0,1}`) |
 
 `state` is opaque to the transport: a brain parses only the games it advertises.
 
@@ -157,8 +159,8 @@ non-empty frame, so new renderers can improve fidelity without breaking the wire
 ## 8. Conformance
 
 A brain is **tvcp-ai conformant** iff it correctly answers every case in the
-standard battery (`brain.ConformanceBattery`, 13 cases spanning all five kinds
-and all six games). `brain.CheckResponse` is the normative validator; it checks,
+standard battery (`brain.ConformanceBattery`, 14 cases spanning all five kinds
+and all seven games). `brain.CheckResponse` is the normative validator; it checks,
 per kind/game: a move is legal, a wordle guess is 5 letters, a tangram solution
 is overlap-free with intersection-over-union ≥ 0.5, a draw/sketch carries shapes,
 an image spec renders. Run the battery against any endpoint with `cmd/conform`;
@@ -178,7 +180,7 @@ GET /v1/capabilities
 {
   "protocol": "tvcp-ai/1",
   "kinds":    ["move","draw","sketch","image","react"],
-  "games":    ["tictactoe","wordle","uno","tangram","world","rpg"],
+  "games":    ["tictactoe","wordle","uno","tangram","world","rpg","ray"],
   "formats":  ["grid","pixels","glyphs","sigils","vector","sketch","mixed","marks"]
 }
 ```
