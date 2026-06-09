@@ -65,6 +65,8 @@ func main() {
 	}
 	rm, _ := babe.ParseRenderMode(mode)
 	dr := terminal.NewDiffRenderer()
+	dayT := 0.32 // time of day; the 't' key steps it through dawn/noon/dusk/night
+	world.SetTime(dayT)
 	scene := world.Scene()
 	pathOpt := raytrace.PathOptions{Samples: 4, MaxDepth: 5, Seed: 1, NEE: true, MIS: true, Sobol: true}
 
@@ -90,8 +92,9 @@ func main() {
 			im = raytrace.Render(scene, c, pxW, pxH, raytrace.Options{Samples: 1})
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
-		fmt.Printf("\n[director: %s | chunks:%d props:%d | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f  g=grow p=path x=quit] ",
-			who, world.Chunks(), world.Props(), cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
+		mins := int((dayT - math.Floor(dayT)) * 24 * 60)
+		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f  g=grow t=time p=path x=quit] ",
+			who, world.Chunks(), world.Props(), mins/60, mins%60, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
 	}
 
 	fmt.Printf("rayexplore — walking a world authored by %s. Each region is shipped as a tiny scene description and ray-traced locally.\n", who)
@@ -119,6 +122,10 @@ func main() {
 				cam.Turn(0, -0.08)
 			case 'g':
 				grow()
+			case 't':
+				dayT += 0.06 // step the day forward
+				world.SetTime(dayT)
+				scene = world.Scene()
 			case 'p':
 				*pathT = !*pathT
 			case 'x':

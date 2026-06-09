@@ -61,6 +61,8 @@ type World struct {
 	seen              map[int]bool     // applied region indices (idempotent growth)
 	lastSpec          *brain.SceneSpec // last authored region (continuity context)
 	lastAt            raytrace.Vec3    // where it sat (to derive the heading)
+	Time              float64          // time of day in [0,1) when timeSet
+	timeSet           bool             // sky and sun follow Time (day/night cycle)
 }
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
@@ -106,8 +108,19 @@ func (w *World) Scene() *raytrace.Scene { return w.SceneWith(nil) }
 // that change every frame and so can't live in the persistent prop list.
 func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	s := &raytrace.Scene{SkyTop: w.SkyTop, SkyBottom: w.SkyBottom}
+	var sun []raytrace.Object
+	if w.timeSet { // day/night: sky and a sun (a distant emitter) follow the time
+		top, bottom, sunDir, sunColor, up := SkyForTime(w.Time)
+		s.SkyTop, s.SkyBottom = top, bottom
+		s.Light = sunDir.Scale(100) // raster directional light
+		if up {
+			ahead := raytrace.Vec3{X: 0, Y: 0, Z: w.lastAt.Z} // keep the sun near the frontier
+			sun = []raytrace.Object{raytrace.Sphere{Center: sunDir.Scale(90).Add(ahead), Radius: 6, Mat: raytrace.Material{Emit: sunColor}}}
+		}
+	}
 	s.Objects = append(s.Objects, w.floor)
 	s.Objects = append(s.Objects, w.props...)
+	s.Objects = append(s.Objects, sun...)
 	s.Objects = append(s.Objects, extra...)
 	s.BuildBVH()
 	return s

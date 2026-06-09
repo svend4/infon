@@ -74,6 +74,7 @@ corrupt the world — it just falls back to a safe region.
 | host → guests | a region's scene graph (`Region`) | ~100–300 bytes, once per region |
 | any → all | a participant's pose (`Pose`) | 44 bytes per tick |
 | any → all | chat (`ChatMsg`, id-tagged + deduped) / voice (`EncodeVoice`, origin-tagged) | a line / a 20 ms PCM chunk |
+| host → guests | time of day (`EncodeEnv`) — drives the whole group's sky/sun | 8 bytes |
 | guest → host | region ack (have-set) | tiny, ~1/s |
 
 No geometry, no frames, no video. A walker who explores for an hour received a

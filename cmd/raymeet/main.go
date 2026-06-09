@@ -41,6 +41,13 @@ import (
 	"github.com/svend4/infon/pkg/terminal"
 )
 
+// clockOf formats a time of day in [0,1) as a wall clock for the status line.
+func clockOf(t float64) string {
+	t -= math.Floor(t)
+	mins := int(t * 24 * 60)
+	return fmt.Sprintf("🕓 %02d:%02d", mins/60, mins%60)
+}
+
 func main() {
 	host := flag.Bool("host", false, "be the director hub: author/broadcast the world and relay poses")
 	modeFlag := flag.String("mode", "auto", "terminal render mode")
@@ -318,8 +325,8 @@ func main() {
 					relayToOthers(addr, network.PacketTypeAudio, p.Payload)
 				}
 			case network.PacketTypeControl:
-				// a guest's region ack: re-send only what it is missing, to it alone.
 				if *host && addr != nil {
+					// a guest's region ack: re-send only what it is missing, to it alone.
 					if have, de := raydir.DecodeAck(p.Payload); de == nil {
 						worldMu.Lock()
 						miss := raydir.MissingRegions(have, regions)
@@ -327,6 +334,13 @@ func main() {
 						for _, r := range miss {
 							sendTo(addr, network.PacketTypeScreen, r.Encode())
 						}
+					}
+				} else if !*host {
+					// the host's time-of-day broadcast: keep the whole group's sky in sync.
+					if t, de := raydir.DecodeEnv(p.Payload); de == nil {
+						worldMu.Lock()
+						world.SetTime(t)
+						worldMu.Unlock()
 					}
 				}
 			}
@@ -388,6 +402,13 @@ func main() {
 	ticker := time.NewTicker(120 * time.Millisecond)
 	defer ticker.Stop()
 	tick := 0
+	dayTime := 0.30              // host's time of day; advances toward dusk/night
+	const dayStep = 0.12 / 150.0 // a full day in ~150s at the 120ms tick
+	if *host {
+		worldMu.Lock()
+		world.SetTime(dayTime)
+		worldMu.Unlock()
+	}
 	for range ticker.C {
 		for drain := true; drain; {
 			select {
@@ -435,8 +456,14 @@ func main() {
 			}
 			stateMu.Unlock()
 			growHost(int((front-8)/12) + 3)
+			dayTime += dayStep // advance and broadcast the time of day to the group
+			worldMu.Lock()
+			world.SetTime(dayTime)
+			worldMu.Unlock()
+			env := raydir.EncodeEnv(dayTime)
 			for _, a := range addrs {
 				sendTo(a, network.PacketTypeAvatar, setBytes) // relay everyone's poses
+				sendTo(a, network.PacketTypeControl, env)     // keep the group's sky in sync
 			}
 			// new regions are pushed immediately in growHost; gaps are filled on
 			// demand when a guest acks (no blind re-broadcast of everything).
@@ -473,6 +500,7 @@ func main() {
 		worldMu.Lock()
 		scene := world.SceneWith(extra)
 		chunks := world.Chunks()
+		tod := world.Time
 		worldMu.Unlock()
 
 		var im image.Image
@@ -482,8 +510,8 @@ func main() {
 			im = raytrace.Render(scene, self.Camera(), pxW, pxH, raytrace.Options{Samples: 1})
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
-		fmt.Printf("\n[%s as %s%s | chunks:%d | walkers:%d | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f, /msg, x=quit]",
-			role, name, vtag, chunks, others+1, self.Pos.X, self.Pos.Y, self.Pos.Z)
+		fmt.Printf("\n[%s as %s%s | chunks:%d | walkers:%d | %s | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f, /msg, x=quit]",
+			role, name, vtag, chunks, others+1, clockOf(tod), self.Pos.X, self.Pos.Y, self.Pos.Z)
 		chatMu.Lock()
 		for _, l := range chat.Lines() {
 			fmt.Printf("\n  💬 %s", l)
