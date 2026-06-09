@@ -127,5 +127,8 @@ func (in *Instance) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 	h.P = r.At(wt)
 	h.N = n
 	h.Front = front
+	if h.Tan.LenSq() > geomEps { // tangents transform by M (not the inverse-transpose)
+		h.Tan = in.m.mul(h.Tan).Norm()
+	}
 	return h, true
 }

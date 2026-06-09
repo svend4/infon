@@ -79,6 +79,8 @@ type Hit struct {
 	U, V  float64 // surface texture coordinates (0..1) where defined
 	Front bool    // true if the ray struck the outward-facing side
 	Mat   Material
+	Tan   Vec3    // UV-aligned tangent (set only when a normal map needs it; zero = none)
+	TanW  float64 // tangent-space handedness (+1/-1) for the bitangent N x Tan
 }
 
 // albedo is the surface's base colour at the hit: the material texture if one is
@@ -148,7 +150,13 @@ func intersectSphere(center Vec3, radius float64, mat Material, r Ray, tMin, tMa
 	n, front := orient(gn, r.Dir)
 	u := 0.5 + math.Atan2(gn.Z, gn.X)/(2*math.Pi)
 	v := 0.5 - math.Asin(math.Max(-1, math.Min(1, gn.Y)))/math.Pi
-	return Hit{T: t, P: p, N: n, U: u, V: v, Front: front, Mat: mat}, true
+	hit := Hit{T: t, P: p, N: n, U: u, V: v, Front: front, Mat: mat}
+	if mat.Bump != nil { // east-pointing (increasing-U) tangent; degenerate at poles
+		if east := (Vec3{X: 0, Y: 1, Z: 0}).Cross(gn); east.LenSq() > geomEps {
+			hit.Tan, hit.TanW = east.Norm(), 1
+		}
+	}
+	return hit, true
 }
 
 // sphereOverlaps reports whether ray r's [tMin,tMax] segment crosses the sphere.
@@ -232,7 +240,38 @@ func (tr Triangle) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 	hu := w0*tr.UVa[0] + u*tr.UVb[0] + v*tr.UVc[0]
 	hv := w0*tr.UVa[1] + u*tr.UVb[1] + v*tr.UVc[1]
 	n, front := orient(ng, r.Dir)
-	return Hit{T: t, P: r.At(t), N: n, U: hu, V: hv, Front: front, Mat: tr.Mat}, true
+	hit := Hit{T: t, P: r.At(t), N: n, U: hu, V: hv, Front: front, Mat: tr.Mat}
+	if tr.Mat.Bump != nil { // UV-aligned tangent frame for the normal map
+		if tan, w, ok := triTangent(tr); ok {
+			hit.Tan, hit.TanW = tan, w
+		}
+	}
+	return hit, true
+}
+
+// triTangent computes the UV-aligned tangent (the world direction of increasing
+// U) and the tangent-space handedness from the triangle's edges and UV deltas, or
+// ok=false if the UVs are degenerate.
+func triTangent(tr Triangle) (Vec3, float64, bool) {
+	e1 := tr.B.Sub(tr.A)
+	e2 := tr.C.Sub(tr.A)
+	du1, dv1 := tr.UVb[0]-tr.UVa[0], tr.UVb[1]-tr.UVa[1]
+	du2, dv2 := tr.UVc[0]-tr.UVa[0], tr.UVc[1]-tr.UVa[1]
+	denom := du1*dv2 - du2*dv1
+	if math.Abs(denom) < 1e-12 {
+		return Vec3{}, 0, false
+	}
+	inv := 1 / denom
+	tan := e1.Scale(dv2).Sub(e2.Scale(dv1)).Scale(inv)
+	bit := e2.Scale(du1).Sub(e1.Scale(du2)).Scale(inv)
+	if tan.LenSq() < geomEps {
+		return Vec3{}, 0, false
+	}
+	w := 1.0
+	if e1.Cross(e2).Cross(tan).Dot(bit) < 0 {
+		w = -1
+	}
+	return tan, w, true
 }
 
 // ---------- plane (checkerboard floor) ----------
@@ -408,7 +447,20 @@ func (s *Scene) closestRaw(r Ray, tMin, tMax float64) (Hit, bool) {
 func perturbNormal(h Hit) Vec3 {
 	c := h.Mat.Bump.At(h.U, h.V, h.P)
 	tn := Vec3{X: 2*c.X - 1, Y: 2*c.Y - 1, Z: 2*c.Z - 1}
-	t, b := basisAround(h.N)
+	var t, b Vec3
+	if h.Tan.LenSq() > geomEps {
+		// UV-aligned frame: orthonormalise the tangent against the shading normal
+		// and rebuild the bitangent with the stored handedness.
+		t = h.Tan.Sub(h.N.Scale(h.N.Dot(h.Tan)))
+		if t.LenSq() < geomEps {
+			t, b = basisAround(h.N)
+		} else {
+			t = t.Norm()
+			b = h.N.Cross(t).Scale(h.TanW)
+		}
+	} else {
+		t, b = basisAround(h.N)
+	}
 	n := t.Scale(tn.X).Add(b.Scale(tn.Y)).Add(h.N.Scale(tn.Z))
 	if n.LenSq() < geomEps {
 		return h.N
