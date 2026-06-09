@@ -17,7 +17,10 @@
 //	go run ./cmd/raymeet localhost:5000 5002   # ...and a third, fourth, ...
 //
 // Controls (type then Enter): w/s walk, a/d strafe, q/e turn, r/f look,
-// /message to chat, x quit. Add -voice to also carry audio (falls back to text).
+// /message to chat, /place <kind> to build an object in front of you (crystal,
+// rock, box, sphere, tree, mandelbulb, mandala, melt, escher, ...) into the shared
+// world for everyone, x quit. Add -voice to also carry audio — positional (quieter
+// with distance, softer from behind); falls back to text-only without a device.
 package main
 
 import (
@@ -250,6 +253,46 @@ func main() {
 		}
 		worldMu.Unlock()
 	}
+	// hostPlace turns a placement (the host's own, or a guest's build request) into
+	// an authoritative region: it gets the next index, is applied, persisted, and
+	// broadcast to everyone — co-created geometry travelling as meaning, not pixels.
+	hostPlace := func(spec brain.SceneSpec, at raytrace.Vec3) {
+		worldMu.Lock()
+		reg := raydir.Region{Index: len(regions), At: at, Spec: spec}
+		regions = append(regions, reg)
+		world.AddRegion(reg)
+		if *worldFile != "" {
+			_ = raydir.SaveWorld(*worldFile, regions)
+		}
+		worldMu.Unlock()
+		stateMu.Lock()
+		addrs := make([]*net.UDPAddr, 0, len(peers))
+		for _, a := range peers {
+			addrs = append(addrs, a)
+		}
+		stateMu.Unlock()
+		for _, a := range addrs {
+			sendTo(a, network.PacketTypeScreen, reg.Encode())
+		}
+	}
+	// place: a walker drops an object in front of them. The host places it directly;
+	// a guest sends a build request to the host, which re-indexes and broadcasts.
+	place := func(kind string) {
+		spec, ok := raydir.PlacementSpec(kind, raydir.AvatarColor(selfID))
+		if !ok {
+			chatMu.Lock()
+			chat.Add("*", "can't build '"+kind+"'")
+			chatMu.Unlock()
+			return
+		}
+		fwd := raytrace.Vec3{X: math.Sin(self.Yaw), Z: math.Cos(self.Yaw)}
+		at := raytrace.Vec3{X: self.Pos.X + fwd.X*2.5, Y: 0, Z: self.Pos.Z + fwd.Z*2.5}
+		if *host {
+			hostPlace(spec, at)
+		} else {
+			sendTo(hubAddr, network.PacketTypeScreen, raydir.Region{At: at, Spec: spec}.Encode())
+		}
+	}
 	if *host {
 		growHost(3)
 	}
@@ -296,6 +339,8 @@ func main() {
 						world.AddRegion(reg)
 						worldMu.Unlock()
 					}
+				} else if reg, de := raydir.DecodeRegion(p.Payload); de == nil {
+					hostPlace(reg.Spec, reg.At) // a guest's build request: re-index + broadcast
 				}
 			case network.PacketTypeTextChat:
 				// reliable chat: dedup by message id, show only the new ones, and (on
@@ -417,11 +462,14 @@ func main() {
 					return
 				}
 				t := strings.TrimSpace(ln)
-				if strings.HasPrefix(t, "/") { // "/message" -> chat
+				switch {
+				case strings.HasPrefix(t, "/place ") || strings.HasPrefix(t, "/build "):
+					place(strings.TrimSpace(t[7:])) // drop an object in front of you
+				case strings.HasPrefix(t, "/"): // "/message" -> chat
 					if msg := strings.TrimSpace(t[1:]); msg != "" {
 						sendChat(msg)
 					}
-				} else {
+				default:
 					for _, ch := range strings.ToLower(t) {
 						if !apply(ch) {
 							return
@@ -486,7 +534,9 @@ func main() {
 			}
 		}
 
-		// draw everyone except yourself.
+		// draw everyone except yourself; also steer positional voice by where each
+		// speaker stands relative to us (quieter with distance, softer from behind).
+		selfFwd := raytrace.Vec3{X: math.Sin(self.Yaw), Z: math.Cos(self.Yaw)}
 		stateMu.Lock()
 		var extra []raytrace.Object
 		others := 0
@@ -494,6 +544,9 @@ func main() {
 			if id != selfID {
 				extra = append(extra, raydir.AvatarSpheres(p, raydir.AvatarColor(id))...)
 				others++
+				if voiceOn && mixer != nil {
+					mixer.SetGain(id, raydir.VoiceGain(self.Pos, selfFwd, p.Pos))
+				}
 			}
 		}
 		stateMu.Unlock()

@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"sync"
+
+	"github.com/svend4/infon/pkg/raytrace"
 )
 
 // voicemix.go mixes group voice. When several people talk at once their audio
@@ -51,6 +53,7 @@ type VoiceMixer struct {
 	frame  int                // samples per output frame
 	maxBuf int                // cap per source (drop oldest past this, to bound lag)
 	bufs   map[uint32][]int16 // per-source jitter buffer
+	gains  map[uint32]float64 // per-source gain (positional voice; 1 if unset)
 }
 
 // NewVoiceMixer returns a mixer producing `frame`-sample output frames, buffering
@@ -59,7 +62,20 @@ func NewVoiceMixer(frame int) *VoiceMixer {
 	if frame <= 0 {
 		frame = 320
 	}
-	return &VoiceMixer{frame: frame, maxBuf: frame * 50, bufs: map[uint32][]int16{}}
+	return &VoiceMixer{frame: frame, maxBuf: frame * 50, bufs: map[uint32][]int16{}, gains: map[uint32]float64{}}
+}
+
+// SetGain sets a speaker's playback gain (positional voice: quieter with distance,
+// softer from behind). 1 is full volume; values clamp to [0,1].
+func (m *VoiceMixer) SetGain(origin uint32, g float64) {
+	if g < 0 {
+		g = 0
+	} else if g > 1 {
+		g = 1
+	}
+	m.mu.Lock()
+	m.gains[origin] = g
+	m.mu.Unlock()
 }
 
 // Add appends a speaker's samples to its jitter buffer, dropping the oldest if the
@@ -99,8 +115,12 @@ func (m *VoiceMixer) Mix() []int16 {
 		if n > len(b) {
 			n = len(b)
 		}
+		g := 1.0
+		if gv, ok := m.gains[id]; ok {
+			g = gv
+		}
 		for i := 0; i < n; i++ {
-			out[i] = clip16(int(out[i]) + int(b[i]))
+			out[i] = clip16(int(out[i]) + int(float64(b[i])*g))
 		}
 		if rest := b[n:]; len(rest) == 0 {
 			delete(m.bufs, id)
@@ -112,6 +132,22 @@ func (m *VoiceMixer) Mix() []int16 {
 		return nil
 	}
 	return out
+}
+
+// VoiceGain is the positional playback gain for a speaker heard by a listener at
+// `listener` facing `facing`: an inverse-square distance falloff, attenuated when
+// the speaker is behind the listener — so people sound where they are. (Output is
+// mono, so this is volume/presence, not stereo panning.)
+func VoiceGain(listener, facing, speaker raytrace.Vec3) float64 {
+	d := speaker.Sub(listener)
+	dist := d.Len()
+	const ref = 5.0
+	g := ref * ref / (ref*ref + dist*dist) // 1 at the listener, 0.5 at ref, fading out
+	if dist > 1e-6 && facing.LenSq() > 1e-9 {
+		back := facing.Norm().Dot(d.Scale(1 / dist)) // +1 ahead, -1 behind
+		g *= 0.55 + 0.45*(0.5+0.5*back)              // ~0.55x behind, 1x ahead
+	}
+	return g
 }
 
 // Active reports how many speakers currently have buffered audio.

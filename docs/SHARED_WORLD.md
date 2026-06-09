@@ -41,9 +41,12 @@ go run ./cmd/raymeet -name cara localhost:5000 5002
 ```
 
 Walk forward (`w`) and the world unfolds ahead on every machine in lock-step. You
-see the others as glowing coloured avatars. Type `/hello` to chat. Add `-voice`
-on machines with a mic/speaker to also talk (it falls back to text-only where
-there's no audio device).
+see the others as glowing coloured avatars. Type `/hello` to chat, or
+`/place crystal` (or `box`, `mandelbulb`, `mandala`, `melt`, …) to drop an object
+into the shared world for everyone — co-creation, not just sightseeing. Add
+`-voice` on machines with a mic/speaker to also talk; voice is positional (quieter
+with distance, softer from behind), falling back to text-only where there's no
+audio device.
 
 ## Run with a real AI director
 
@@ -102,8 +105,11 @@ it idempotently and ack what they have, so loss and late joins self-heal.
 - The reference director composes a coherent but repetitive world; the real
   novelty comes from a live `BRAIN_URL` model.
 - Voice is wired and degrades gracefully but needs real audio hardware to hear.
-  Concurrent speakers are now mixed at the listener (`VoiceMixer`: per-speaker
-  jitter buffers summed each frame), not played back-to-back.
+  Concurrent speakers are mixed at the listener (`VoiceMixer`: per-speaker jitter
+  buffers summed each frame) and positional (`VoiceGain`: quieter with distance,
+  softer from behind) — mono presence, not stereo panning.
+- The world is co-created: besides the director, any walker can `/place` objects,
+  which travel as ordinary regions (broadcast, ack-healed, persisted).
 - Reliability is ack-based for regions (the state that must persist) and id-based
   for chat (`ChatSync`: unique ids, dedup, hub re-broadcast — so a dropped line
   self-heals without double-display); poses stay loss-tolerant (replaced next

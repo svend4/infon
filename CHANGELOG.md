@@ -144,7 +144,17 @@ adopting, and it was reimplemented better).
   talking at once blend instead of serialising and lagging. Buffers are bounded and
   silent speakers pruned. It falls back to text-only when there is no audio device,
   so the experience never depends on hardware. Chat/pose/world relay all share one
-  `sendGroup`/`relayToOthers` path.
+  `sendGroup`/`relayToOthers` path. Voice is now **positional** (`VoiceGain`): a
+  speaker is quieter with distance and softer from behind, by their pose relative
+  to you — people sound where they stand (mono presence, not stereo panning).
+- **Collaborative building** (`cmd/raymeet` `/place`, `pkg/raydir/build.go`): a
+  walker drops an object in front of them (`/place crystal|rock|box|sphere|tree|
+  mandelbulb|mandala|melt|escher|…`, tinted in their avatar colour) into the shared
+  world for everyone. A placement is an ordinary `Region`, so it is broadcast,
+  ack-healed and persisted like any authored chunk: a guest sends a build request,
+  the host re-indexes it authoritatively and fans it out; the sanitiser guards it.
+  The multiplayer world goes from director-only to co-created. Verified live: a
+  guest's placed crystal appears for host and guest alike.
 - **Reliable world delivery (acks, not blind re-broadcast)** (`cmd/raymeet`,
   `pkg/raydir` `EncodeAck`/`Known`/`MissingRegions`): a guest periodically acks
   the region indices it has; the host re-sends only the missing regions, only to
