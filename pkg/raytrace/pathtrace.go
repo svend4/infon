@@ -147,6 +147,55 @@ func (s *Scene) emitterRadius(p Vec3) (float64, bool) {
 	return 0, false
 }
 
+// triNormalArea returns a triangle's unit geometric normal and area (area 0 if
+// degenerate).
+func triNormalArea(t Triangle) (Vec3, float64) {
+	cr := t.B.Sub(t.A).Cross(t.C.Sub(t.A))
+	l := cr.Len()
+	if l < geomEps {
+		return Vec3{}, 0
+	}
+	return cr.Scale(1 / l), 0.5 * l
+}
+
+// triSamplePoint draws a uniform point on a triangle.
+func triSamplePoint(t Triangle, rg *rng) Vec3 {
+	u, v := rg.f(), rg.f()
+	if u+v > 1 {
+		u, v = 1-u, 1-v
+	}
+	return t.A.Add(t.B.Sub(t.A).Scale(u)).Add(t.C.Sub(t.A).Scale(v))
+}
+
+// emitterArea returns the surface area of the emitter (sphere or triangle) whose
+// surface contains p, for the light-sampling pdf when a BSDF ray hits an emitter
+// under MIS. The area form unifies spheres (4*pi*r^2) and triangles.
+func (s *Scene) emitterArea(p Vec3) (float64, bool) {
+	for _, e := range s.emit {
+		if math.Abs(p.Sub(e.Center).Len()-e.Radius) < 1e-3 {
+			return 4 * math.Pi * e.Radius * e.Radius, true
+		}
+	}
+	for _, t := range s.emitTris {
+		n, area := triNormalArea(t)
+		if area == 0 || math.Abs(p.Sub(t.A).Dot(n)) > 1e-3 {
+			continue // off this triangle's plane
+		}
+		v0, v1, v2 := t.B.Sub(t.A), t.C.Sub(t.A), p.Sub(t.A)
+		d00, d01, d11 := v0.Dot(v0), v0.Dot(v1), v1.Dot(v1)
+		den := d00*d11 - d01*d01
+		if den == 0 {
+			continue
+		}
+		vv := (d11*v2.Dot(v0) - d01*v2.Dot(v1)) / den
+		ww := (d00*v2.Dot(v1) - d01*v2.Dot(v0)) / den
+		if vv >= -1e-4 && ww >= -1e-4 && vv+ww <= 1+1e-4 {
+			return area, true
+		}
+	}
+	return 0, false
+}
+
 // radiance follows one path. mode 0 = naive (BSDF only), 1 = NEE only, 2 = MIS
 // (light- and BSDF-sampling combined with the power heuristic).
 func (s *Scene) radiance(r Ray, maxDepth int, rg *rng, mode int) Vec3 {
@@ -154,7 +203,7 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng, mode int) Vec3 {
 	var out Vec3
 	specularPrev := true // the camera ray counts as a specular connection
 	var prevPdfB float64
-	nEmit := len(s.emit)
+	nEmit := len(s.emit) + len(s.emitTris)
 	tm := r.Time // shutter time, constant along the whole path (motion blur)
 pathLoop:
 	for d := 0; d < maxDepth; d++ {
@@ -206,10 +255,9 @@ pathLoop:
 			case mode == 0 || specularPrev:
 				out = out.Add(throughput.Mul(h.Mat.Emit))
 			case mode == 2 && nEmit > 0:
-				if rad, okE := s.emitterRadius(h.P); okE {
+				if area, okE := s.emitterArea(h.P); okE {
 					if cosL := -h.N.Dot(r.Dir); cosL > geomEps {
-						areaPdf := 1 / (float64(nEmit) * 4 * math.Pi * rad * rad)
-						pdfL := areaPdf * h.T * h.T / cosL
+						pdfL := (1 / (float64(nEmit) * area)) * h.T * h.T / cosL
 						w := prevPdfB * prevPdfB / (prevPdfB*prevPdfB + pdfL*pdfL)
 						out = out.Add(throughput.Mul(h.Mat.Emit).Scale(w))
 					}
@@ -387,12 +435,29 @@ pathLoop:
 // form, normalised for the number of emitters). With mis it is weighted against
 // the BSDF-sampling pdf (power heuristic).
 func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64) Vec3 {
-	n := len(s.emit)
+	n := len(s.emit) + len(s.emitTris)
 	if n == 0 {
 		return Vec3{}
 	}
-	li := s.emit[int(rg.next()%uint64(n))]
-	q := li.Center.Add(rg.unit().Scale(li.Radius))
+	// Pick one emitter uniformly across spheres and triangles, draw a point on it,
+	// and note its normal, area and emission.
+	var q, nL, Le Vec3
+	var area float64
+	twoSided := false
+	if pick := int(rg.next() % uint64(n)); pick < len(s.emit) {
+		li := s.emit[pick]
+		q = li.Center.Add(rg.unit().Scale(li.Radius))
+		nL = q.Sub(li.Center).Norm()
+		Le, area = li.Mat.Emit, 4*math.Pi*li.Radius*li.Radius
+	} else {
+		tr := s.emitTris[pick-len(s.emit)]
+		var a float64
+		nL, a = triNormalArea(tr)
+		if a == 0 {
+			return Vec3{}
+		}
+		q, Le, area, twoSided = triSamplePoint(tr, rg), tr.Mat.Emit, a, true
+	}
 	d := q.Sub(h.P)
 	dist := d.Len()
 	if dist < geomEps {
@@ -403,7 +468,10 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64)
 	if cosS <= 0 {
 		return Vec3{}
 	}
-	cosL := q.Sub(li.Center).Norm().Dot(wi.Neg())
+	cosL := nL.Dot(wi.Neg())
+	if twoSided && cosL < 0 { // a triangle emits from both faces
+		cosL = -cosL
+	}
 	if cosL <= 0 {
 		return Vec3{}
 	}
@@ -411,10 +479,10 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64)
 	if s.anyHit(Ray{Origin: so, Dir: wi, Time: time}, shadowEps, dist-2*shadowEps) {
 		return Vec3{}
 	}
-	areaPdf := 1 / (float64(n) * 4 * math.Pi * li.Radius * li.Radius)
+	areaPdf := 1 / (float64(n) * area)
 	pdfL := areaPdf * dist * dist / cosL
 	// diffuse: f = alb/pi, estimator = f * cosS * Le / pdfL.
-	contrib := alb.Scale(1 / math.Pi).Mul(li.Mat.Emit).Scale(cosS / pdfL)
+	contrib := alb.Scale(1 / math.Pi).Mul(Le).Scale(cosS / pdfL)
 	if mis {
 		pdfB := cosS / math.Pi
 		contrib = contrib.Scale(pdfL * pdfL / (pdfL*pdfL + pdfB*pdfB))

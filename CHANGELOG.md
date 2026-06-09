@@ -20,7 +20,11 @@ adopting, and it was reimplemented better).
 #### Added — light-transport renderers (all unbiased, mutually validated)
 - **Monte-Carlo path tracer** (`pathtrace.go`): global illumination with
   next-event estimation, multiple importance sampling (power heuristic), Russian
-  roulette, a progressive accumulator and temporal reprojection.
+  roulette, a progressive accumulator and temporal reprojection. NEE samples both
+  emissive **spheres and triangles** (top-level emissive geometry — an authored
+  emissive box face or glowing panel becomes a proper area light), with the
+  matching area-form MIS weight on BSDF-sampled emitter hits; verified unbiased
+  (NEE+MIS mean == pure-BSDF mean) and markedly less noisy at equal spp.
 - **Bidirectional path tracing** (`bdpt.go`, `bdpt_connect.go`): eye × light
   subpaths, all s/t connections, balance-heuristic MIS.
 - **Light (particle) tracer** (`lighttrace.go`): light→camera splatting (the t=1

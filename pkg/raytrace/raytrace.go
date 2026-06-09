@@ -399,17 +399,29 @@ type Scene struct {
 	// many-light scenes. Requires NEE on and MIS off (it replaces light-side MIS).
 	RISCandidates int
 
-	sbvh *objBVH  // optional top-level acceleration structure (see BuildBVH)
-	emit []Sphere // emissive spheres, cached for next-event estimation
+	sbvh     *objBVH    // optional top-level acceleration structure (see BuildBVH)
+	emit     []Sphere   // emissive spheres, cached for next-event estimation
+	emitTris []Triangle // emissive triangles (area lights), cached for NEE
 }
 
-// gatherEmitters caches the scene's emissive spheres so the path tracer can
-// sample them directly (next-event estimation). Called by PathRender.
+// gatherEmitters caches the scene's emissive spheres and triangles so the path
+// tracer can sample them directly (next-event estimation). Called by PathRender.
+// Triangles are top-level emissive area lights (e.g. an authored emissive box face
+// or glowing panel); emissive geometry hidden inside a Mesh/Instance is still lit
+// correctly by BSDF sampling, just not NEE-sampled.
 func (s *Scene) gatherEmitters() {
 	s.emit = s.emit[:0]
+	s.emitTris = s.emitTris[:0]
 	for _, o := range s.Objects {
-		if sp, ok := o.(Sphere); ok && sp.Mat.Emit.LenSq() > 0 {
-			s.emit = append(s.emit, sp)
+		switch g := o.(type) {
+		case Sphere:
+			if g.Mat.Emit.LenSq() > 0 {
+				s.emit = append(s.emit, g)
+			}
+		case Triangle:
+			if g.Mat.Emit.LenSq() > 0 {
+				s.emitTris = append(s.emitTris, g)
+			}
 		}
 	}
 }
