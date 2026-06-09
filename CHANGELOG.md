@@ -83,8 +83,9 @@ adopting, and it was reimplemented better).
   finishes; an untinted placement keeps the model's own look.
 - **Textured surfaces from a name** (`pkg/raydir/texlib.go`): an object's new
   `tex` field names a surface texture the renderer samples by UV/position. Built-in
-  procedurals — `checker`, `marble`, `wood`, `stone`, `clouds` — are reconstructed
-  from a name (no assets on the wire), and `LoadTextureDir` registers image files
+  procedurals — `checker`, `marble`, `wood`, `stone`, `clouds`, a radial `mandala`
+  (`KaleidoTex`) and an interlocking Escher-style `tiles` tessellation (`TileTex`)
+  — are reconstructed from a name (no assets on the wire), and `LoadTextureDir` registers image files
   (`.png`/`.jpg`) for real image textures. Works on any surface (the OBJ loader
   already parses `vt`, so loaded meshes carry UVs); on a `mesh` the texture rides
   the same per-instance override. Unknown texture names are ignored (the surface

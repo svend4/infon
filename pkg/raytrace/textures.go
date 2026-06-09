@@ -64,6 +64,68 @@ func (w WaveNormalTex) At(_, _ float64, p Vec3) Vec3 {
 	return Vec3{X: 0.5*n.X + 0.5, Y: 0.5*n.Y + 0.5, Z: 0.5*n.Z + 0.5}
 }
 
+// KaleidoTex is a radially-symmetric mandala: it folds the ground plane into Sym
+// mirrored wedges and paints concentric rings (A->B) with sharp radial petals (C),
+// so a floor or wall becomes a mandala. Position-based, so no UVs are required.
+type KaleidoTex struct {
+	A, B, C Vec3    // base, ring and petal-accent colours
+	Sym     int     // rotational symmetry (number of petals; default 8)
+	Scale   float64 // pattern scale in world units
+}
+
+// At implements Texture.
+func (k KaleidoTex) At(_, _ float64, p Vec3) Vec3 {
+	s := k.Scale
+	if s <= 0 {
+		s = 1
+	}
+	sym := k.Sym
+	if sym < 2 {
+		sym = 8
+	}
+	x, z := p.X/s, p.Z/s
+	rad := math.Hypot(x, z)
+	wedge := 2 * math.Pi / float64(sym)
+	a := math.Mod(math.Atan2(z, x), wedge)
+	if a < 0 {
+		a += wedge
+	}
+	a = math.Abs(a - wedge/2) // mirror within the wedge
+	ring := 0.5 + 0.5*math.Cos(rad*2*math.Pi)
+	petal := math.Pow(0.5+0.5*math.Cos(a*float64(sym)), 4)
+	base := k.A.Add(k.B.Sub(k.A).Scale(ring))
+	return base.Add(k.C.Sub(base).Scale(petal))
+}
+
+// TileTex is an interlocking triangular tessellation (Escher-style): each unit cell
+// is split by a diagonal that flips per cell, so two colours interlock across the
+// plane. Position-based.
+type TileTex struct {
+	A, B  Vec3
+	Scale float64
+}
+
+// At implements Texture.
+func (t TileTex) At(_, _ float64, p Vec3) Vec3 {
+	s := t.Scale
+	if s <= 0 {
+		s = 1
+	}
+	x, z := p.X/s, p.Z/s
+	fx, fz := x-math.Floor(x), z-math.Floor(z)
+	cell := int(math.Floor(x)) + int(math.Floor(z))
+	var upper bool
+	if cell&1 == 0 {
+		upper = fx+fz > 1 // diagonal
+	} else {
+		upper = fx > fz // anti-diagonal -> interlock
+	}
+	if upper {
+		return t.A
+	}
+	return t.B
+}
+
 // ImageTex samples an image by UV (0..1, v top-down). With Wrap it tiles,
 // otherwise it clamps. sRGB is decoded toward linear so it composes with the
 // renderer's output gamma. Used both for surfaces and as an equirectangular

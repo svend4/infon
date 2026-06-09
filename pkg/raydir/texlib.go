@@ -106,6 +106,13 @@ func init() {
 	RegisterTexture("clouds", raytrace.NoiseTex{
 		A: raytrace.Vec3{X: 0.45, Y: 0.55, Z: 0.8}, B: raytrace.Vec3{X: 1, Y: 1, Z: 1}, Scale: 1.6, Octaves: 6,
 	})
+	RegisterTexture("mandala", raytrace.KaleidoTex{
+		A: raytrace.Vec3{X: 0.08, Y: 0.05, Z: 0.18}, B: raytrace.Vec3{X: 0.9, Y: 0.82, Z: 0.4},
+		C: raytrace.Vec3{X: 0.85, Y: 0.2, Z: 0.42}, Sym: 8, Scale: 1.2,
+	})
+	tiles := raytrace.TileTex{A: raytrace.Vec3{X: 0.85, Y: 0.85, Z: 0.88}, B: raytrace.Vec3{X: 0.2, Y: 0.3, Z: 0.52}, Scale: 0.7}
+	RegisterTexture("tiles", tiles)
+	RegisterTexture("tessellation", tiles)
 	// procedural bump/normal maps (Material.Bump)
 	RegisterBump("ripple", raytrace.WaveNormalTex{Freq: 6, Amp: 0.25})
 	RegisterBump("waves", raytrace.WaveNormalTex{Freq: 4, Amp: 0.3})
