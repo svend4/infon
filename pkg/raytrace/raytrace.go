@@ -49,6 +49,18 @@ type Material struct {
 	// blending a Lambert diffuse lobe and a GGX specular lobe, driven by Metal and
 	// Rough, instead of choosing a single Reflect/Metal/diffuse behaviour.
 	Principled bool
+
+	// Subsurface scattering (volumetric random walk). SSS is the boundary index of
+	// refraction (0 = off; ~1.3-1.4 for skin/wax/marble). When set, light refracts
+	// into the surface, random-walks a homogeneous interior medium with
+	// single-scatter albedo SSSColor (falls back to the base colour), stepping a
+	// mean free path of SSSRadius world units between isotropic scatter events,
+	// then refracts back out. Smaller SSSRadius = denser / more opaque (marble);
+	// larger = more translucent (wax, skin). A Fresnel boundary reflection (the
+	// shiny highlight) is kept alongside the soft subsurface term.
+	SSS       float64
+	SSSColor  Vec3
+	SSSRadius float64
 }
 
 // Hit records the nearest intersection along a ray.

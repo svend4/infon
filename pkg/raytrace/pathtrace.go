@@ -155,6 +155,26 @@ pathLoop:
 		}
 
 		switch {
+		case h.Mat.SSS > 0:
+			// Dielectric boundary: Fresnel-reflect (the highlight), or transmit and
+			// random-walk the subsurface medium. Branch is chosen by the Fresnel
+			// term without reweighting (the branch pdf cancels it), as for glass.
+			cosI := math.Min(1, math.Max(0, -r.Dir.Dot(h.N)))
+			r0 := (h.Mat.SSS - 1) / (h.Mat.SSS + 1)
+			r0 *= r0
+			fr := r0 + (1-r0)*math.Pow(1-cosI, 5)
+			if rg.f() < fr {
+				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: r.Dir.Reflect(h.N).Norm(), Time: tm}
+				specularPrev = true
+				break
+			}
+			outRay, tput, okS := s.walkSubsurface(r, h, rg)
+			if !okS {
+				break pathLoop
+			}
+			throughput = throughput.Mul(tput)
+			r = outRay
+			specularPrev = true
 		case h.Mat.Glass > 0:
 			if h.Mat.Disperse > 0 {
 				// spectral: one of R/G/B per ray, each with its own IOR, scaled by
