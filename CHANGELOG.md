@@ -58,6 +58,11 @@ adopting, and it was reimplemented better).
   tvcp camera (`tvcp call --ray`), the brain driving the camera/world
   (`game:ray`), and the brain **authoring a full material scene from a prompt**
   (`game:rayscene`, formalised in the tvcp-ai/1 protocol + adapters).
+- **The experience — walk a world the AI dreams up** (`cmd/rayexplore`,
+  `pkg/raydir/fly.go`): a free-fly camera through a `World` the brain authors and
+  **extends on the fly** — walk forward and new regions are composed ahead of you,
+  each shipped as a compact scene description (meaning, not pixels) and ray-traced
+  locally. Offline with the reference brain, or a real director via `BRAIN_URL`.
 - **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
   exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
 
