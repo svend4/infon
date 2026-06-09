@@ -277,9 +277,14 @@ type Scene struct {
 	// ambient term in creases (0 samples = off).
 	AOSamples int
 	AORadius  float64
+
+	sbvh *objBVH // optional top-level acceleration structure (see BuildBVH)
 }
 
 func (s *Scene) closest(r Ray, tMin, tMax float64) (Hit, bool) {
+	if s.sbvh != nil {
+		return s.sbvh.closest(r, tMin, tMax)
+	}
 	var best Hit
 	found := false
 	near := tMax
@@ -292,6 +297,9 @@ func (s *Scene) closest(r Ray, tMin, tMax float64) (Hit, bool) {
 }
 
 func (s *Scene) anyHit(r Ray, tMin, tMax float64) bool {
+	if s.sbvh != nil {
+		return s.sbvh.anyHit(r, tMin, tMax)
+	}
 	for _, o := range s.Objects {
 		if _, ok := o.Intersect(r, tMin, tMax); ok {
 			return true
