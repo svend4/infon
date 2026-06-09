@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	"github.com/svend4/infon/internal/contacts"
 	"github.com/svend4/infon/internal/device"
 	"github.com/svend4/infon/internal/network"
+	"github.com/svend4/infon/internal/raysource"
 	"github.com/svend4/infon/internal/recorder"
 	"github.com/svend4/infon/internal/video"
 	"github.com/svend4/infon/pkg/color"
@@ -29,12 +31,15 @@ func runCall() {
 		fmt.Fprintln(os.Stderr, "\nOptions:")
 		fmt.Fprintln(os.Stderr, "  --record              Record the call")
 		fmt.Fprintln(os.Stderr, "  --output <file>       Output file for recording (default: auto-generated)")
+		fmt.Fprintln(os.Stderr, "  --ray                 Send a live CPU ray-traced 3-D world instead of the camera")
+		fmt.Fprintln(os.Stderr, "  --ray-spp <n>         Ray-tracer samples per pixel axis (default 1; higher = cleaner, slower)")
 		fmt.Fprintln(os.Stderr, "\nThis starts a two-way video call with text chat.")
 		fmt.Fprintln(os.Stderr, "Type messages and press Enter to send text during the call.")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
 		fmt.Fprintln(os.Stderr, "  tvcp call alice                          # Call contact 'alice'")
 		fmt.Fprintln(os.Stderr, "  tvcp call --record alice                 # Record the call")
 		fmt.Fprintln(os.Stderr, "  tvcp call --record --output my-call.tvcp alice")
+		fmt.Fprintln(os.Stderr, "  tvcp call --ray alice                    # Send a ray-traced world as your video")
 		fmt.Fprintln(os.Stderr, "  tvcp call localhost:5001 bounce          # Local test call")
 		fmt.Fprintln(os.Stderr, "  tvcp call [200:abc::1]:5001              # Yggdrasil call")
 		os.Exit(1)
@@ -43,6 +48,8 @@ func runCall() {
 	// Parse flags
 	var enableRecording bool
 	var outputFile string
+	var useRay bool
+	raySPP := 1
 	args := os.Args[2:]
 	var positionalArgs []string
 
@@ -56,6 +63,22 @@ func runCall() {
 				i++ // Skip next arg
 			} else {
 				fmt.Fprintln(os.Stderr, "Error: --output requires a filename")
+				os.Exit(1)
+			}
+		} else if arg == "--ray" {
+			useRay = true
+		} else if arg == "--ray-spp" {
+			if i+1 < len(args) {
+				n, err := strconv.Atoi(args[i+1])
+				if err != nil || n < 1 {
+					fmt.Fprintln(os.Stderr, "Error: --ray-spp requires a positive integer")
+					os.Exit(1)
+				}
+				raySPP = n
+				useRay = true // specifying samples implies --ray
+				i++           // Skip next arg
+			} else {
+				fmt.Fprintln(os.Stderr, "Error: --ray-spp requires a number")
 				os.Exit(1)
 			}
 		} else if !strings.HasPrefix(arg, "--") {
@@ -146,14 +169,24 @@ func runCall() {
 	fps := 15.0
 	var camera device.Camera
 
+	if useRay {
+		// Send a live CPU ray-traced 3-D world instead of a webcam. raysource is a
+		// device.FrameGenerator; GenerativeSource adapts it to device.Camera, so it
+		// is a drop-in source for the same capture/encode/send path.
+		camera = device.NewGenerativeSource(640, 480, fps, raysource.New(nil, raySPP))
+		fmt.Printf("🎥 Using ray-traced 3-D world as camera (spp=%d)\n", raySPP)
+	}
+
 	// Try to use real camera first (V4L2 on Linux)
-	cameras, err := device.ListCameras()
-	if err == nil && len(cameras) > 0 {
-		// Real camera available
-		realCamera, err := device.NewCamera(0) // Use first camera
-		if err == nil {
-			camera = realCamera
-			fmt.Println("📹 Using real camera:", cameras[0].Name)
+	if camera == nil {
+		cameras, err := device.ListCameras()
+		if err == nil && len(cameras) > 0 {
+			// Real camera available
+			realCamera, err := device.NewCamera(0) // Use first camera
+			if err == nil {
+				camera = realCamera
+				fmt.Println("📹 Using real camera:", cameras[0].Name)
+			}
 		}
 	}
 
@@ -344,21 +377,21 @@ func runCall() {
 			// Send each fragment
 			timestamp := uint64(time.Now().UnixMilli())
 			for _, fragData := range fragments {
-					packet := &network.Packet{
-						Type:      network.PacketTypeFrame,
-						Sequence:  transport.NextSequence(),
-						Timestamp: timestamp,
-						Payload:   fragData,
-					}
-					_ = transport.SendPacket(packet, udpAddr)
-
-					// Store for potential retransmission
-					retransmitter.OnPacketSent(packet, udpAddr)
+				packet := &network.Packet{
+					Type:      network.PacketTypeFrame,
+					Sequence:  transport.NextSequence(),
+					Timestamp: timestamp,
+					Payload:   fragData,
 				}
+				_ = transport.SendPacket(packet, udpAddr)
 
-				mu.Lock()
-				sendCount++
-				mu.Unlock()
+				// Store for potential retransmission
+				retransmitter.OnPacketSent(packet, udpAddr)
+			}
+
+			mu.Lock()
+			sendCount++
+			mu.Unlock()
 		}
 	}()
 
@@ -377,7 +410,7 @@ func runCall() {
 	// This is prepared for future integration when loopback is available
 	echoCanceller := audio.NewEchoCanceller(audioFormat.SampleRate, audioFormat.SampleRate/50)
 	echoCanceller.SetStepSize(0.01) // Conservative adaptation
-	_ = echoCanceller // Prepared for future use
+	_ = echoCanceller               // Prepared for future use
 
 	// Goroutine for sending audio
 	go func() {
