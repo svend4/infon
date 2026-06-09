@@ -122,7 +122,11 @@ adopting, and it was reimplemented better).
   night fall out of it). A timed `World` renders the matching sky and a distant sun
   emitter; the `raymeet` host advances it and broadcasts `EncodeEnv` (8 bytes) so
   the whole group's light evolves in sync — `rayexplore` steps it with `t`. A
-  living world for almost nothing on the wire.
+  living world for almost nothing on the wire. While the sun is up the sky is the
+  **physical Preetham model** (`pkg/raytrace/sky.go`, `PreethamSky`): a closed-form
+  sky from the sun direction + turbidity — blue overhead, warming and reddening
+  toward the horizon and the sun, with automatic sunset colour as the sun sinks; it
+  also acts as an area light in the path tracer.
 - **The shared world — two walkers, one space** (`cmd/raymeet`,
   `pkg/raydir/pose.go`, `pkg/raydir/region.go`): two peers "call in" over UDP and
   walk the *same* growing world together, each seeing the other's glowing avatar.

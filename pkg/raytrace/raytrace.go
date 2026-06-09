@@ -361,16 +361,17 @@ func (b camBasis) ray(px, py float64) Ray {
 type Scene struct {
 	Objects   []Object
 	Light     Vec3
-	LightInt  float64     // light strength (default 1 if 0)
-	Ambient   float64     // 0..1 ambient term
-	SkyTop    Vec3        // looking up
-	SkyBottom Vec3        // looking toward the horizon/down
-	SkyTex    Texture     // optional equirectangular environment map (overrides the gradient)
-	Env       *EnvSampler // optional importance sampler for the environment (path-tracer env-NEE)
-	Caustics  *PhotonMap  // optional caustic photon map (additive caustic term at diffuse hits)
-	Medium    *Medium     // optional heterogeneous participating medium (delta tracking; path tracer)
-	MaxBounce int         // reflection/refraction bounce budget (0 = none)
-	AttenK    float64     // linear distance attenuation coefficient (0 = none)
+	LightInt  float64      // light strength (default 1 if 0)
+	Ambient   float64      // 0..1 ambient term
+	SkyTop    Vec3         // looking up
+	SkyBottom Vec3         // looking toward the horizon/down
+	SkyTex    Texture      // optional equirectangular environment map (overrides the gradient)
+	Sky       *PreethamSky // optional physical sky model (overrides gradient/env map)
+	Env       *EnvSampler  // optional importance sampler for the environment (path-tracer env-NEE)
+	Caustics  *PhotonMap   // optional caustic photon map (additive caustic term at diffuse hits)
+	Medium    *Medium      // optional heterogeneous participating medium (delta tracking; path tracer)
+	MaxBounce int          // reflection/refraction bounce budget (0 = none)
+	AttenK    float64      // linear distance attenuation coefficient (0 = none)
 
 	// Soft shadows: a light of radius LightRadius sampled ShadowSamples times.
 	LightRadius   float64
@@ -588,6 +589,9 @@ func (s *Scene) fog(col Vec3, t float64) Vec3 {
 }
 
 func (s *Scene) sky(dir Vec3) Vec3 {
+	if s.Sky != nil {
+		return s.Sky.At(dir)
+	}
 	if s.SkyTex != nil {
 		u := 0.5 + math.Atan2(dir.Z, dir.X)/(2*math.Pi)
 		v := 0.5 - math.Asin(math.Max(-1, math.Min(1, dir.Y)))/math.Pi

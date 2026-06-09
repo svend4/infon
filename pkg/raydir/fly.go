@@ -114,6 +114,9 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 		s.SkyTop, s.SkyBottom = top, bottom
 		s.Light = sunDir.Scale(100) // raster directional light
 		if up {
+			// a physical (Preetham) sky while the sun is up — blue overhead, warming
+			// and reddening toward the horizon/sun automatically as it sinks.
+			s.Sky = raytrace.NewPreethamSky(sunDir, 2.6)
 			ahead := raytrace.Vec3{X: 0, Y: 0, Z: w.lastAt.Z} // keep the sun near the frontier
 			sun = []raytrace.Object{raytrace.Sphere{Center: sunDir.Scale(90).Add(ahead), Radius: 6, Mat: raytrace.Material{Emit: sunColor}}}
 		}
