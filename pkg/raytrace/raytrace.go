@@ -321,6 +321,7 @@ type Scene struct {
 	SkyTex    Texture     // optional equirectangular environment map (overrides the gradient)
 	Env       *EnvSampler // optional importance sampler for the environment (path-tracer env-NEE)
 	Caustics  *PhotonMap  // optional caustic photon map (additive caustic term at diffuse hits)
+	Medium    *Medium     // optional heterogeneous participating medium (delta tracking; path tracer)
 	MaxBounce int         // reflection/refraction bounce budget (0 = none)
 	AttenK    float64     // linear distance attenuation coefficient (0 = none)
 

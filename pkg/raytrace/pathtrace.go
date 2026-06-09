@@ -150,6 +150,38 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng, mode int) Vec3 {
 pathLoop:
 	for d := 0; d < maxDepth; d++ {
 		h, ok := s.closest(r, shadowEps, tFar)
+
+		// Heterogeneous medium: delta-track a volume collision before the surface.
+		// A real collision in front of the surface scatters in the medium; "no
+		// collision" implicitly carries the transmittance to the surface/sky.
+		if s.Medium != nil && (mode >= 1) {
+			tMax := tFar
+			if ok {
+				tMax = h.T
+			}
+			if t0, t1, in := s.Medium.span(r, tMax); in {
+				if tc, scattered := s.Medium.sampleCollision(r, t0, t1, rg); scattered {
+					p := r.At(tc)
+					a := s.Medium.Albedo
+					out = out.Add(throughput.Mul(a).Mul(s.mediumNEE(p, r.Dir, rg, tm)))
+					throughput = throughput.Mul(a)
+					if d >= 2 { // Russian roulette so dense media stay bounded
+						pr := math.Max(throughput.X, math.Max(throughput.Y, throughput.Z))
+						if pr < 1 {
+							if rg.f() > pr {
+								break
+							}
+							throughput = throughput.Scale(1 / pr)
+						}
+					}
+					r = Ray{Origin: p, Dir: hgSample(r.Dir, s.Medium.G, rg), Time: tm}
+					specularPrev = false
+					prevPdfB = 0 // medium direct light is counted by mediumNEE only
+					continue pathLoop
+				}
+			}
+		}
+
 		if !ok {
 			sky := s.sky(r.Dir)
 			if mode >= 1 && s.Env != nil && !specularPrev { // MIS against env-NEE
