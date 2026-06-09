@@ -295,7 +295,11 @@ pathLoop:
 		default:
 			alb := h.albedo()
 			if mode >= 1 {
-				out = out.Add(throughput.Mul(s.sampleEmitters(h, alb, rg, mode == 2, tm)))
+				if s.RISCandidates > 1 && mode == 1 {
+					out = out.Add(throughput.Mul(s.sampleEmittersRIS(h, alb, rg, tm, s.RISCandidates)))
+				} else {
+					out = out.Add(throughput.Mul(s.sampleEmitters(h, alb, rg, mode == 2, tm)))
+				}
 				if s.Env != nil {
 					out = out.Add(throughput.Mul(s.sampleEnv(h, alb, rg, tm)))
 				}

@@ -344,6 +344,13 @@ type Scene struct {
 	Volume      float64
 	VolumeColor Vec3
 
+	// RISCandidates enables ReSTIR-style direct lighting (resampled importance
+	// sampling): each NEE draw resamples one of this many candidate light samples
+	// weighted by their unshadowed contribution, then shadow-tests only the
+	// survivor. 0/1 = the plain single-sample estimator; higher cuts noise in
+	// many-light scenes. Requires NEE on and MIS off (it replaces light-side MIS).
+	RISCandidates int
+
 	sbvh *objBVH  // optional top-level acceleration structure (see BuildBVH)
 	emit []Sphere // emissive spheres, cached for next-event estimation
 }
