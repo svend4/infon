@@ -58,6 +58,7 @@ type opts struct {
 	path    bool
 	depth   int
 	nee     bool
+	mis     bool
 	denoise int
 }
 
@@ -65,7 +66,7 @@ type opts struct {
 func renderImage(scene *raytrace.Scene, cam raytrace.Camera, w, h int, o opts) image.Image {
 	var img image.Image
 	if o.path {
-		img = raytrace.PathRender(scene, cam, w, h, raytrace.PathOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1, NEE: o.nee})
+		img = raytrace.PathRender(scene, cam, w, h, raytrace.PathOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1, NEE: o.nee, MIS: o.mis})
 	} else {
 		img = raytrace.Render(scene, cam, w, h, raytrace.Options{Samples: o.spp})
 	}
@@ -88,10 +89,11 @@ func main() {
 	pathT := flag.Bool("path", false, "use the Monte-Carlo path tracer (global illumination)")
 	depth := flag.Int("depth", 6, "path tracer max bounces")
 	nee := flag.Bool("nee", true, "path tracer: next-event estimation (direct light sampling)")
+	mis := flag.Bool("mis", false, "path tracer: multiple importance sampling (light + BSDF)")
 	denoise := flag.Int("denoise", 0, "à-trous denoiser passes applied to the result (0 = off)")
 	flag.Parse()
 
-	o := opts{spp: *spp, path: *pathT, depth: *depth, nee: *nee, denoise: *denoise}
+	o := opts{spp: *spp, path: *pathT, depth: *depth, nee: *nee, mis: *mis, denoise: *denoise}
 	w := demoWire()
 
 	const ecc = 10

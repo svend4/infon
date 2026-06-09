@@ -60,6 +60,41 @@ func TestNEELightsSmallEmitterAtLowSPP(t *testing.T) {
 	}
 }
 
+func TestMISAndNEEAreUnbiased(t *testing.T) {
+	build := func() *Scene {
+		return &Scene{
+			Objects: []Object{
+				Plane{Y: 0, Size: 1, C1: Vec3{0.7, 0.7, 0.7}, C2: Vec3{0.7, 0.7, 0.7}},
+				Sphere{Center: Vec3{0, 4, 0}, Radius: 1.0, Mat: Material{Emit: Vec3{8, 8, 8}}},
+			},
+		}
+	}
+	cam := Camera{Pos: Vec3{0, 2, 6}, Yaw: math.Pi, Pitch: -0.3, FOV: 1.0}
+	avg := func(opt PathOptions) float64 {
+		img := PathRender(build(), cam, 28, 28, opt)
+		var s float64
+		n := 0
+		for y := 14; y < 26; y++ {
+			for x := 8; x < 20; x++ {
+				r, g, b, _ := img.At(x, y).RGBA()
+				s += lum(r, g, b)
+				n++
+			}
+		}
+		return s / float64(n)
+	}
+	ref := avg(PathOptions{Samples: 300, MaxDepth: 4, Seed: 1}) // naive ground truth
+	mis := avg(PathOptions{Samples: 64, MaxDepth: 4, Seed: 2, MIS: true})
+	nee := avg(PathOptions{Samples: 64, MaxDepth: 4, Seed: 3, NEE: true})
+	tol := ref*0.2 + 300 // generous Monte-Carlo tolerance
+	if math.Abs(mis-ref) > tol {
+		t.Errorf("MIS mean %.0f vs naive %.0f (tol %.0f) - biased?", mis, ref, tol)
+	}
+	if math.Abs(nee-ref) > tol {
+		t.Errorf("NEE mean %.0f vs naive %.0f (tol %.0f) - biased?", nee, ref, tol)
+	}
+}
+
 func TestPathEmissiveIsBright(t *testing.T) {
 	sc := &Scene{
 		Objects: []Object{Sphere{Center: Vec3{0, 0, 0}, Radius: 1, Mat: Material{Emit: Vec3{1, 1, 1}}}},
