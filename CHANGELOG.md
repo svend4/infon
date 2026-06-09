@@ -82,9 +82,13 @@ adopting, and it was reimplemented better).
   guests' worlds fill from the host's broadcasts.
 - **Talk in the shared world** (`cmd/raymeet`, `pkg/raydir/chat.go`): a `/message`
   is relayed through the hub to everyone and shown in a chat log under the view
-  (reusing the existing `network.TextMessage`), with a `-name`. Voice travels the
-  same relay path (audio packets) as the next increment. Verified live: one
+  (reusing the existing `network.TextMessage`), with a `-name`. Verified live: one
   guest's message reaches the other guest and the hub.
+- **Voice in the shared world** (`cmd/raymeet -voice`): the mic is captured in
+  20 ms PCM chunks and relayed on the same hub path as chat (`PacketTypeAudio`,
+  reusing `internal/audio`); received audio is played back. It falls back to
+  text-only when there is no audio device, so the experience never depends on
+  hardware. Chat/pose/world relay all share one `sendGroup`/`relayToOthers` path.
 - **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
   exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
 

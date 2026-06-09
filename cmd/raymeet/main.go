@@ -1,12 +1,12 @@
 // Command raymeet is the shared-world experience for a group: several people (and
 // AIs) "call in" and walk the SAME 3-D world together, in the terminal, each
-// seeing everyone else's avatar. Pixels never cross the wire. One peer is the
-// director host (the hub): it asks its brain to author each region and broadcasts
-// the region's compact scene spec (game:rayscene); guests reconstruct each
-// identical region locally. The hub also relays everyone's pose to everyone, so
-// the only things on the wire are ~100-byte region specs and 44-byte poses —
-// meaning, not pixels — and the world stays in sync even with a live AI director
-// (set BRAIN_URL on the host).
+// seeing everyone else's avatar and able to talk. Pixels never cross the wire. One
+// peer is the director host (the hub): it asks its brain to author each region and
+// broadcasts the region's compact scene spec (game:rayscene); guests reconstruct
+// each identical region locally. The hub also relays everyone's pose, chat and
+// voice to everyone, so the wire carries ~100-byte region specs, 44-byte poses and
+// short text/audio — meaning, not pixels — and the world stays in sync even with a
+// live AI director (set BRAIN_URL on the host).
 //
 //	# host / director (the hub), listens on 5000
 //	go run ./cmd/raymeet -host 5000
@@ -14,7 +14,8 @@
 //	go run ./cmd/raymeet localhost:5000 5001
 //	go run ./cmd/raymeet localhost:5000 5002   # ...and a third, fourth, ...
 //
-// Controls (type then Enter): w/s walk, a/d strafe, q/e turn, r/f look, x quit.
+// Controls (type then Enter): w/s walk, a/d strafe, q/e turn, r/f look,
+// /message to chat, x quit. Add -voice to also carry audio (falls back to text).
 package main
 
 import (
@@ -29,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/svend4/infon/internal/audio"
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/internal/network"
 	"github.com/svend4/infon/pkg/brain"
@@ -41,6 +43,7 @@ func main() {
 	host := flag.Bool("host", false, "be the director hub: author/broadcast the world and relay poses")
 	modeFlag := flag.String("mode", "auto", "terminal render mode")
 	nameFlag := flag.String("name", "", "your chat name (default walker-<id>)")
+	voice := flag.Bool("voice", false, "carry voice too (needs a mic/speaker; falls back to text-only)")
 	pathT := flag.Bool("path", false, "path-trace (prettier, slower)")
 	cols := flag.Int("w", 80, "width in cells")
 	rows := flag.Int("h", 36, "height in cells")
@@ -112,8 +115,85 @@ func main() {
 			_ = transport.SendPacket(&network.Packet{Type: typ, Sequence: transport.NextSequence(), Timestamp: uint64(time.Now().UnixMilli()), Payload: payload}, addr)
 		}
 	}
+	// sendGroup: a guest sends to the hub; the hub fans out to every peer. Chat and
+	// voice both ride this path.
+	sendGroup := func(typ uint8, payload []byte) {
+		if *host {
+			stateMu.Lock()
+			for _, a := range peers {
+				sendTo(a, typ, payload)
+			}
+			stateMu.Unlock()
+		} else {
+			sendTo(hubAddr, typ, payload)
+		}
+	}
+	// relayToOthers (host only): forward a received packet to every peer but the
+	// one it came from, so guests reach each other through the hub.
+	relayToOthers := func(origin *net.UDPAddr, typ uint8, payload []byte) {
+		if !*host {
+			return
+		}
+		key := ""
+		if origin != nil {
+			key = origin.String()
+		}
+		stateMu.Lock()
+		for k, a := range peers {
+			if k != key {
+				sendTo(a, typ, payload)
+			}
+		}
+		stateMu.Unlock()
+	}
+	sendChat := func(msg string) {
+		if payload, e := network.EncodeTextMessage(network.NewTextMessage(name, msg)); e == nil {
+			sendGroup(network.PacketTypeTextChat, payload)
+		}
+		chatMu.Lock()
+		chat.Add(name, msg)
+		chatMu.Unlock()
+	}
 	if !*host {
 		sendTo(hubAddr, network.PacketTypeHandshake, []byte("raymeet")) // announce to the hub
+	}
+
+	// Voice (optional): capture the mic in 20ms PCM chunks and ship them on the same
+	// relay as chat; play received audio. Falls back to text-only if there is no
+	// audio device, so the experience never depends on hardware.
+	voiceOn := false
+	var play audio.AudioPlayback
+	if *voice {
+		af := audio.DefaultFormat()
+		capDev, e1 := audio.NewDefaultCapture()
+		plDev, e2 := audio.NewDefaultPlayback()
+		if e1 == nil && e2 == nil && capDev.Open() == nil {
+			if plDev.Open() == nil {
+				voiceOn, play = true, plDev
+				defer func() { _ = capDev.Close() }()
+				defer func() { _ = plDev.Close() }()
+				go func() {
+					buf := make([]int16, af.SampleRate/50) // 20ms
+					t := time.NewTicker(20 * time.Millisecond)
+					defer t.Stop()
+					for range t.C {
+						n, e := capDev.Read(buf)
+						if e != nil || n == 0 {
+							continue
+						}
+						ap := &network.AudioPacket{Timestamp: uint64(time.Now().UnixMilli()), SampleRate: uint16(af.SampleRate), Channels: uint8(af.Channels), Codec: network.AudioCodecPCM, Samples: append([]int16(nil), buf[:n]...)}
+						if payload, e := network.EncodeAudioPacket(ap); e == nil {
+							sendGroup(network.PacketTypeAudio, payload)
+						}
+					}
+				}()
+			} else {
+				_ = capDev.Close()
+			}
+		}
+		if !voiceOn {
+			fmt.Fprintln(os.Stderr, "voice: no audio device available; continuing text-only")
+		}
 	}
 
 	growHost := func(count int) {
@@ -141,12 +221,12 @@ func main() {
 		growHost(3)
 	}
 
-	// receive: poses (everyone), regions (guests), and peer discovery (host).
+	// receive: poses, regions, chat and voice; peer discovery and relay on the host.
 	go func() {
 		for {
-			p, addr, err := transport.ReceivePacket()
-			if err != nil {
-				if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			p, addr, e := transport.ReceivePacket()
+			if e != nil {
+				if ne, ok := e.(net.Error); ok && ne.Timeout() {
 					continue
 				}
 				return
@@ -159,8 +239,8 @@ func main() {
 					stateMu.Unlock()
 				}
 			case network.PacketTypeAvatar:
-				set, e := raydir.DecodePoseSet(p.Payload)
-				if e != nil {
+				set, de := raydir.DecodePoseSet(p.Payload)
+				if de != nil {
 					continue
 				}
 				stateMu.Lock()
@@ -178,28 +258,26 @@ func main() {
 				stateMu.Unlock()
 			case network.PacketTypeScreen:
 				if !*host {
-					if reg, e := raydir.DecodeRegion(p.Payload); e == nil {
+					if reg, de := raydir.DecodeRegion(p.Payload); de == nil {
 						worldMu.Lock()
 						world.AddRegion(reg)
 						worldMu.Unlock()
 					}
 				}
 			case network.PacketTypeTextChat:
-				if tm, e := network.DecodeTextMessage(p.Payload); e == nil {
+				if tm, de := network.DecodeTextMessage(p.Payload); de == nil {
 					chatMu.Lock()
 					chat.Add(tm.Sender, tm.Message)
 					chatMu.Unlock()
-					if *host && addr != nil { // relay to everyone but the sender
-						origin := addr.String()
-						stateMu.Lock()
-						for k, a := range peers {
-							if k != origin {
-								sendTo(a, network.PacketTypeTextChat, p.Payload)
-							}
-						}
-						stateMu.Unlock()
+					relayToOthers(addr, network.PacketTypeTextChat, p.Payload)
+				}
+			case network.PacketTypeAudio:
+				if voiceOn && play != nil {
+					if ap, de := network.DecodeAudioPacket(p.Payload); de == nil && len(ap.Samples) > 0 {
+						_, _ = play.Write(ap.Samples)
 					}
 				}
+				relayToOthers(addr, network.PacketTypeAudio, p.Payload)
 			}
 		}
 	}()
@@ -212,28 +290,6 @@ func main() {
 		}
 		close(lines)
 	}()
-
-	// sendChat ships a text message to the group (guest -> hub, host -> all) and
-	// shows it locally. Voice would travel the same path as PacketTypeAudio.
-	sendChat := func(msg string) {
-		tm := network.NewTextMessage(name, msg)
-		payload, err := network.EncodeTextMessage(tm)
-		if err != nil {
-			return
-		}
-		if *host {
-			stateMu.Lock()
-			for _, a := range peers {
-				sendTo(a, network.PacketTypeTextChat, payload)
-			}
-			stateMu.Unlock()
-		} else {
-			sendTo(hubAddr, network.PacketTypeTextChat, payload)
-		}
-		chatMu.Lock()
-		chat.Add(name, msg)
-		chatMu.Unlock()
-	}
 
 	mode := *modeFlag
 	if mode == "" || mode == "auto" {
@@ -273,7 +329,11 @@ func main() {
 	if *host {
 		role = "host/director (" + who + ")"
 	}
-	fmt.Printf("raymeet [%s] — group shared world. Only poses and region specs cross the wire; pixels never do.\n", role)
+	vtag := ""
+	if voiceOn {
+		vtag = " +voice"
+	}
+	fmt.Printf("raymeet [%s%s] — group shared world. Only poses, region specs and chat/voice cross the wire; pixels never do.\n", role, vtag)
 	ticker := time.NewTicker(120 * time.Millisecond)
 	defer ticker.Stop()
 	tick := 0
@@ -364,8 +424,8 @@ func main() {
 			im = raytrace.Render(scene, self.Camera(), pxW, pxH, raytrace.Options{Samples: 1})
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
-		fmt.Printf("\n[%s as %s | chunks:%d | walkers:%d | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f, /msg to chat, x=quit]",
-			role, name, chunks, others+1, self.Pos.X, self.Pos.Y, self.Pos.Z)
+		fmt.Printf("\n[%s as %s%s | chunks:%d | walkers:%d | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f, /msg, x=quit]",
+			role, name, vtag, chunks, others+1, self.Pos.X, self.Pos.Y, self.Pos.Z)
 		chatMu.Lock()
 		for _, l := range chat.Lines() {
 			fmt.Printf("\n  💬 %s", l)
