@@ -378,10 +378,17 @@ func (s *Scene) scatterGlassIOR(r Ray, h Hit, rg *rng, ior float64) Ray {
 }
 
 // lensRay generates a depth-of-field primary ray through sub-pixel (px,py) using
-// the camera aperture/focus; with Aperture 0 it is the pinhole ray.
+// the camera aperture/focus; with Aperture 0 it is the pinhole ray. The shutter
+// time is sampled here (static objects ignore it).
 func (b camBasis) lensRay(px, py float64, cam Camera, rg *rng) Ray {
+	return b.lensRayAt(px, py, rg.f(), cam, rg)
+}
+
+// lensRayAt is lensRay with the shutter time supplied by the caller, so camera
+// motion blur can pick the interpolated camera pose at that same time.
+func (b camBasis) lensRayAt(px, py, time float64, cam Camera, rg *rng) Ray {
 	base := b.ray(px, py)
-	base.Time = rg.f() // shutter time in [0,1] for motion blur (static objects ignore it)
+	base.Time = time
 	if cam.Aperture <= 0 {
 		return base
 	}
@@ -405,6 +412,17 @@ func (b camBasis) lensRay(px, py float64, cam Camera, rg *rng) Ray {
 // radiance per pixel (row-major), pre-tone-map. Parallel and deterministic given
 // Seed. PathRender and Accumulator are both built on it.
 func pathSum(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) []Vec3 {
+	b := cam.basis(pxW, pxH)
+	return pathSumRays(s, pxW, pxH, opt, func(u, v float64, rg *rng) Ray {
+		return b.lensRay(u, v, cam, rg)
+	})
+}
+
+// pathSumRays is the shared parallel sampler: for each pixel it draws spp paths,
+// generating each primary ray via gen, and returns the per-pixel radiance sum.
+// The static camera, the moving camera (pathSumMotion) and any future primary-ray
+// scheme all share this one worker loop.
+func pathSumRays(s *Scene, pxW, pxH int, opt PathOptions, gen func(u, v float64, rg *rng) Ray) []Vec3 {
 	buf := make([]Vec3, pxW*pxH)
 	if pxW <= 0 || pxH <= 0 {
 		return buf
@@ -417,7 +435,6 @@ func pathSum(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) []Vec3 {
 	if depth < 1 {
 		depth = 6
 	}
-	b := cam.basis(pxW, pxH)
 	s.gatherEmitters()
 	mode := opt.mode()
 
@@ -445,7 +462,7 @@ func pathSum(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) []Vec3 {
 					for i := 0; i < spp; i++ {
 						u := float64(x) + rg.f()
 						v := float64(y) + rg.f()
-						acc = acc.Add(s.radiance(b.lensRay(u, v, cam, rg), depth, rg, mode))
+						acc = acc.Add(s.radiance(gen(u, v, rg), depth, rg, mode))
 					}
 					buf[y*pxW+x] = acc
 				}
@@ -456,17 +473,12 @@ func pathSum(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) []Vec3 {
 	return buf
 }
 
-// PathRender renders the scene with Monte-Carlo global illumination.
-func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image {
+// tonemapSum tone-maps a per-pixel radiance sum (spp samples each) to an image.
+func tonemapSum(buf []Vec3, pxW, pxH, spp int) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, pxW, pxH))
-	if pxW <= 0 || pxH <= 0 {
-		return img
-	}
-	spp := opt.Samples
 	if spp < 1 {
 		spp = 1
 	}
-	buf := pathSum(s, cam, pxW, pxH, opt)
 	inv := 1.0 / float64(spp)
 	for y := 0; y < pxH; y++ {
 		for x := 0; x < pxW; x++ {
@@ -474,6 +486,14 @@ func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image
 		}
 	}
 	return img
+}
+
+// PathRender renders the scene with Monte-Carlo global illumination.
+func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image {
+	if pxW <= 0 || pxH <= 0 {
+		return image.NewRGBA(image.Rect(0, 0, pxW, pxH))
+	}
+	return tonemapSum(pathSum(s, cam, pxW, pxH, opt), pxW, pxH, opt.Samples)
 }
 
 // Accumulator progressively averages path-traced samples, so a viewer can refine
