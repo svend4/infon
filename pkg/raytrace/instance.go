@@ -91,10 +91,11 @@ func (a Transform) Mul(b Transform) Transform {
 // Instance is a transformed placement of a (bounded) object.
 type Instance struct {
 	obj     Object
-	m       mat3 // local -> world linear part
-	t       Vec3 // local -> world translation
-	minv    mat3 // world -> local linear part
-	normalM mat3 // inverse-transpose, for normals
+	m       mat3      // local -> world linear part
+	t       Vec3      // local -> world translation
+	minv    mat3      // world -> local linear part
+	normalM mat3      // inverse-transpose, for normals
+	mat     *Material // optional material override (nil = keep the object's own)
 }
 
 // NewInstance places obj under the given local->world transform.
@@ -104,6 +105,15 @@ func NewInstance(obj Object, xf Transform) *Instance {
 		minv = identity3() // degenerate transform: fall back to identity linear part
 	}
 	return &Instance{obj: obj, m: xf.M, t: xf.T, minv: minv, normalM: minv.transpose()}
+}
+
+// NewInstanceMat is NewInstance with a material override: every hit on this
+// placement reports mat instead of the wrapped object's own material, so one
+// shared mesh can be placed in many colours/finishes without duplicating geometry.
+func NewInstanceMat(obj Object, xf Transform, mat Material) *Instance {
+	in := NewInstance(obj, xf)
+	in.mat = &mat
+	return in
 }
 
 // Intersect transforms the ray into local space, intersects the wrapped object,
@@ -129,6 +139,9 @@ func (in *Instance) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 	h.Front = front
 	if h.Tan.LenSq() > geomEps { // tangents transform by M (not the inverse-transpose)
 		h.Tan = in.m.mul(h.Tan).Norm()
+	}
+	if in.mat != nil { // per-instance material override
+		h.Mat = *in.mat
 	}
 	return h, true
 }

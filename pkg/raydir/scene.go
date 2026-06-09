@@ -62,6 +62,9 @@ func objectsFromSpec(o brain.ObjSpec, at raytrace.Vec3, includePlane bool) []ray
 			return nil // unknown model
 		}
 		xf := raytrace.Translate(specCenter(o, at)).Mul(raytrace.ScaleUniform(specScale(o)))
+		if specHasMaterial(o) { // author tinted/retextured this placement
+			return []raytrace.Object{raytrace.NewInstanceMat(m, xf, objMaterial(o))}
+		}
 		return []raytrace.Object{raytrace.NewInstance(m, xf)}
 	default:
 		return []raytrace.Object{raytrace.Sphere{
@@ -93,6 +96,13 @@ func specScale(o brain.ObjSpec) float64 {
 		return 1
 	}
 	return o.R
+}
+
+// specHasMaterial reports whether the spec set any material field, i.e. whether a
+// "mesh" placement wants to override the model's own baked material with its own.
+func specHasMaterial(o brain.ObjSpec) bool {
+	return o.Color != [3]float64{} || o.Emit != [3]float64{} ||
+		o.Glass != 0 || o.Metal != 0 || o.Reflect != 0 || o.Rough != 0
 }
 
 // maxRegionObjects caps how many objects one authored scene may contribute, so a

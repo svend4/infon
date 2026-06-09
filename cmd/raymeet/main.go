@@ -10,6 +10,8 @@
 //
 //	# host / director (the hub), listens on 5000
 //	go run ./cmd/raymeet -host 5000
+//	# host that resumes / persists its authored world to a tiny file
+//	go run ./cmd/raymeet -host -world myworld.rwld 5000
 //	# each guest connects to the hub
 //	go run ./cmd/raymeet localhost:5000 5001
 //	go run ./cmd/raymeet localhost:5000 5002   # ...and a third, fourth, ...
@@ -47,6 +49,7 @@ func main() {
 	pathT := flag.Bool("path", false, "path-trace (prettier, slower)")
 	cols := flag.Int("w", 80, "width in cells")
 	rows := flag.Int("h", 36, "height in cells")
+	worldFile := flag.String("world", "", "host: persist the authored world to this file (load on start, save as it grows)")
 	flag.Parse()
 	args := flag.Args()
 	pxW, pxH := *cols*2, *rows*4
@@ -97,6 +100,17 @@ func main() {
 	world := raydir.NewWorld()
 	var worldMu sync.Mutex
 	var regions []raydir.Region
+	// persistence: a host resumes a saved world (a tiny file of region specs —
+	// meaning, not pixels) instead of re-authoring it from scratch.
+	if *host && *worldFile != "" {
+		if loaded, e := raydir.LoadWorldFile(*worldFile); e == nil && len(loaded) > 0 {
+			for _, r := range loaded {
+				world.AddRegion(r)
+				regions = append(regions, r)
+			}
+			fmt.Printf("resumed %d regions from %s\n", len(loaded), *worldFile)
+		}
+	}
 
 	self := raydir.FlyCam{Pos: raytrace.Vec3{X: 0, Y: 2.2, Z: 0}, Pitch: -0.08, FOV: math.Pi / 3}
 
@@ -212,6 +226,7 @@ func main() {
 			addrs = append(addrs, a)
 		}
 		stateMu.Unlock()
+		before := len(regions)
 		for len(regions) < count {
 			i := len(regions)
 			reg, _, e := world.AuthorRegion(b, prompts[i%len(prompts)], i, regionAt(i))
@@ -222,6 +237,9 @@ func main() {
 			for _, a := range addrs {
 				sendTo(a, network.PacketTypeScreen, reg.Encode())
 			}
+		}
+		if *worldFile != "" && len(regions) > before { // persist only when it grew
+			_ = raydir.SaveWorld(*worldFile, regions)
 		}
 		worldMu.Unlock()
 	}

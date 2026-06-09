@@ -68,6 +68,10 @@ adopting, and it was reimplemented better).
   with no code change, and a hundred placements share one mesh via cheap
   `Instance` transforms while still sending only a name over the wire. Unknown
   model names are dropped by the same sanitiser that guards the rest of a spec.
+  A `mesh` placement that sets any material field (`color`/`metal`/`reflect`/
+  `rough`/`glass`/`emit`) overrides the model's baked material for that placement
+  (`raytrace.NewInstanceMat`), so one shared mesh can appear in many colours and
+  finishes; an untinted placement keeps the model's own look.
 - **The experience — walk a world the AI dreams up** (`cmd/rayexplore`,
   `pkg/raydir/fly.go`): a free-fly camera through a `World` the brain authors and
   **extends on the fly** — walk forward and new regions are composed ahead of you,
@@ -115,6 +119,13 @@ adopting, and it was reimplemented better).
   that guest, instead of blasting everything to everyone. New regions are still
   pushed immediately; gaps (loss or late join) self-heal. Verified live: a guest
   that joins after authoring reaches the full world purely via ack gap-fill.
+- **Persistent worlds** (`cmd/raymeet -world`, `pkg/raydir/persist.go`): a host can
+  save its authored world and resume it. The world *is* its list of `Region`s —
+  positions plus the director's scene specs — so `SaveWorld`/`LoadWorldFile` write a
+  tiny file (meaning, not pixels): a host restarts where it left off instead of
+  re-authoring, and a world becomes something you can copy and share. Saved
+  atomically (temp + rename), only when the world grows; reloaded regions reach
+  guests through the existing ack gap-fill. Round-trip and rebuild are tested.
 - **Hardening against a live model** (`pkg/raydir`): the director's output is
   sanitised so a sloppy or adversarial brain can't crash or corrupt the world —
   unknown object kinds and non-finite coordinates are dropped, sizes/emission/

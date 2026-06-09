@@ -110,4 +110,8 @@ it idempotently and ack what they have, so loss and late joins self-heal.
 - Geometry is procedural primitives + composites *and* named meshes: `kind:mesh`
   instances a model from the renderer's library (built-in `crystal`/`rock`, plus
   any `.obj` loaded via `LoadMeshDir`), placed as a shared `Instance` — so a
-  hundred copies cost one mesh, and still only a name crosses the wire.
+  hundred copies cost one mesh, and still only a name crosses the wire. A `mesh`
+  that sets material fields is tinted per-placement (one mesh, many finishes).
+- A host can **persist and resume** its world (`-world file`): the world is just
+  its region specs, so it saves/loads as a tiny file — restart where you left off,
+  or copy a world to share it. (`SaveWorld`/`LoadWorldFile`.)
