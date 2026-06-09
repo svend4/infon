@@ -2,6 +2,7 @@ package brain
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 )
 
@@ -43,7 +44,10 @@ type ObjSpec struct {
 // ("gold", "night"), so behaviour is reproducible without a real model.
 func refRayScene(req Request) Response {
 	var p struct {
-		Prompt string `json:"prompt"`
+		Prompt  string     `json:"prompt"`
+		Index   int        `json:"index"`
+		Heading [3]float64 `json:"heading"`
+		Prev    *SceneSpec `json:"prev"`
 	}
 	_ = json.Unmarshal(req.State, &p)
 	spec := SceneSpec{
@@ -56,6 +60,23 @@ func refRayScene(req Request) Response {
 			{Y: 0.6, Z: 2, R: 0.6, Glass: 1.5},
 			{Y: 6, Z: -1, R: 0.7, Emit: [3]float64{18, 18, 17}},
 		},
+	}
+	// Continuity: a region connects to the place that came before it. Inherit the
+	// previous region's sky (so adjacent regions share a sky, before any keyword
+	// override), and lay a path of stepping stones leading back toward it along the
+	// reverse of the walking heading — turning independent chunks into one journey.
+	if p.Prev != nil {
+		spec.SkyTop, spec.SkyBot = p.Prev.SkyTop, p.Prev.SkyBot
+	}
+	if hl := math.Hypot(p.Heading[0], p.Heading[2]); hl > 1e-6 {
+		ux, uz := p.Heading[0]/hl, p.Heading[2]/hl
+		for k := 1; k <= 4; k++ {
+			d := 2.0 * float64(k)
+			spec.Objects = append(spec.Objects, ObjSpec{
+				Kind: "cylinder", X: -ux * d, Z: -uz * d, R: 0.4,
+				S: [3]float64{0.4, 0.05, 0.4}, Color: [3]float64{0.6, 0.6, 0.62}, Rough: 0.6,
+			})
+		}
 	}
 	if strings.Contains(p.Prompt, "gold") {
 		spec.Objects[1].Color = [3]float64{1, 0.78, 0.34}

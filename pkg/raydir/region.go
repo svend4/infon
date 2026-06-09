@@ -142,9 +142,10 @@ func (w *World) AddRegion(r Region) int { return w.applyRegion(r.Index, r.At, r.
 // AuthorRegion (host side) asks the brain to author region `index` at `at`, applies
 // it locally, and returns the Region to broadcast to peers.
 func (w *World) AuthorRegion(b brain.Brain, prompt string, index int, at raytrace.Vec3) (Region, int, error) {
-	_, spec, err := AuthorScene(b, prompt)
+	_, spec, err := AuthorSceneCtx(b, prompt, w.context(index, at))
 	if err != nil {
 		return Region{}, 0, err
 	}
+	w.lastSpec, w.lastAt = &spec, at
 	return Region{Index: index, At: at, Spec: spec}, w.applyRegion(index, at, spec), nil
 }

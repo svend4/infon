@@ -201,14 +201,33 @@ func DecodeSceneSpec(data []byte) (*raytrace.Scene, brain.SceneSpec, error) {
 	return BuildScene(spec), spec, nil
 }
 
+// SceneContext carries continuity hints to the director so authored regions
+// connect into a coherent place rather than independent islands: the region index,
+// the walking heading (world direction from the previous region to this one), and
+// the previous region's spec. All optional — a zero context just authors fresh.
+type SceneContext struct {
+	Index   int
+	Heading raytrace.Vec3
+	Prev    *brain.SceneSpec
+}
+
 // AuthorScene asks a brain to author a scene for the prompt (game "rayscene"). It
 // is robust to a live model: a transport error is returned, but unusable model
 // output (bad JSON, or nothing renderable) becomes a safe fallback region so the
 // shared world never stalls or breaks.
 func AuthorScene(b brain.Brain, prompt string) (*raytrace.Scene, brain.SceneSpec, error) {
+	return AuthorSceneCtx(b, prompt, SceneContext{})
+}
+
+// AuthorSceneCtx is AuthorScene with continuity context (index, heading, previous
+// region) passed to the director, so it can extend the world coherently.
+func AuthorSceneCtx(b brain.Brain, prompt string, ctx SceneContext) (*raytrace.Scene, brain.SceneSpec, error) {
 	state, _ := json.Marshal(struct {
-		Prompt string `json:"prompt"`
-	}{prompt})
+		Prompt  string           `json:"prompt"`
+		Index   int              `json:"index"`
+		Heading [3]float64       `json:"heading"`
+		Prev    *brain.SceneSpec `json:"prev,omitempty"`
+	}{prompt, ctx.Index, [3]float64{ctx.Heading.X, ctx.Heading.Y, ctx.Heading.Z}, ctx.Prev})
 	resp, err := b.Decide(brain.Request{Protocol: brain.Protocol, Kind: "move", Game: "rayscene", State: state})
 	if err != nil {
 		return nil, brain.SceneSpec{}, err

@@ -89,6 +89,10 @@ adopting, and it was reimplemented better).
   **extends on the fly** — walk forward and new regions are composed ahead of you,
   each shipped as a compact scene description (meaning, not pixels) and ray-traced
   locally. Offline with the reference brain, or a real director via `BRAIN_URL`.
+  Regions now **connect into one place** (`SceneContext`/`AuthorSceneCtx`): the
+  director is given the previous region's spec and the walking heading, so a region
+  inherits the prior sky and lays a path of stepping stones leading back — a
+  continuous journey, not independent islands.
 - **The shared world — two walkers, one space** (`cmd/raymeet`,
   `pkg/raydir/pose.go`, `pkg/raydir/region.go`): two peers "call in" over UDP and
   walk the *same* growing world together, each seeing the other's glowing avatar.

@@ -58,7 +58,9 @@ type World struct {
 	floor             raytrace.Object
 	props             []raytrace.Object
 	chunks            int
-	seen              map[int]bool // applied region indices (idempotent growth)
+	seen              map[int]bool     // applied region indices (idempotent growth)
+	lastSpec          *brain.SceneSpec // last authored region (continuity context)
+	lastAt            raytrace.Vec3    // where it sat (to derive the heading)
 }
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
@@ -79,11 +81,22 @@ func (w *World) Props() int { return len(w.props) }
 // Grow asks the brain to author a scene chunk (game:rayscene) and places its props
 // centred at `at`, so the world extends by meaning. Returns the props added.
 func (w *World) Grow(b brain.Brain, prompt string, at raytrace.Vec3) (int, error) {
-	_, spec, err := AuthorScene(b, prompt)
+	_, spec, err := AuthorSceneCtx(b, prompt, w.context(w.chunks, at))
 	if err != nil {
 		return 0, err
 	}
+	w.lastSpec, w.lastAt = &spec, at
 	return w.applyRegion(w.chunks, at, spec), nil
+}
+
+// context builds the continuity hints for authoring the next region: its index and
+// the heading from the previous region to this one (zero on the first region).
+func (w *World) context(index int, at raytrace.Vec3) SceneContext {
+	ctx := SceneContext{Index: index, Prev: w.lastSpec}
+	if w.lastSpec != nil {
+		ctx.Heading = at.Sub(w.lastAt)
+	}
+	return ctx
 }
 
 // Scene builds a renderable, BVH-accelerated scene from the floor and all props.
