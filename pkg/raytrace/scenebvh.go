@@ -15,6 +15,11 @@ func objectBounds(o Object) (aabb, bool) {
 	case Sphere:
 		r := Vec3{X: v.Radius, Y: v.Radius, Z: v.Radius}
 		return aabb{min: v.Center.Sub(r), max: v.Center.Add(r)}, true
+	case MovingSphere:
+		r := Vec3{X: v.Radius, Y: v.Radius, Z: v.Radius}
+		b0 := aabb{min: v.C0.Sub(r), max: v.C0.Add(r)}
+		b1 := aabb{min: v.C1.Sub(r), max: v.C1.Add(r)}
+		return b0.union(b1), true
 	case Triangle:
 		return triBounds(v), true
 	case *Mesh:

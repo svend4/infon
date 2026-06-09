@@ -22,7 +22,12 @@ import (
 )
 
 // Ray is a half-line Origin + t*Dir. Dir is expected to be unit length.
-type Ray struct{ Origin, Dir Vec3 }
+// Ray is a half-line. Time is the shutter fraction in [0,1] the ray is sampled
+// at; static objects ignore it, MovingSphere uses it for motion blur.
+type Ray struct {
+	Origin, Dir Vec3
+	Time        float64
+}
 
 // At returns the point at parameter t along the ray.
 func (r Ray) At(t float64) Vec3 { return r.Origin.Add(r.Dir.Scale(t)) }
@@ -98,9 +103,15 @@ type Sphere struct {
 
 // Intersect implements Object for a sphere (unit-direction quadratic, a=1).
 func (s Sphere) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
-	oc := r.Origin.Sub(s.Center)
+	return intersectSphere(s.Center, s.Radius, s.Mat, r, tMin, tMax)
+}
+
+// intersectSphere is the shared ray/sphere test used by Sphere and MovingSphere
+// (the latter passes the center evaluated at the ray's time).
+func intersectSphere(center Vec3, radius float64, mat Material, r Ray, tMin, tMax float64) (Hit, bool) {
+	oc := r.Origin.Sub(center)
 	b := oc.Dot(r.Dir)
-	c := oc.LenSq() - s.Radius*s.Radius
+	c := oc.LenSq() - radius*radius
 	disc := b*b - c
 	if disc < 0 {
 		return Hit{}, false
@@ -113,11 +124,11 @@ func (s Sphere) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 		}
 	}
 	p := r.At(t)
-	gn := p.Sub(s.Center).Norm()
+	gn := p.Sub(center).Norm()
 	n, front := orient(gn, r.Dir)
 	u := 0.5 + math.Atan2(gn.Z, gn.X)/(2*math.Pi)
 	v := 0.5 - math.Asin(math.Max(-1, math.Min(1, gn.Y)))/math.Pi
-	return Hit{T: t, P: p, N: n, U: u, V: v, Front: front, Mat: s.Mat}, true
+	return Hit{T: t, P: p, N: n, U: u, V: v, Front: front, Mat: mat}, true
 }
 
 // sphereOverlaps reports whether ray r's [tMin,tMax] segment crosses the sphere.
@@ -130,6 +141,25 @@ func sphereOverlaps(r Ray, center Vec3, radius, tMin, tMax float64) bool {
 	}
 	sq := math.Sqrt(disc)
 	return -b-sq <= tMax && -b+sq >= tMin
+}
+
+// MovingSphere is a sphere whose center travels linearly from C0 (shutter open,
+// time 0) to C1 (shutter close, time 1). Sampling many rays with times spread
+// over [0,1] (the camera does this automatically) renders motion blur.
+type MovingSphere struct {
+	C0, C1 Vec3
+	Radius float64
+	Mat    Material
+}
+
+// center returns the sphere's center at shutter fraction t in [0,1].
+func (m MovingSphere) center(t float64) Vec3 {
+	return m.C0.Add(m.C1.Sub(m.C0).Scale(t))
+}
+
+// Intersect evaluates the sphere at the ray's time, then does the static test.
+func (m MovingSphere) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
+	return intersectSphere(m.center(r.Time), m.Radius, m.Mat, r, tMin, tMax)
 }
 
 // ---------- triangle ----------

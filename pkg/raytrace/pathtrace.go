@@ -123,6 +123,7 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng, mode int) Vec3 {
 	specularPrev := true // the camera ray counts as a specular connection
 	var prevPdfB float64
 	nEmit := len(s.emit)
+	tm := r.Time // shutter time, constant along the whole path (motion blur)
 pathLoop:
 	for d := 0; d < maxDepth; d++ {
 		h, ok := s.closest(r, shadowEps, tFar)
@@ -204,11 +205,11 @@ pathLoop:
 				}
 				g := g1ggx(nv, a) * g1ggx(nl, a)
 				throughput = throughput.Mul(schlickV(f0, vh)).Scale(g * vh / (nv * nh) / pSpec)
-				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: wi}
+				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: wi, Time: tm}
 				specularPrev = true
 			} else {
 				throughput = throughput.Mul(alb.Scale((1 - m) / (1 - pSpec)))
-				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: cosineSample(h.N, rg)}
+				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: cosineSample(h.N, rg), Time: tm}
 				specularPrev = false
 			}
 		case h.Mat.Metal > 0:
@@ -231,7 +232,7 @@ pathLoop:
 			}
 			g := g1ggx(nv, a) * g1ggx(nl, a)
 			throughput = throughput.Mul(schlickV(f0, vh)).Scale(g * vh / (nv * nh))
-			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: wi}
+			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: wi, Time: tm}
 			specularPrev = true
 		case h.Mat.Reflect > 0:
 			dir := r.Dir.Reflect(h.N).Norm()
@@ -246,14 +247,14 @@ pathLoop:
 				tint = Vec3{X: 1, Y: 1, Z: 1}
 			}
 			throughput = throughput.Mul(tint)
-			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: dir}
+			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: dir, Time: tm}
 			specularPrev = true
 		default:
 			alb := h.albedo()
 			if mode >= 1 {
-				out = out.Add(throughput.Mul(s.sampleEmitters(h, alb, rg, mode == 2)))
+				out = out.Add(throughput.Mul(s.sampleEmitters(h, alb, rg, mode == 2, tm)))
 				if s.Env != nil {
-					out = out.Add(throughput.Mul(s.sampleEnv(h, alb, rg)))
+					out = out.Add(throughput.Mul(s.sampleEnv(h, alb, rg, tm)))
 				}
 			}
 			if s.Caustics != nil {
@@ -262,7 +263,7 @@ pathLoop:
 			dir := cosineSample(h.N, rg)
 			prevPdfB = math.Max(0, h.N.Dot(dir)) / math.Pi
 			throughput = throughput.Mul(alb)
-			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: dir}
+			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: dir, Time: tm}
 			specularPrev = false
 		}
 
@@ -284,7 +285,7 @@ pathLoop:
 // point on it, and return the unoccluded direct diffuse contribution (area-light
 // form, normalised for the number of emitters). With mis it is weighted against
 // the BSDF-sampling pdf (power heuristic).
-func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool) Vec3 {
+func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64) Vec3 {
 	n := len(s.emit)
 	if n == 0 {
 		return Vec3{}
@@ -306,7 +307,7 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool) Vec3 {
 		return Vec3{}
 	}
 	so := h.P.Add(h.N.Scale(shadowEps))
-	if s.anyHit(Ray{Origin: so, Dir: wi}, shadowEps, dist-2*shadowEps) {
+	if s.anyHit(Ray{Origin: so, Dir: wi, Time: time}, shadowEps, dist-2*shadowEps) {
 		return Vec3{}
 	}
 	areaPdf := 1 / (float64(n) * 4 * math.Pi * li.Radius * li.Radius)
@@ -324,7 +325,7 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool) Vec3 {
 // bright env direction, test visibility to infinity, and return the MIS-weighted
 // (power heuristic vs the cosine BSDF) direct contribution. Radiance is read from
 // s.sky so it stays consistent with the BSDF-sampling side.
-func (s *Scene) sampleEnv(h Hit, alb Vec3, rg *rng) Vec3 {
+func (s *Scene) sampleEnv(h Hit, alb Vec3, rg *rng, time float64) Vec3 {
 	we, _, pdfE := s.Env.Sample(rg)
 	if pdfE <= 0 {
 		return Vec3{}
@@ -333,7 +334,7 @@ func (s *Scene) sampleEnv(h Hit, alb Vec3, rg *rng) Vec3 {
 	if ndl <= 0 {
 		return Vec3{}
 	}
-	if s.anyHit(Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: we}, shadowEps, tFar) {
+	if s.anyHit(Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: we, Time: time}, shadowEps, tFar) {
 		return Vec3{}
 	}
 	pdfB := ndl / math.Pi
@@ -371,15 +372,16 @@ func (s *Scene) scatterGlassIOR(r Ray, h Hit, rg *rng, ior float64) Ray {
 	r0 *= r0
 	fr := r0 + (1-r0)*math.Pow(1-cosI, 5)
 	if !ok || rg.f() < fr {
-		return Ray{Origin: h.P.Add(n.Scale(shadowEps)), Dir: r.Dir.Reflect(n).Norm()}
+		return Ray{Origin: h.P.Add(n.Scale(shadowEps)), Dir: r.Dir.Reflect(n).Norm(), Time: r.Time}
 	}
-	return Ray{Origin: h.P.Sub(n.Scale(shadowEps)), Dir: tdir}
+	return Ray{Origin: h.P.Sub(n.Scale(shadowEps)), Dir: tdir, Time: r.Time}
 }
 
 // lensRay generates a depth-of-field primary ray through sub-pixel (px,py) using
 // the camera aperture/focus; with Aperture 0 it is the pinhole ray.
 func (b camBasis) lensRay(px, py float64, cam Camera, rg *rng) Ray {
 	base := b.ray(px, py)
+	base.Time = rg.f() // shutter time in [0,1] for motion blur (static objects ignore it)
 	if cam.Aperture <= 0 {
 		return base
 	}
@@ -396,7 +398,7 @@ func (b camBasis) lensRay(px, py float64, cam Camera, rg *rng) Ray {
 	th := 2 * math.Pi * rg.f()
 	off := b.right.Scale(rr * math.Cos(th)).Add(b.up.Scale(rr * math.Sin(th)))
 	orig := base.Origin.Add(off)
-	return Ray{Origin: orig, Dir: focal.Sub(orig).Norm()}
+	return Ray{Origin: orig, Dir: focal.Sub(orig).Norm(), Time: base.Time}
 }
 
 // pathSum renders opt.Samples paths per pixel and returns the SUM of linear
