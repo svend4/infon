@@ -256,6 +256,9 @@ pathLoop:
 					out = out.Add(throughput.Mul(s.sampleEnv(h, alb, rg)))
 				}
 			}
+			if s.Caustics != nil {
+				out = out.Add(throughput.Mul(s.Caustics.Estimate(h.P, h.N, alb)))
+			}
 			dir := cosineSample(h.N, rg)
 			prevPdfB = math.Max(0, h.N.Dot(dir)) / math.Pi
 			throughput = throughput.Mul(alb)
