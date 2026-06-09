@@ -288,6 +288,12 @@ type Scene struct {
 	FogDensity float64
 	FogColor   Vec3
 
+	// Volumetric single-scatter ("god rays"): a homogeneous medium of density
+	// Volume scatters Scene.Light along the view ray; shadowed medium stays dark,
+	// lit medium glows. Volume <= 0 disables it (raster Render only).
+	Volume      float64
+	VolumeColor Vec3
+
 	sbvh *objBVH  // optional top-level acceleration structure (see BuildBVH)
 	emit []Sphere // emissive spheres, cached for next-event estimation
 }
@@ -328,6 +334,38 @@ func (s *Scene) anyHit(r Ray, tMin, tMax float64) bool {
 		}
 	}
 	return false
+}
+
+// marchVolume integrates single-scattering of Scene.Light through a homogeneous
+// medium along ray r over [0, tMax], ray-marching with shadow rays at each step.
+// Returns the accumulated in-scatter and the medium transmittance over the segment.
+func (s *Scene) marchVolume(r Ray, tMax float64) (Vec3, float64) {
+	if s.Volume <= 0 {
+		return Vec3{}, 1
+	}
+	if tMax > 40 {
+		tMax = 40 // cap for rays that miss everything
+	}
+	const steps = 32
+	dt := tMax / steps
+	li := s.LightInt
+	if li == 0 {
+		li = 1
+	}
+	var inscatter Vec3
+	transmittance := 1.0
+	stepTr := math.Exp(-s.Volume * dt)
+	for i := 0; i < steps; i++ {
+		p := r.At((float64(i) + 0.5) * dt)
+		toL := s.Light.Sub(p)
+		dist := toL.Len()
+		if dist > geomEps && !s.anyHit(Ray{Origin: p, Dir: toL.Scale(1 / dist)}, shadowEps, dist-shadowEps) {
+			atten := li / (1 + s.AttenK*dist)
+			inscatter = inscatter.Add(s.VolumeColor.Scale(transmittance * s.Volume * dt * atten))
+		}
+		transmittance *= stepTr
+	}
+	return inscatter, transmittance
 }
 
 // fog blends a colour toward FogColor by the transmittance over distance t.
@@ -535,7 +573,17 @@ func Render(s *Scene, cam Camera, pxW, pxH int, opt Options) image.Image {
 						for sx := 0; sx < ss; sx++ {
 							u := float64(x) + (float64(sx)+0.5)/float64(ss)
 							v := float64(y) + (float64(sy)+0.5)/float64(ss)
-							acc = acc.Add(clampVec(s.shade(b.ray(u, v), depth)))
+							r := b.ray(u, v)
+							col := s.shade(r, depth)
+							if s.Volume > 0 {
+								tMax := tFar
+								if h, ok := s.closest(r, shadowEps, tFar); ok {
+									tMax = h.T
+								}
+								ins, tr := s.marchVolume(r, tMax)
+								col = col.Scale(tr).Add(ins)
+							}
+							acc = acc.Add(clampVec(col))
 						}
 					}
 					img.SetRGBA(x, y, toRGBA(acc.Scale(inv)))
