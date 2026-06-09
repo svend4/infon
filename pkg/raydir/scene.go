@@ -56,6 +56,13 @@ func objectsFromSpec(o brain.ObjSpec, at raytrace.Vec3, includePlane bool) []ray
 		return treeObjects(specCenter(o, at), specScale(o), objMaterial(o))
 	case "house":
 		return houseObjects(specCenter(o, at), specScale(o), objMaterial(o))
+	case "mesh":
+		m := meshFor(o.Name)
+		if m == nil {
+			return nil // unknown model
+		}
+		xf := raytrace.Translate(specCenter(o, at)).Mul(raytrace.ScaleUniform(specScale(o)))
+		return []raytrace.Object{raytrace.NewInstance(m, xf)}
 	default:
 		return []raytrace.Object{raytrace.Sphere{
 			Center: specCenter(o, at), Radius: specScale(o), Mat: objMaterial(o),
@@ -94,7 +101,7 @@ const maxRegionObjects = 256
 
 var knownKinds = map[string]bool{
 	"": true, "sphere": true, "box": true, "pyramid": true,
-	"cylinder": true, "tree": true, "house": true, "plane": true,
+	"cylinder": true, "tree": true, "house": true, "plane": true, "mesh": true,
 }
 
 func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) && math.Abs(f) < 1e6 }
@@ -103,6 +110,9 @@ func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) && math
 func validObj(o brain.ObjSpec) bool {
 	if !knownKinds[o.Kind] {
 		return false
+	}
+	if o.Kind == "mesh" && meshFor(o.Name) == nil {
+		return false // unknown named model: drop it
 	}
 	return finite(o.X) && finite(o.Y) && finite(o.Z) && finite(o.R) &&
 		finite(o.S[0]) && finite(o.S[1]) && finite(o.S[2])

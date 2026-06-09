@@ -23,6 +23,7 @@ type SceneSpec struct {
 // radius.
 type ObjSpec struct {
 	Kind    string     `json:"kind"`
+	Name    string     `json:"name"` // for kind "mesh": the named model to instance
 	X       float64    `json:"x"`
 	Y       float64    `json:"y"`
 	Z       float64    `json:"z"`
@@ -76,6 +77,12 @@ func refRayScene(req Request) Response {
 	}
 	if hasAny(p.Prompt, "house", "home", "village", "town", "cabin") {
 		spec.Objects = append(spec.Objects, ObjSpec{Kind: "house", X: 3, Y: 0, Z: -1, R: 1.1})
+	}
+	if hasAny(p.Prompt, "crystal", "gem", "cave") {
+		spec.Objects = append(spec.Objects, ObjSpec{Kind: "mesh", Name: "crystal", X: -3, Y: 1, Z: 1, R: 1})
+	}
+	if hasAny(p.Prompt, "rock", "stone", "boulder") {
+		spec.Objects = append(spec.Objects, ObjSpec{Kind: "mesh", Name: "rock", X: 3, Y: 0.5, Z: 1, R: 1})
 	}
 	data, _ := json.Marshal(spec)
 	return Response{Protocol: Protocol, Kind: "move", Ray: data, Reasoning: "reference scene author"}

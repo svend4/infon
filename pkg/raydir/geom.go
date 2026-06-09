@@ -107,6 +107,38 @@ func treeObjects(c raytrace.Vec3, scale float64, mat raytrace.Material) []raytra
 	return append(out, coneObjects(raytrace.Vec3{X: c.X, Y: c.Y + 0.7*scale, Z: c.Z}, 0.7*scale, 1.5*scale, foliage, 14)...)
 }
 
+// crystalTris builds a faceted gem (a stretched octahedron, 8 triangles) at unit
+// scale around c — registered as the "crystal" instanceable mesh.
+func crystalTris(c raytrace.Vec3, s float64) []raytrace.Object {
+	mat := raytrace.Material{Color: raytrace.Vec3{X: 0.4, Y: 0.7, Z: 0.95}, Spec: 0.6, Shine: 80}
+	px := raytrace.Vec3{X: c.X + s, Y: c.Y, Z: c.Z}
+	nx := raytrace.Vec3{X: c.X - s, Y: c.Y, Z: c.Z}
+	pz := raytrace.Vec3{X: c.X, Y: c.Y, Z: c.Z + s}
+	nz := raytrace.Vec3{X: c.X, Y: c.Y, Z: c.Z - s}
+	py := raytrace.Vec3{X: c.X, Y: c.Y + s*1.5, Z: c.Z}
+	ny := raytrace.Vec3{X: c.X, Y: c.Y - s*1.5, Z: c.Z}
+	return []raytrace.Object{
+		tri(py, px, pz, mat), tri(py, pz, nx, mat), tri(py, nx, nz, mat), tri(py, nz, px, mat),
+		tri(ny, pz, px, mat), tri(ny, nx, pz, mat), tri(ny, nz, nx, mat), tri(ny, px, nz, mat),
+	}
+}
+
+// rockTris builds a low-poly rock (an irregular, flattened octahedron) at unit
+// scale around c — registered as the "rock" instanceable mesh.
+func rockTris(c raytrace.Vec3, s float64) []raytrace.Object {
+	mat := raytrace.Material{Color: raytrace.Vec3{X: 0.42, Y: 0.4, Z: 0.38}, Rough: 0.7}
+	px := raytrace.Vec3{X: c.X + s*1.1, Y: c.Y + 0.1*s, Z: c.Z}
+	nx := raytrace.Vec3{X: c.X - s*0.9, Y: c.Y, Z: c.Z + 0.1*s}
+	pz := raytrace.Vec3{X: c.X + 0.1*s, Y: c.Y, Z: c.Z + s}
+	nz := raytrace.Vec3{X: c.X, Y: c.Y, Z: c.Z - s*1.1}
+	py := raytrace.Vec3{X: c.X + 0.1*s, Y: c.Y + s*0.7, Z: c.Z - 0.1*s}
+	ny := raytrace.Vec3{X: c.X, Y: c.Y - s*0.4, Z: c.Z}
+	return []raytrace.Object{
+		tri(py, px, pz, mat), tri(py, pz, nx, mat), tri(py, nx, nz, mat), tri(py, nz, px, mat),
+		tri(ny, pz, px, mat), tri(ny, nx, pz, mat), tri(ny, nz, nx, mat), tri(ny, px, nz, mat),
+	}
+}
+
 // houseObjects builds a house: a box body (the material's colour, or tan) under a
 // pyramid roof.
 func houseObjects(c raytrace.Vec3, scale float64, mat raytrace.Material) []raytrace.Object {
