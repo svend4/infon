@@ -64,12 +64,16 @@ adopting, and it was reimplemented better).
   each shipped as a compact scene description (meaning, not pixels) and ray-traced
   locally. Offline with the reference brain, or a real director via `BRAIN_URL`.
 - **The shared world — two walkers, one space** (`cmd/raymeet`,
-  `pkg/raydir/pose.go`): two peers "call in" over UDP and walk the *same* growing
-  world together, each seeing the other's glowing avatar. The world is never sent:
-  both sides derive it identically from the director's region script, so the only
-  thing on the wire is a 40-byte `Pose` per tick — meaning, not pixels, even for
-  multiplayer. Verified live: two processes exchange poses and each places the
-  other at the correct position.
+  `pkg/raydir/pose.go`, `pkg/raydir/region.go`): two peers "call in" over UDP and
+  walk the *same* growing world together, each seeing the other's glowing avatar.
+  Pixels never cross the wire. With `-host`, one peer is the director: it asks its
+  brain to author each region and broadcasts the region's compact scene spec
+  (`Region`, ~100 bytes, idempotent re-broadcast for lossy UDP), and the guest
+  reconstructs each identical region locally — so the shared world stays in sync
+  even with a **live, non-deterministic AI director** (`BRAIN_URL` on the host).
+  The only things on the wire are 40-byte poses and region specs — meaning, not
+  pixels, even for multiplayer. Verified live: a guest's world fills entirely from
+  the host's broadcasts and both place each other correctly.
 - **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
   exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
 

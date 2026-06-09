@@ -58,6 +58,7 @@ type World struct {
 	floor             raytrace.Object
 	props             []raytrace.Object
 	chunks            int
+	seen              map[int]bool // applied region indices (idempotent growth)
 }
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
@@ -82,23 +83,7 @@ func (w *World) Grow(b brain.Brain, prompt string, at raytrace.Vec3) (int, error
 	if err != nil {
 		return 0, err
 	}
-	n := 0
-	for _, o := range spec.Objects {
-		if o.Kind == "plane" {
-			continue // a single shared floor for the whole world
-		}
-		r := o.R
-		if r <= 0 {
-			r = 1
-		}
-		w.props = append(w.props, raytrace.Sphere{
-			Center: raytrace.Vec3{X: o.X + at.X, Y: o.Y + at.Y, Z: o.Z + at.Z},
-			Radius: r, Mat: objMaterial(o),
-		})
-		n++
-	}
-	w.chunks++
-	return n, nil
+	return w.applyRegion(w.chunks, at, spec), nil
 }
 
 // Scene builds a renderable, BVH-accelerated scene from the floor and all props.
