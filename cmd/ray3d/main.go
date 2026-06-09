@@ -61,6 +61,8 @@ type opts struct {
 	mis      bool
 	denoise  int
 	gdenoise bool
+	bloom    float64
+	exposure float64
 }
 
 // renderImage picks the raster or the path tracer, then optionally denoises.
@@ -78,6 +80,9 @@ func renderImage(scene *raytrace.Scene, cam raytrace.Camera, w, h int, o opts) i
 		} else {
 			img = raytrace.Denoise(img, o.denoise, 0.12)
 		}
+	}
+	if o.bloom > 0 || o.exposure != 1 {
+		img = raytrace.PostProcess(img, o.exposure, 0.8, o.bloom)
 	}
 	return img
 }
@@ -98,9 +103,11 @@ func main() {
 	mis := flag.Bool("mis", false, "path tracer: multiple importance sampling (light + BSDF)")
 	denoise := flag.Int("denoise", 0, "à-trous denoiser passes applied to the result (0 = off)")
 	gdenoise := flag.Bool("gdenoise", false, "denoise with albedo/normal guides (sharper edges)")
+	bloom := flag.Float64("bloom", 0, "bloom/glare strength (0 = off)")
+	exposure := flag.Float64("exposure", 1, "exposure multiplier (0 = auto to mid-grey)")
 	flag.Parse()
 
-	o := opts{spp: *spp, path: *pathT, depth: *depth, nee: *nee, mis: *mis, denoise: *denoise, gdenoise: *gdenoise}
+	o := opts{spp: *spp, path: *pathT, depth: *depth, nee: *nee, mis: *mis, denoise: *denoise, gdenoise: *gdenoise, bloom: *bloom, exposure: *exposure}
 	w := demoWire()
 
 	const ecc = 10
