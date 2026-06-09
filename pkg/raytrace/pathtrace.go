@@ -150,7 +150,25 @@ pathLoop:
 
 		switch {
 		case h.Mat.Glass > 0:
-			r = s.scatterGlass(r, h, rg)
+			if h.Mat.Disperse > 0 {
+				// spectral: one of R/G/B per ray, each with its own IOR, scaled by
+				// 3 so the channels average to the achromatic result.
+				c := int(rg.next() % 3)
+				ior := h.Mat.Glass + (float64(c)-1)*h.Mat.Disperse
+				r = s.scatterGlassIOR(r, h, rg, ior)
+				tint := Vec3{}
+				switch c {
+				case 0:
+					tint.X = 3
+				case 1:
+					tint.Y = 3
+				default:
+					tint.Z = 3
+				}
+				throughput = throughput.Mul(tint)
+			} else {
+				r = s.scatterGlass(r, h, rg)
+			}
 			specularPrev = true
 		case h.Mat.Metal > 0:
 			// GGX microfacet metal: importance-sample the half-vector, reflect,
@@ -255,23 +273,39 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool) Vec3 {
 	return contrib
 }
 
+// refract returns the refracted direction of unit d through the unit normal n
+// (which faces against d) for the relative index eta = n_in/n_out, or ok=false on
+// total internal reflection.
+func refract(d, n Vec3, eta float64) (Vec3, bool) {
+	cosI := math.Min(1, math.Max(0, -d.Dot(n)))
+	k := 1 - eta*eta*(1-cosI*cosI)
+	if k < 0 {
+		return Vec3{}, false
+	}
+	return d.Scale(eta).Add(n.Scale(eta*cosI - math.Sqrt(k))).Norm(), true
+}
+
 func (s *Scene) scatterGlass(r Ray, h Hit, rg *rng) Ray {
+	return s.scatterGlassIOR(r, h, rg, h.Mat.Glass)
+}
+
+// scatterGlassIOR reflects or refracts at a dielectric of the given index of
+// refraction, choosing the branch stochastically by the Schlick Fresnel term.
+func (s *Scene) scatterGlassIOR(r Ray, h Hit, rg *rng, ior float64) Ray {
 	n := h.N
-	ior := h.Mat.Glass
 	eta := 1 / ior
 	if !h.Front {
 		eta = ior
 	}
 	cosI := math.Min(1, math.Max(0, -r.Dir.Dot(n)))
-	k := 1 - eta*eta*(1-cosI*cosI)
+	tdir, ok := refract(r.Dir, n, eta)
 	r0 := (1 - ior) / (1 + ior)
 	r0 *= r0
 	fr := r0 + (1-r0)*math.Pow(1-cosI, 5)
-	if k < 0 || rg.f() < fr {
+	if !ok || rg.f() < fr {
 		return Ray{Origin: h.P.Add(n.Scale(shadowEps)), Dir: r.Dir.Reflect(n).Norm()}
 	}
-	dir := r.Dir.Scale(eta).Add(n.Scale(eta*cosI - math.Sqrt(k))).Norm()
-	return Ray{Origin: h.P.Sub(n.Scale(shadowEps)), Dir: dir}
+	return Ray{Origin: h.P.Sub(n.Scale(shadowEps)), Dir: tdir}
 }
 
 // lensRay generates a depth-of-field primary ray through sub-pixel (px,py) using
