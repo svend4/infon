@@ -1,10 +1,8 @@
-// obj.go is a minimal Wavefront .obj reader. It understands `v x y z` vertices,
-// `vn x y z` normals, `vt u v` texture coordinates and `f` faces (any polygon,
-// fan-triangulated). Face tokens may be `a`, `a/b`, `a/b/c` or `a//c`; the vertex
-// index is always used, the texture index gives UVs (for image textures) and the
-// normal index gives smooth shading. Both 1-based and negative/relative indices
-// are accepted. It is enough to load classic test models without a third-party
-// parser.
+// obj.go is a minimal Wavefront .obj reader. It understands `v`, `vn`, `vt`, `f`
+// (any polygon, fan-triangulated) and `usemtl` (when a material library is
+// supplied via LoadOBJMTL). Face tokens may be `a`, `a/b`, `a/b/c` or `a//c`;
+// 1-based and negative/relative indices are accepted. Enough to load classic test
+// models without a third-party parser.
 package raytrace
 
 import (
@@ -15,12 +13,20 @@ import (
 )
 
 // LoadOBJ parses an .obj stream into a Mesh, giving every triangle mat.
-func LoadOBJ(r io.Reader, mat Material) (*Mesh, error) {
+func LoadOBJ(r io.Reader, mat Material) (*Mesh, error) { return loadOBJWith(r, nil, mat) }
+
+// LoadOBJMTL parses an .obj stream, switching material on `usemtl name` using the
+// supplied material library (see LoadMTL); faces before any usemtl use fallback.
+func LoadOBJMTL(r io.Reader, mtls map[string]Material, fallback Material) (*Mesh, error) {
+	return loadOBJWith(r, mtls, fallback)
+}
+
+func loadOBJWith(r io.Reader, mtls map[string]Material, fallback Material) (*Mesh, error) {
 	var verts, norms []Vec3
 	var uvs [][2]float64
 	var tris []Triangle
+	curMat := fallback
 
-	// resolve a "v/vt/vn" token to vertex, texture and normal indices (-1 if absent).
 	resolve := func(tok string) (vi, ti, ni int, ok bool) {
 		parts := strings.Split(tok, "/")
 		v, err := strconv.Atoi(parts[0])
@@ -92,6 +98,12 @@ func LoadOBJ(r io.Reader, mat Material) (*Mesh, error) {
 				v, _ := strconv.ParseFloat(f[2], 64)
 				uvs = append(uvs, [2]float64{u, v})
 			}
+		case "usemtl":
+			if mtls != nil && len(f) >= 2 {
+				if m, ok := mtls[f[1]]; ok {
+					curMat = m
+				}
+			}
 		case "f":
 			var vs, ts, ns []int
 			for _, tok := range f[1:] {
@@ -102,7 +114,7 @@ func LoadOBJ(r io.Reader, mat Material) (*Mesh, error) {
 				}
 			}
 			for i := 1; i+1 < len(vs); i++ { // fan triangulation
-				t := Triangle{A: verts[vs[0]], B: verts[vs[i]], C: verts[vs[i+1]], Mat: mat}
+				t := Triangle{A: verts[vs[0]], B: verts[vs[i]], C: verts[vs[i+1]], Mat: curMat}
 				if ns[0] >= 0 && ns[i] >= 0 && ns[i+1] >= 0 {
 					t.Na, t.Nb, t.Nc = norms[ns[0]], norms[ns[i]], norms[ns[i+1]]
 				}
