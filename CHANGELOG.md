@@ -74,6 +74,12 @@ adopting, and it was reimplemented better).
   The only things on the wire are 40-byte poses and region specs — meaning, not
   pixels, even for multiplayer. Verified live: a guest's world fills entirely from
   the host's broadcasts and both place each other correctly.
+- **Group mode (>2 walkers)** (`cmd/raymeet -host`, `pkg/raydir` `PoseSet`): the
+  host is a hub that learns peers dynamically, broadcasts the world to all guests,
+  and relays everyone's pose to everyone (a `PoseSet`, 44 bytes/walker), pruning
+  the disconnected. Each participant sees the others as distinctly-coloured
+  avatars. Verified live with three participants: all report `walkers:3` and the
+  guests' worlds fill from the host's broadcasts.
 - **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
   exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
 

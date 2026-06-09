@@ -31,6 +31,41 @@ func TestPoseOf(t *testing.T) {
 	}
 }
 
+func TestPoseSetRoundTrip(t *testing.T) {
+	s := PoseSet{
+		7:   {Pos: raytrace.Vec3{X: 1, Y: 2, Z: 3}, Yaw: 0.4},
+		42:  {Pos: raytrace.Vec3{X: -5, Y: 2, Z: 9}, Yaw: -1.1, Pitch: 0.2},
+		999: {Pos: raytrace.Vec3{X: 0, Y: 2, Z: 0}},
+	}
+	got, err := DecodePoseSet(s.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(s) {
+		t.Fatalf("decoded %d entries, want %d", len(got), len(s))
+	}
+	for id, p := range s {
+		if got[id] != p {
+			t.Errorf("id %d = %+v, want %+v", id, got[id], p)
+		}
+	}
+	if _, err := DecodePoseSet([]byte{0}); err == nil {
+		t.Error("short payload should error")
+	}
+}
+
+func TestAvatarColorDistinctAndBright(t *testing.T) {
+	for _, id := range []uint32{0, 1, 2, 7, 1000, 4000000000} {
+		c := AvatarColor(id)
+		if c.X < 0 || c.X > 1 || c.Y < 0 || c.Y > 1 || c.Z < 0 || c.Z > 1 {
+			t.Errorf("AvatarColor(%d)=%v out of [0,1]", id, c)
+		}
+		if c.LenSq() < 0.3 {
+			t.Errorf("AvatarColor(%d)=%v too dark to see", id, c)
+		}
+	}
+}
+
 // The avatar's head sits at the pose and its gaze marker is ahead along the yaw.
 func TestAvatarSpheres(t *testing.T) {
 	p := Pose{Pos: raytrace.Vec3{X: 0, Y: 2, Z: 5}, Yaw: 0} // yaw 0 -> faces +Z

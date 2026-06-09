@@ -1,16 +1,18 @@
-// Command raymeet is the shared-world experience: two people (or a person and an
-// AI) "call in" and walk the SAME 3-D world together, in the terminal, seeing each
-// other's avatar. The world is never sent as pixels. One peer is the director host:
-// it asks its brain to author each region and broadcasts the region's compact scene
-// description (game:rayscene); the guest reconstructs each identical region locally.
-// So the only things on the wire are 40-byte poses and ~100-byte region specs —
-// meaning, not pixels — and the world stays in sync even with a live, non-
-// deterministic AI director (set BRAIN_URL on the host).
+// Command raymeet is the shared-world experience for a group: several people (and
+// AIs) "call in" and walk the SAME 3-D world together, in the terminal, each
+// seeing everyone else's avatar. Pixels never cross the wire. One peer is the
+// director host (the hub): it asks its brain to author each region and broadcasts
+// the region's compact scene spec (game:rayscene); guests reconstruct each
+// identical region locally. The hub also relays everyone's pose to everyone, so
+// the only things on the wire are ~100-byte region specs and 44-byte poses —
+// meaning, not pixels — and the world stays in sync even with a live AI director
+// (set BRAIN_URL on the host).
 //
-//	# host (the director) listens on 5000, talks to the guest on 5001
-//	go run ./cmd/raymeet -host localhost:5001 5000
-//	# guest
+//	# host / director (the hub), listens on 5000
+//	go run ./cmd/raymeet -host 5000
+//	# each guest connects to the hub
 //	go run ./cmd/raymeet localhost:5000 5001
+//	go run ./cmd/raymeet localhost:5000 5002   # ...and a third, fourth, ...
 //
 // Controls (type then Enter): w/s walk, a/d strafe, q/e turn, r/f look, x quit.
 package main
@@ -36,26 +38,40 @@ import (
 )
 
 func main() {
-	host := flag.Bool("host", false, "be the director: author and broadcast the world (otherwise receive it)")
+	host := flag.Bool("host", false, "be the director hub: author/broadcast the world and relay poses")
 	modeFlag := flag.String("mode", "auto", "terminal render mode")
 	pathT := flag.Bool("path", false, "path-trace (prettier, slower)")
 	cols := flag.Int("w", 80, "width in cells")
 	rows := flag.Int("h", 36, "height in cells")
 	flag.Parse()
 	args := flag.Args()
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: raymeet [-host] <host:port> [localport]")
-		os.Exit(1)
-	}
-	remoteAddr := args[0]
-	localPort := "5000"
-	if len(args) >= 2 {
-		localPort = args[1]
-	}
 	pxW, pxH := *cols*2, *rows*4
 
-	// The director's brain (only the host authors): reference offline, or a live
-	// tvcp-ai/1 endpoint via BRAIN_URL.
+	var hubAddr *net.UDPAddr
+	localPort := "5000"
+	if *host {
+		if len(args) >= 1 {
+			localPort = args[0]
+		}
+	} else {
+		if len(args) < 1 {
+			fmt.Fprintln(os.Stderr, "usage: raymeet -host [localport]   |   raymeet <hostaddr> [localport]")
+			os.Exit(1)
+		}
+		a, err := net.ResolveUDPAddr("udp", args[0])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "resolve:", err)
+			os.Exit(1)
+		}
+		hubAddr = a
+		localPort = "5001"
+		if len(args) >= 2 {
+			localPort = args[1]
+		}
+	}
+	selfID := uint32(time.Now().UnixNano()) ^ uint32(os.Getpid())<<8
+
+	// director's brain (host only): reference offline, or a live endpoint via BRAIN_URL.
 	var b brain.Brain = brain.Local{}
 	who := "reference (offline)"
 	if url := os.Getenv("BRAIN_URL"); url != "" {
@@ -69,12 +85,14 @@ func main() {
 
 	world := raydir.NewWorld()
 	var worldMu sync.Mutex
-	var regions []raydir.Region // host: authored regions, kept for re-broadcast
+	var regions []raydir.Region
 
 	self := raydir.FlyCam{Pos: raytrace.Vec3{X: 0, Y: 2.2, Z: 0}, Pitch: -0.08, FOV: math.Pi / 3}
-	var poseMu sync.Mutex
-	var remote raydir.Pose
-	haveRemote := false
+
+	var stateMu sync.Mutex
+	poses := raydir.PoseSet{}          // host: everyone; guest: the hub's relayed table
+	peers := map[string]*net.UDPAddr{} // host: connected guests
+	lastSeen := map[uint32]time.Time{} // host: prune the disconnected
 
 	transport, err := network.NewTransport(":" + localPort)
 	if err != nil {
@@ -82,27 +100,33 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = transport.Close() }()
-	udpAddr, err := net.ResolveUDPAddr("udp", remoteAddr)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "resolve:", err)
-		os.Exit(1)
+	sendTo := func(addr *net.UDPAddr, typ uint8, payload []byte) {
+		if addr != nil {
+			_ = transport.SendPacket(&network.Packet{Type: typ, Sequence: transport.NextSequence(), Timestamp: uint64(time.Now().UnixMilli()), Payload: payload}, addr)
+		}
 	}
-	send := func(typ uint8, payload []byte) {
-		_ = transport.SendPacket(&network.Packet{Type: typ, Sequence: transport.NextSequence(), Timestamp: uint64(time.Now().UnixMilli()), Payload: payload}, udpAddr)
+	if !*host {
+		sendTo(hubAddr, network.PacketTypeHandshake, []byte("raymeet")) // announce to the hub
 	}
-	send(network.PacketTypeHandshake, []byte("raymeet"))
 
-	// host: author regions up to `count` and broadcast each new one.
 	growHost := func(count int) {
 		worldMu.Lock()
+		stateMu.Lock()
+		addrs := make([]*net.UDPAddr, 0, len(peers))
+		for _, a := range peers {
+			addrs = append(addrs, a)
+		}
+		stateMu.Unlock()
 		for len(regions) < count {
 			i := len(regions)
-			reg, _, err := world.AuthorRegion(b, prompts[i%len(prompts)], i, regionAt(i))
-			if err != nil {
+			reg, _, e := world.AuthorRegion(b, prompts[i%len(prompts)], i, regionAt(i))
+			if e != nil {
 				break
 			}
 			regions = append(regions, reg)
-			send(network.PacketTypeScreen, reg.Encode()) // broadcast the region spec
+			for _, a := range addrs {
+				sendTo(a, network.PacketTypeScreen, reg.Encode())
+			}
 		}
 		worldMu.Unlock()
 	}
@@ -110,10 +134,10 @@ func main() {
 		growHost(3)
 	}
 
-	// receive: peer poses, and (for the guest) authored regions.
+	// receive: poses (everyone), regions (guests), and peer discovery (host).
 	go func() {
 		for {
-			p, _, err := transport.ReceivePacket()
+			p, addr, err := transport.ReceivePacket()
 			if err != nil {
 				if ne, ok := err.(net.Error); ok && ne.Timeout() {
 					continue
@@ -121,12 +145,30 @@ func main() {
 				return
 			}
 			switch p.Type {
-			case network.PacketTypeAvatar:
-				if pose, e := raydir.DecodePose(p.Payload); e == nil {
-					poseMu.Lock()
-					remote, haveRemote = pose, true
-					poseMu.Unlock()
+			case network.PacketTypeHandshake:
+				if *host && addr != nil {
+					stateMu.Lock()
+					peers[addr.String()] = addr
+					stateMu.Unlock()
 				}
+			case network.PacketTypeAvatar:
+				set, e := raydir.DecodePoseSet(p.Payload)
+				if e != nil {
+					continue
+				}
+				stateMu.Lock()
+				if *host {
+					if addr != nil {
+						peers[addr.String()] = addr
+					}
+					for id, pose := range set { // merge each guest's own entry
+						poses[id] = pose
+						lastSeen[id] = time.Now()
+					}
+				} else {
+					poses = set // the hub's full relayed table
+				}
+				stateMu.Unlock()
 			case network.PacketTypeScreen:
 				if !*host {
 					if reg, e := raydir.DecodeRegion(p.Payload); e == nil {
@@ -139,7 +181,6 @@ func main() {
 		}
 	}()
 
-	// input: stdin -> command runes.
 	cmds := make(chan rune, 128)
 	go func() {
 		sc := bufio.NewScanner(os.Stdin)
@@ -158,7 +199,6 @@ func main() {
 	rm, _ := babe.ParseRenderMode(mode)
 	dr := terminal.NewDiffRenderer()
 	pathOpt := raytrace.PathOptions{Samples: 3, MaxDepth: 4, Seed: 1, NEE: true, MIS: true, Sobol: true}
-	avatarColor := raytrace.Vec3{X: 0.25, Y: 0.85, Z: 1.0}
 
 	apply := func(ch rune) bool {
 		switch ch {
@@ -190,7 +230,7 @@ func main() {
 	if *host {
 		role = "host/director (" + who + ")"
 	}
-	fmt.Printf("raymeet [%s] — shared world with %s. Only poses and region specs cross the wire; pixels never do.\n", role, remoteAddr)
+	fmt.Printf("raymeet [%s] — group shared world. Only poses and region specs cross the wire; pixels never do.\n", role)
 	ticker := time.NewTicker(120 * time.Millisecond)
 	defer ticker.Stop()
 	tick := 0
@@ -206,40 +246,62 @@ func main() {
 			}
 		}
 		tick++
+		myPose := raydir.PoseOf(self)
+
 		if *host {
-			// keep the world a few regions ahead of BOTH walkers.
-			poseMu.Lock()
-			gz := 0.0
-			if haveRemote {
-				gz = remote.Pos.Z
+			stateMu.Lock()
+			poses[selfID] = myPose
+			lastSeen[selfID] = time.Now()
+			for id, ts := range lastSeen { // prune walkers we haven't heard from
+				if id != selfID && time.Since(ts) > 5*time.Second {
+					delete(poses, id)
+					delete(lastSeen, id)
+				}
 			}
-			poseMu.Unlock()
-			front := math.Max(self.Pos.Z, gz)
+			front := self.Pos.Z
+			for _, p := range poses {
+				front = math.Max(front, p.Pos.Z)
+			}
+			setBytes := poses.Encode()
+			addrs := make([]*net.UDPAddr, 0, len(peers))
+			for _, a := range peers {
+				addrs = append(addrs, a)
+			}
+			stateMu.Unlock()
 			growHost(int((front-8)/12) + 3)
-			// re-broadcast everything periodically so a lossy/late guest catches up.
+			for _, a := range addrs {
+				sendTo(a, network.PacketTypeAvatar, setBytes) // relay everyone's poses
+			}
 			if tick%8 == 0 {
 				worldMu.Lock()
-				for _, r := range regions {
-					send(network.PacketTypeScreen, r.Encode())
-				}
+				rs := append([]raydir.Region(nil), regions...)
 				worldMu.Unlock()
+				for _, a := range addrs {
+					for _, r := range rs {
+						sendTo(a, network.PacketTypeScreen, r.Encode())
+					}
+				}
+			}
+		} else {
+			sendTo(hubAddr, network.PacketTypeAvatar, raydir.PoseSet{selfID: myPose}.Encode())
+		}
+
+		// draw everyone except yourself.
+		stateMu.Lock()
+		var extra []raytrace.Object
+		others := 0
+		for id, p := range poses {
+			if id != selfID {
+				extra = append(extra, raydir.AvatarSpheres(p, raydir.AvatarColor(id))...)
+				others++
 			}
 		}
-		send(network.PacketTypeAvatar, raydir.PoseOf(self).Encode())
-
-		poseMu.Lock()
-		rp, have := remote, haveRemote
-		poseMu.Unlock()
-		var extra []raytrace.Object
-		peer := "waiting…"
-		if have {
-			extra = raydir.AvatarSpheres(rp, avatarColor)
-			peer = fmt.Sprintf("(%.1f,%.1f,%.1f)", rp.Pos.X, rp.Pos.Y, rp.Pos.Z)
-		}
+		stateMu.Unlock()
 		worldMu.Lock()
 		scene := world.SceneWith(extra)
 		chunks := world.Chunks()
 		worldMu.Unlock()
+
 		var im image.Image
 		if *pathT {
 			im = raytrace.PathRender(scene, self.Camera(), pxW, pxH, pathOpt)
@@ -247,7 +309,7 @@ func main() {
 			im = raytrace.Render(scene, self.Camera(), pxW, pxH, raytrace.Options{Samples: 1})
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
-		fmt.Printf("\n[%s | chunks:%d | you (%.1f,%.1f,%.1f) | peer %s | w/s a/d q/e r/f x=quit] ",
-			role, chunks, self.Pos.X, self.Pos.Y, self.Pos.Z, peer)
+		fmt.Printf("\n[%s | chunks:%d | walkers:%d | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f x=quit] ",
+			role, chunks, others+1, self.Pos.X, self.Pos.Y, self.Pos.Z)
 	}
 }
