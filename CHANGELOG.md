@@ -80,6 +80,11 @@ adopting, and it was reimplemented better).
   the disconnected. Each participant sees the others as distinctly-coloured
   avatars. Verified live with three participants: all report `walkers:3` and the
   guests' worlds fill from the host's broadcasts.
+- **Talk in the shared world** (`cmd/raymeet`, `pkg/raydir/chat.go`): a `/message`
+  is relayed through the hub to everyone and shown in a chat log under the view
+  (reusing the existing `network.TextMessage`), with a `-name`. Voice travels the
+  same relay path (audio packets) as the next increment. Verified live: one
+  guest's message reaches the other guest and the hub.
 - **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
   exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
 

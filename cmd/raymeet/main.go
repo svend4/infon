@@ -40,6 +40,7 @@ import (
 func main() {
 	host := flag.Bool("host", false, "be the director hub: author/broadcast the world and relay poses")
 	modeFlag := flag.String("mode", "auto", "terminal render mode")
+	nameFlag := flag.String("name", "", "your chat name (default walker-<id>)")
 	pathT := flag.Bool("path", false, "path-trace (prettier, slower)")
 	cols := flag.Int("w", 80, "width in cells")
 	rows := flag.Int("h", 36, "height in cells")
@@ -70,6 +71,12 @@ func main() {
 		}
 	}
 	selfID := uint32(time.Now().UnixNano()) ^ uint32(os.Getpid())<<8
+	name := *nameFlag
+	if name == "" {
+		name = fmt.Sprintf("walker-%04x", selfID&0xffff)
+	}
+	chat := raydir.NewChatLog(6)
+	var chatMu sync.Mutex
 
 	// director's brain (host only): reference offline, or a live endpoint via BRAIN_URL.
 	var b brain.Brain = brain.Local{}
@@ -177,20 +184,56 @@ func main() {
 						worldMu.Unlock()
 					}
 				}
+			case network.PacketTypeTextChat:
+				if tm, e := network.DecodeTextMessage(p.Payload); e == nil {
+					chatMu.Lock()
+					chat.Add(tm.Sender, tm.Message)
+					chatMu.Unlock()
+					if *host && addr != nil { // relay to everyone but the sender
+						origin := addr.String()
+						stateMu.Lock()
+						for k, a := range peers {
+							if k != origin {
+								sendTo(a, network.PacketTypeTextChat, p.Payload)
+							}
+						}
+						stateMu.Unlock()
+					}
+				}
 			}
 		}
 	}()
 
-	cmds := make(chan rune, 128)
+	lines := make(chan string, 64)
 	go func() {
 		sc := bufio.NewScanner(os.Stdin)
 		for sc.Scan() {
-			for _, ch := range strings.ToLower(strings.TrimSpace(sc.Text())) {
-				cmds <- ch
-			}
+			lines <- sc.Text()
 		}
-		close(cmds)
+		close(lines)
 	}()
+
+	// sendChat ships a text message to the group (guest -> hub, host -> all) and
+	// shows it locally. Voice would travel the same path as PacketTypeAudio.
+	sendChat := func(msg string) {
+		tm := network.NewTextMessage(name, msg)
+		payload, err := network.EncodeTextMessage(tm)
+		if err != nil {
+			return
+		}
+		if *host {
+			stateMu.Lock()
+			for _, a := range peers {
+				sendTo(a, network.PacketTypeTextChat, payload)
+			}
+			stateMu.Unlock()
+		} else {
+			sendTo(hubAddr, network.PacketTypeTextChat, payload)
+		}
+		chatMu.Lock()
+		chat.Add(name, msg)
+		chatMu.Unlock()
+	}
 
 	mode := *modeFlag
 	if mode == "" || mode == "auto" {
@@ -237,9 +280,21 @@ func main() {
 	for range ticker.C {
 		for drain := true; drain; {
 			select {
-			case ch, ok := <-cmds:
-				if !ok || !apply(ch) {
+			case ln, ok := <-lines:
+				if !ok {
 					return
+				}
+				t := strings.TrimSpace(ln)
+				if strings.HasPrefix(t, "/") { // "/message" -> chat
+					if msg := strings.TrimSpace(t[1:]); msg != "" {
+						sendChat(msg)
+					}
+				} else {
+					for _, ch := range strings.ToLower(t) {
+						if !apply(ch) {
+							return
+						}
+					}
 				}
 			default:
 				drain = false
@@ -309,7 +364,13 @@ func main() {
 			im = raytrace.Render(scene, self.Camera(), pxW, pxH, raytrace.Options{Samples: 1})
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
-		fmt.Printf("\n[%s | chunks:%d | walkers:%d | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f x=quit] ",
-			role, chunks, others+1, self.Pos.X, self.Pos.Y, self.Pos.Z)
+		fmt.Printf("\n[%s as %s | chunks:%d | walkers:%d | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f, /msg to chat, x=quit]",
+			role, name, chunks, others+1, self.Pos.X, self.Pos.Y, self.Pos.Z)
+		chatMu.Lock()
+		for _, l := range chat.Lines() {
+			fmt.Printf("\n  💬 %s", l)
+		}
+		chatMu.Unlock()
+		fmt.Print(" ")
 	}
 }
