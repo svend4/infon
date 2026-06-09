@@ -35,7 +35,8 @@ type Material struct {
 	Shine   float64 // specular exponent (default 32 when Spec > 0)
 	Emit    Vec3    // emissive colour (also an area light in the path tracer)
 	Glass   float64 // refractive index (0 = opaque; ~1.5 = glass)
-	Rough   float64 // glossy spread of a reflection in the path tracer (0 = sharp)
+	Rough   float64 // GGX roughness (0 = sharp/mirror .. 1 = very rough); also the glossy spread
+	Metal   float64 // metalness for the path tracer's GGX lobe (0 = dielectric .. 1 = metal)
 	Tex     Texture // optional surface texture; overrides Color when set
 }
 

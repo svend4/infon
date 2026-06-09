@@ -57,6 +57,33 @@ func cosineSample(n Vec3, r *rng) Vec3 {
 	return t.Scale(x).Add(b.Scale(y)).Add(n.Scale(z)).Norm()
 }
 
+// sampleGGX importance-samples a microfacet half-vector from the GGX distribution
+// (roughness alpha = rough^2) around the normal n.
+func sampleGGX(n Vec3, rough float64, r *rng) Vec3 {
+	a := rough * rough
+	if a < 1e-3 {
+		a = 1e-3
+	}
+	u1, u2 := r.f(), r.f()
+	cosT := math.Sqrt((1 - u1) / (1 + (a*a-1)*u1))
+	sinT := math.Sqrt(math.Max(0, 1-cosT*cosT))
+	phi := 2 * math.Pi * u2
+	t, b := basisAround(n)
+	return t.Scale(sinT * math.Cos(phi)).Add(b.Scale(sinT * math.Sin(phi))).Add(n.Scale(cosT)).Norm()
+}
+
+// g1ggx is the Smith-GGX masking term for one direction (a = roughness^2).
+func g1ggx(cosX, a float64) float64 {
+	a2 := a * a
+	return 2 * cosX / (cosX + math.Sqrt(a2+(1-a2)*cosX*cosX))
+}
+
+// schlickV is the per-channel Schlick Fresnel for a coloured F0.
+func schlickV(f0 Vec3, cosT float64) Vec3 {
+	m := math.Pow(1-cosT, 5)
+	return f0.Add(Vec3{X: 1, Y: 1, Z: 1}.Sub(f0).Scale(m))
+}
+
 // PathOptions controls the path tracer.
 type PathOptions struct {
 	Samples  int    // paths per pixel
@@ -96,6 +123,7 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng, mode int) Vec3 {
 	specularPrev := true // the camera ray counts as a specular connection
 	var prevPdfB float64
 	nEmit := len(s.emit)
+pathLoop:
 	for d := 0; d < maxDepth; d++ {
 		h, ok := s.closest(r, shadowEps, tFar)
 		if !ok {
@@ -123,6 +151,28 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng, mode int) Vec3 {
 		switch {
 		case h.Mat.Glass > 0:
 			r = s.scatterGlass(r, h, rg)
+			specularPrev = true
+		case h.Mat.Metal > 0:
+			// GGX microfacet metal: importance-sample the half-vector, reflect,
+			// and weight by F*G*(V·H)/((N·V)(N·H)) (the BRDF*cos/pdf for D-sampling).
+			V := r.Dir.Neg()
+			hv := sampleGGX(h.N, h.Mat.Rough, rg)
+			vh := V.Dot(hv)
+			wi := r.Dir.Reflect(hv).Norm()
+			nl := h.N.Dot(wi)
+			nv := h.N.Dot(V)
+			nh := h.N.Dot(hv)
+			if vh <= 0 || nl <= 0 || nv*nh < geomEps {
+				break pathLoop // microfacet points away: end the path
+			}
+			f0 := Vec3{X: 0.04, Y: 0.04, Z: 0.04}.Scale(1 - h.Mat.Metal).Add(h.albedo().Scale(h.Mat.Metal))
+			a := h.Mat.Rough * h.Mat.Rough
+			if a < 1e-3 {
+				a = 1e-3
+			}
+			g := g1ggx(nv, a) * g1ggx(nl, a)
+			throughput = throughput.Mul(schlickV(f0, vh)).Scale(g * vh / (nv * nh))
+			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: wi}
 			specularPrev = true
 		case h.Mat.Reflect > 0:
 			dir := r.Dir.Reflect(h.N).Norm()
