@@ -87,14 +87,14 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng) Vec3 {
 					dir = dir.Reflect(h.N)
 				}
 			}
-			tint := h.Mat.Color
+			tint := h.albedo()
 			if tint.LenSq() == 0 {
 				tint = Vec3{X: 1, Y: 1, Z: 1}
 			}
 			throughput = throughput.Mul(tint)
 			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: dir}
 		default:
-			throughput = throughput.Mul(h.Mat.Color)
+			throughput = throughput.Mul(h.albedo())
 			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: cosineSample(h.N, rg)}
 		}
 

@@ -36,6 +36,7 @@ type Material struct {
 	Emit    Vec3    // emissive colour (also an area light in the path tracer)
 	Glass   float64 // refractive index (0 = opaque; ~1.5 = glass)
 	Rough   float64 // glossy spread of a reflection in the path tracer (0 = sharp)
+	Tex     Texture // optional surface texture; overrides Color when set
 }
 
 // Hit records the nearest intersection along a ray.
@@ -43,8 +44,18 @@ type Hit struct {
 	T     float64 // ray parameter
 	P     Vec3    // world-space hit point
 	N     Vec3    // unit shading normal, oriented against the incoming ray
+	U, V  float64 // surface texture coordinates (0..1) where defined
 	Front bool    // true if the ray struck the outward-facing side
 	Mat   Material
+}
+
+// albedo is the surface's base colour at the hit: the material texture if one is
+// set, otherwise the flat Material.Color.
+func (h Hit) albedo() Vec3 {
+	if h.Mat.Tex != nil {
+		return h.Mat.Tex.At(h.U, h.V, h.P)
+	}
+	return h.Mat.Color
 }
 
 // Object is anything a ray can intersect. Intersect reports the nearest hit with
@@ -95,8 +106,11 @@ func (s Sphere) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 		}
 	}
 	p := r.At(t)
-	n, front := orient(p.Sub(s.Center).Norm(), r.Dir)
-	return Hit{T: t, P: p, N: n, Front: front, Mat: s.Mat}, true
+	gn := p.Sub(s.Center).Norm()
+	n, front := orient(gn, r.Dir)
+	u := 0.5 + math.Atan2(gn.Z, gn.X)/(2*math.Pi)
+	v := 0.5 - math.Asin(math.Max(-1, math.Min(1, gn.Y)))/math.Pi
+	return Hit{T: t, P: p, N: n, U: u, V: v, Front: front, Mat: s.Mat}, true
 }
 
 // sphereOverlaps reports whether ray r's [tMin,tMax] segment crosses the sphere.
@@ -251,6 +265,7 @@ type Scene struct {
 	Ambient   float64 // 0..1 ambient term
 	SkyTop    Vec3    // looking up
 	SkyBottom Vec3    // looking toward the horizon/down
+	SkyTex    Texture // optional equirectangular environment map (overrides the gradient)
 	MaxBounce int     // reflection/refraction bounce budget (0 = none)
 	AttenK    float64 // linear distance attenuation coefficient (0 = none)
 
@@ -286,6 +301,11 @@ func (s *Scene) anyHit(r Ray, tMin, tMax float64) bool {
 }
 
 func (s *Scene) sky(dir Vec3) Vec3 {
+	if s.SkyTex != nil {
+		u := 0.5 + math.Atan2(dir.Z, dir.X)/(2*math.Pi)
+		v := 0.5 - math.Asin(math.Max(-1, math.Min(1, dir.Y)))/math.Pi
+		return s.SkyTex.At(u, v, dir)
+	}
 	t := 0.5 * (dir.Y + 1)
 	return s.SkyBottom.Scale(1 - t).Add(s.SkyTop.Scale(t))
 }
@@ -368,7 +388,8 @@ func (s *Scene) shade(r Ray, depth int) Vec3 {
 		return s.dielectric(r, h, depth)
 	}
 
-	col := h.Mat.Color.Scale(s.Ambient * s.ao(h.P, h.N)).Add(h.Mat.Emit)
+	alb := h.albedo()
+	col := alb.Scale(s.Ambient * s.ao(h.P, h.N)).Add(h.Mat.Emit)
 
 	toL := s.Light.Sub(h.P)
 	dist := toL.Len()
@@ -378,7 +399,7 @@ func (s *Scene) shade(r Ray, depth int) Vec3 {
 		if diff > 0 {
 			if vis := s.visibility(h.P, h.N); vis > 0 {
 				atten := vis * li / (1 + s.AttenK*dist)
-				col = col.Add(h.Mat.Color.Scale((1 - s.Ambient) * diff * atten))
+				col = col.Add(alb.Scale((1 - s.Ambient) * diff * atten))
 				if h.Mat.Spec > 0 {
 					shine := h.Mat.Shine
 					if shine <= 0 {
