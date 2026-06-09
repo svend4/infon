@@ -94,6 +94,12 @@ adopting, and it was reimplemented better).
   reusing `internal/audio`); received audio is played back. It falls back to
   text-only when there is no audio device, so the experience never depends on
   hardware. Chat/pose/world relay all share one `sendGroup`/`relayToOthers` path.
+- **Reliable world delivery (acks, not blind re-broadcast)** (`cmd/raymeet`,
+  `pkg/raydir` `EncodeAck`/`Known`/`MissingRegions`): a guest periodically acks
+  the region indices it has; the host re-sends only the missing regions, only to
+  that guest, instead of blasting everything to everyone. New regions are still
+  pushed immediately; gaps (loss or late join) self-heal. Verified live: a guest
+  that joins after authoring reaches the full world purely via ack gap-fill.
 - **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
   exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
 

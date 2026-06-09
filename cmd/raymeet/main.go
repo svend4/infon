@@ -278,6 +278,18 @@ func main() {
 					}
 				}
 				relayToOthers(addr, network.PacketTypeAudio, p.Payload)
+			case network.PacketTypeControl:
+				// a guest's region ack: re-send only what it is missing, to it alone.
+				if *host && addr != nil {
+					if have, de := raydir.DecodeAck(p.Payload); de == nil {
+						worldMu.Lock()
+						miss := raydir.MissingRegions(have, regions)
+						worldMu.Unlock()
+						for _, r := range miss {
+							sendTo(addr, network.PacketTypeScreen, r.Encode())
+						}
+					}
+				}
 			}
 		}
 	}()
@@ -387,18 +399,16 @@ func main() {
 			for _, a := range addrs {
 				sendTo(a, network.PacketTypeAvatar, setBytes) // relay everyone's poses
 			}
-			if tick%8 == 0 {
-				worldMu.Lock()
-				rs := append([]raydir.Region(nil), regions...)
-				worldMu.Unlock()
-				for _, a := range addrs {
-					for _, r := range rs {
-						sendTo(a, network.PacketTypeScreen, r.Encode())
-					}
-				}
-			}
+			// new regions are pushed immediately in growHost; gaps are filled on
+			// demand when a guest acks (no blind re-broadcast of everything).
 		} else {
 			sendTo(hubAddr, network.PacketTypeAvatar, raydir.PoseSet{selfID: myPose}.Encode())
+			if tick%8 == 0 { // tell the hub which regions we have so it fills the gaps
+				worldMu.Lock()
+				known := world.Known()
+				worldMu.Unlock()
+				sendTo(hubAddr, network.PacketTypeControl, raydir.EncodeAck(known))
+			}
 		}
 
 		// draw everyone except yourself.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"sort"
 
 	"github.com/svend4/infon/pkg/brain"
 	"github.com/svend4/infon/pkg/raytrace"
@@ -73,6 +74,64 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 
 // Has reports whether a region index has already been applied.
 func (w *World) Has(index int) bool { return w.seen[index] }
+
+// Known returns the sorted region indices this world has applied — what a guest
+// acknowledges so the host can fill only the gaps.
+func (w *World) Known() []int {
+	out := make([]int, 0, len(w.seen))
+	for i := range w.seen {
+		out = append(out, i)
+	}
+	sort.Ints(out)
+	return out
+}
+
+// EncodeAck packs a list of region indices a peer already has (count + uint32s).
+func EncodeAck(indices []int) []byte {
+	b := make([]byte, 2, 2+len(indices)*4)
+	binary.BigEndian.PutUint16(b[0:], uint16(len(indices)))
+	for _, i := range indices {
+		var h [4]byte
+		binary.BigEndian.PutUint32(h[:], uint32(i))
+		b = append(b, h[:]...)
+	}
+	return b
+}
+
+// DecodeAck parses an ack produced by EncodeAck.
+func DecodeAck(b []byte) ([]int, error) {
+	if len(b) < 2 {
+		return nil, errors.New("raydir: ack too short")
+	}
+	n := int(binary.BigEndian.Uint16(b[0:]))
+	off := 2
+	out := make([]int, 0, n)
+	for i := 0; i < n; i++ {
+		if off+4 > len(b) {
+			return nil, errors.New("raydir: truncated ack")
+		}
+		out = append(out, int(binary.BigEndian.Uint32(b[off:])))
+		off += 4
+	}
+	return out, nil
+}
+
+// MissingRegions returns the regions whose index is not in `have` — what the host
+// re-sends to a guest in response to its ack, instead of blindly re-broadcasting
+// everything to everyone.
+func MissingRegions(have []int, regions []Region) []Region {
+	hs := make(map[int]bool, len(have))
+	for _, i := range have {
+		hs[i] = true
+	}
+	var out []Region
+	for _, r := range regions {
+		if !hs[r.Index] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
 
 // AddRegion applies a region received from the director host (idempotent).
 func (w *World) AddRegion(r Region) int { return w.applyRegion(r.Index, r.At, r.Spec) }
