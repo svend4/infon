@@ -29,12 +29,13 @@ func (r Ray) At(t float64) Vec3 { return r.Origin.Add(r.Dir.Scale(t)) }
 
 // Material describes a surface.
 type Material struct {
-	Color   Vec3    // base (diffuse) colour, channels 0..1
+	Color   Vec3    // base (diffuse / metal tint) colour, channels 0..1
 	Reflect float64 // mirror fraction, 0 = matte .. 1 = perfect mirror
-	Spec    float64 // Blinn-Phong specular strength (0 = none)
+	Spec    float64 // Blinn-Phong specular strength (raster shader; 0 = none)
 	Shine   float64 // specular exponent (default 32 when Spec > 0)
-	Emit    Vec3    // emissive colour added regardless of lighting
+	Emit    Vec3    // emissive colour (also an area light in the path tracer)
 	Glass   float64 // refractive index (0 = opaque; ~1.5 = glass)
+	Rough   float64 // glossy spread of a reflection in the path tracer (0 = sharp)
 }
 
 // Hit records the nearest intersection along a ray.
@@ -197,13 +198,16 @@ func (p Plane) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 
 // ---------- camera ----------
 
-// Camera is a pinhole camera: a position, a yaw/pitch look direction and a
-// vertical field of view (radians).
+// Camera is a thin-lens camera: a position, a yaw/pitch look direction, a
+// vertical field of view, and an optional aperture/focus for depth of field
+// (used by the path tracer; the raster Render treats it as a pinhole).
 type Camera struct {
-	Pos   Vec3
-	Yaw   float64 // around the y (up) axis
-	Pitch float64 // up (+) / down (-)
-	FOV   float64 // vertical field of view, radians (default pi/3 if <= 0)
+	Pos      Vec3
+	Yaw      float64 // around the y (up) axis
+	Pitch    float64 // up (+) / down (-)
+	FOV      float64 // vertical field of view, radians (default pi/3 if <= 0)
+	Aperture float64 // lens radius for depth of field (0 = pinhole, sharp)
+	Focus    float64 // focus distance (defaults to looking at infinity if 0)
 }
 
 type camBasis struct {
