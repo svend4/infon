@@ -54,12 +54,13 @@ func orbitCam(angle float64) raytrace.Camera {
 }
 
 type opts struct {
-	spp     int
-	path    bool
-	depth   int
-	nee     bool
-	mis     bool
-	denoise int
+	spp      int
+	path     bool
+	depth    int
+	nee      bool
+	mis      bool
+	denoise  int
+	gdenoise bool
 }
 
 // renderImage picks the raster or the path tracer, then optionally denoises.
@@ -71,7 +72,12 @@ func renderImage(scene *raytrace.Scene, cam raytrace.Camera, w, h int, o opts) i
 		img = raytrace.Render(scene, cam, w, h, raytrace.Options{Samples: o.spp})
 	}
 	if o.denoise > 0 {
-		img = raytrace.Denoise(img, o.denoise, 0.12)
+		if o.gdenoise {
+			al, nm := raytrace.GBuffer(scene, cam, w, h)
+			img = raytrace.DenoiseGuided(img, al, nm, o.denoise, 0.12, 0.1, 0.2)
+		} else {
+			img = raytrace.Denoise(img, o.denoise, 0.12)
+		}
 	}
 	return img
 }
@@ -91,9 +97,10 @@ func main() {
 	nee := flag.Bool("nee", true, "path tracer: next-event estimation (direct light sampling)")
 	mis := flag.Bool("mis", false, "path tracer: multiple importance sampling (light + BSDF)")
 	denoise := flag.Int("denoise", 0, "à-trous denoiser passes applied to the result (0 = off)")
+	gdenoise := flag.Bool("gdenoise", false, "denoise with albedo/normal guides (sharper edges)")
 	flag.Parse()
 
-	o := opts{spp: *spp, path: *pathT, depth: *depth, nee: *nee, mis: *mis, denoise: *denoise}
+	o := opts{spp: *spp, path: *pathT, depth: *depth, nee: *nee, mis: *mis, denoise: *denoise, gdenoise: *gdenoise}
 	w := demoWire()
 
 	const ecc = 10

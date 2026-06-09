@@ -61,3 +61,35 @@ func TestDenoiseReducesNoiseAndKeepsEdge(t *testing.T) {
 		t.Errorf("edge contrast not preserved: %.1f", c)
 	}
 }
+
+func TestDenoiseGuidedRespectsNormalEdge(t *testing.T) {
+	const w, h = 20, 20
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.SetRGBA(x, y, color.RGBA{A: 255}) // black
+		}
+	}
+	for y := 9; y < 11; y++ { // a bright block on the LEFT of the x=10 edge
+		for x := 7; x < 9; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	normal := make([]Vec3, w*h) // hard normal edge at x=10
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			if x < 10 {
+				normal[y*w+x] = Vec3{0, 0, 1}
+			} else {
+				normal[y*w+x] = Vec3{1, 0, 0}
+			}
+		}
+	}
+	val := func(im image.Image, x, y int) int { r, _, _, _ := im.At(x, y).RGBA(); return int(r >> 8) }
+	colorOnly := Denoise(img, 4, 0.6)
+	guided := DenoiseGuided(img, nil, normal, 4, 0.6, 0, 0.1)
+	if val(guided, 11, 10) >= val(colorOnly, 11, 10) {
+		t.Errorf("normal guide should block cross-edge bleed: guided=%d colorOnly=%d",
+			val(guided, 11, 10), val(colorOnly, 11, 10))
+	}
+}
