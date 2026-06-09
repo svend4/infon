@@ -4,15 +4,16 @@ import (
 	"image"
 	"testing"
 
+	"github.com/svend4/infon/pkg/brain"
 	"github.com/svend4/infon/pkg/raytrace"
 )
 
 // BuildScene must map the spec's material fields onto the path tracer's materials.
 func TestBuildSceneMaterials(t *testing.T) {
-	spec := SceneSpec{
+	spec := brain.SceneSpec{
 		Light:  [3]float64{1, 2, 3},
 		SkyTop: [3]float64{0.1, 0.2, 0.3},
-		Objects: []ObjSpec{
+		Objects: []brain.ObjSpec{
 			{Kind: "plane", Y: 0, Color: [3]float64{0.5, 0.5, 0.5}},
 			{X: 1, Y: 1, Z: 1, R: 2, Glass: 1.5},
 			{X: -1, Y: 1, Z: 0, R: 1, Metal: 1, Color: [3]float64{1, 0.8, 0.3}, Rough: 0.2},

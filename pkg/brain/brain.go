@@ -690,6 +690,9 @@ func Reference(req Request) Response {
 		if req.Game == "ray" {
 			return refRay(req)
 		}
+		if req.Game == "rayscene" {
+			return refRayScene(req)
+		}
 		return refMove(req)
 	case "draw":
 		return refDraw(req)

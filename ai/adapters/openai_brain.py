@@ -36,6 +36,10 @@ SYS = ("You are a game and art partner speaking the tvcp-ai/1 format. Reply with
        "the scene, camera pans); state gives fold_pct, relief_pct, camera_deg to react to. "
        "kind=move with game=ray -> reply a JSON object with key ray = a list of {id,dx,dy,dz}, "
        "moving each sphere in state.spheres (by id); dx,dy,dz each -1,0,1. "
+       "kind=move with game=rayscene -> reply a JSON object with key ray = a scene graph "
+       "{objects:[{kind,x,y,z,r,color:[r,g,b],emit:[r,g,b],glass,metal,reflect,rough}],light:[x,y,z],"
+       "skyTop:[r,g,b],skyBottom:[r,g,b]}; kind is sphere or plane; author the world that "
+       "state.prompt describes (use emit for lights, glass~1.5, metal/reflect for shiny). "
        "kind=move with game=rpg -> reply a JSON object with key rpg = a list of {id,dx,dy}, where "
        "for each of your units (state.units, by id) dx,dy are -1,0,1 stepping toward the nearest "
        "enemy (state.enemies); combat is automatic on contact.")
@@ -155,6 +159,14 @@ def decide(req):
                         return resp
                     last = "no ray moves"
                     continue
+                if req.get("game") == "rayscene":
+                    sc = m.get("ray", m)
+                    if isinstance(sc, dict) and sc.get("objects"):
+                        resp["ray"] = sc
+                        resp["reasoning"] = "rayscene"
+                        return resp
+                    last = "no rayscene"
+                    continue
                 if req.get("game") == "rpg":
                     mv = m.get("rpg", m)
                     if isinstance(mv, list):
@@ -216,6 +228,15 @@ def decide(req):
             resp["rpg"] = []
         elif req.get("game") == "ray":
             resp["ray"] = []
+        elif req.get("game") == "rayscene":
+            resp["ray"] = {
+                "objects": [
+                    {"kind": "plane", "color": [0.8, 0.8, 0.8]},
+                    {"x": 0, "y": 1, "z": 0, "r": 1, "color": [0.8, 0.4, 0.4]},
+                    {"x": 0, "y": 6, "z": -1, "r": 0.7, "emit": [18, 18, 17]},
+                ],
+                "light": [6, 9, -4], "skyTop": [0.4, 0.55, 0.85], "skyBottom": [0.85, 0.88, 0.95],
+            }
         elif req.get("game") == "tangram":
             st = req.get("state") or {}
             resp["tangram"] = {"h": st.get("h", 1), "w": st.get("w", 1), "pieces": []}

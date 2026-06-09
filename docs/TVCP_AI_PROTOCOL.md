@@ -97,6 +97,7 @@ it filled in by `HTTPBrain.Decide`; a server always stamps it on the way out.
   "world":     { ... },   // move/world: next-tick directives
   "rpg":       [ ... ],    // move/rpg: per-unit moves
   "ray":       [ ... ],    // move/ray: per-sphere 3-D scene moves
+                           // move/rayscene: a full authored scene graph (objects+materials+light+sky)
   "cards":     ["★","♥"],  // react
   "reasoning": "optional human-readable rationale",
   "error":     ""          // non-empty iff the brain failed the request
@@ -142,6 +143,7 @@ The `move` object covers every board/word/card game:
 | `world` | scene brief (`fold_pct`, `relief_pct`, …) | `world` (4 directives ∈ `{-1,0,1}`) |
 | `rpg` | `you`, `w`, `h`, `units[]`, `enemies[]` | `rpg` (`[]{id,dx,dy}`) |
 | `ray` | `spheres[]{id,x,y,z}` | `ray` (`[]{id,dx,dy,dz}`, each ∈ `{-1,0,1}`) |
+| `rayscene` | `{prompt}` | `ray` (a scene graph: `{objects[]{kind,x,y,z,r,color,emit,glass,metal,reflect,rough}, light, skyTop, skyBottom}`) |
 
 `state` is opaque to the transport: a brain parses only the games it advertises.
 
@@ -180,7 +182,7 @@ GET /v1/capabilities
 {
   "protocol": "tvcp-ai/1",
   "kinds":    ["move","draw","sketch","image","react"],
-  "games":    ["tictactoe","wordle","uno","tangram","world","rpg","ray"],
+  "games":    ["tictactoe","wordle","uno","tangram","world","rpg","ray","rayscene"],
   "formats":  ["grid","pixels","glyphs","sigils","vector","sketch","mixed","marks"]
 }
 ```
