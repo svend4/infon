@@ -11,6 +11,7 @@ import (
 	"github.com/svend4/infon/internal/aisource"
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/internal/device"
+	"github.com/svend4/infon/internal/raysource"
 	"github.com/svend4/infon/pkg/color"
 	"github.com/svend4/infon/pkg/terminal"
 )
@@ -26,6 +27,7 @@ import (
 //	tvcp synth                 # default: plasma
 //	tvcp synth plasma
 //	tvcp synth ripple
+//	tvcp synth ray             # CPU ray-traced 3-D scene as a live source
 //	tvcp synth neural [prompt] # neural hook (placeholder until a model is wired)
 func runSynth() {
 	fmt.Println("🎨 TVCP Generative Synthesis")
@@ -65,6 +67,11 @@ func runSynth() {
 			fmt.Println("Backend: none. Set IMAGE_API_URL (raster), BRAIN_URL (sketch),")
 			fmt.Println("         or TVCP_LOCAL_BRAIN=1 (offline procedural) to render with a model.")
 		}
+	} else if name == "ray" {
+		// CPU ray-traced 3-D scene as a live video source (pkg/raytrace via
+		// internal/raysource); orbits by wall-clock time.
+		gen = raysource.New(nil, 1)
+		fmt.Println("Generator: ray (CPU ray-traced 3-D scene)")
 	} else {
 		g, err := device.NewProceduralGenerator(name)
 		if err != nil {
