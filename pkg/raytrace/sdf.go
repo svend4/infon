@@ -181,6 +181,43 @@ func mandelbulbDE(pos Vec3, power float64, iters int) float64 {
 	return 0.5 * math.Log(r) * r / dr
 }
 
+// sierpinskiDE is the distance estimator for a Sierpinski tetrahedron (folding
+// toward four corners), a self-similar fractal.
+func sierpinskiDE(p Vec3, iters int) float64 {
+	a1 := Vec3{X: 1, Y: 1, Z: 1}
+	a2 := Vec3{X: -1, Y: -1, Z: 1}
+	a3 := Vec3{X: 1, Y: -1, Z: -1}
+	a4 := Vec3{X: -1, Y: 1, Z: -1}
+	const scale = 2.0
+	z := p
+	n := 0
+	for ; n < iters; n++ {
+		c, dist := a1, z.Sub(a1).Len()
+		if d := z.Sub(a2).Len(); d < dist {
+			c, dist = a2, d
+		}
+		if d := z.Sub(a3).Len(); d < dist {
+			c, dist = a3, d
+		}
+		if d := z.Sub(a4).Len(); d < dist {
+			c = a4
+		}
+		z = z.Scale(scale).Sub(c.Scale(scale - 1))
+	}
+	return z.Len() * math.Pow(scale, float64(-n))
+}
+
+// latticeDE repeats a cell of three interlocking perpendicular rings infinitely
+// (domain repetition) — an Escher-style endless tessellation, clipped to the
+// object's bounding sphere.
+func latticeDE(p Vec3, period float64) float64 {
+	q := Vec3{X: fmod(p.X+0.5*period, period) - 0.5*period, Y: fmod(p.Y+0.5*period, period) - 0.5*period, Z: fmod(p.Z+0.5*period, period) - 0.5*period}
+	d := sdTorus(q, 0.33, 0.09)
+	d = math.Min(d, sdTorus(Vec3{X: q.Y, Y: q.Z, Z: q.X}, 0.33, 0.09))
+	d = math.Min(d, sdTorus(Vec3{X: q.Z, Y: q.X, Z: q.Y}, 0.33, 0.09))
+	return d
+}
+
 // mandalaDE folds space radially into `sym` mirrored wedges and fills the wedge
 // with a small arrangement of rings and beads — a 3-D mandala in relief.
 func mandalaDE(p Vec3, sym int) float64 {
@@ -210,6 +247,15 @@ func NewMarched(name string, center Vec3, radius float64, mat Material) (Marched
 	case "menger":
 		sc := radius
 		m.DE = func(p Vec3) float64 { return mengerDE(p.Scale(1/sc), 4) * sc }
+	case "sierpinski":
+		sc := radius / 1.4
+		m.DE = func(p Vec3) float64 { return sierpinskiDE(p.Scale(1/sc), 10) * sc }
+		m.Eps = radius * 2e-3 // the folding DE has a resolution floor ~scale^-iters
+		m.StepK = 0.9
+	case "lattice", "escher":
+		sc := radius / 2.2
+		m.DE = func(p Vec3) float64 { return latticeDE(p.Scale(1/sc), 1) * sc }
+		m.StepK = 0.9
 	case "mandala":
 		sc := radius
 		m.DE = func(p Vec3) float64 { return mandalaDE(p.Scale(1/sc), 8) * sc }

@@ -32,7 +32,7 @@ func TestMarchedMatchesAnalyticSphere(t *testing.T) {
 // The named fractals are hit by a ray aimed at them, with a unit normal, inside
 // their bounding sphere.
 func TestMarchedFractalsHit(t *testing.T) {
-	for _, name := range []string{"mandelbulb", "menger", "mandala", "melt"} {
+	for _, name := range []string{"mandelbulb", "menger", "mandala", "melt", "sierpinski", "lattice", "escher"} {
 		m, ok := NewMarched(name, Vec3{X: 0, Y: 0, Z: 4}, 1.5, Material{Color: Vec3{X: 0.8}})
 		if !ok {
 			t.Fatalf("NewMarched(%q) should exist", name)
