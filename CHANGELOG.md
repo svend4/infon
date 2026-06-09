@@ -84,6 +84,16 @@ adopting, and it was reimplemented better).
   already parses `vt`, so loaded meshes carry UVs); on a `mesh` the texture rides
   the same per-instance override. Unknown texture names are ignored (the surface
   stays flat-coloured, never dropped).
+- **Ray-marched art — fractals, mandalas, surreal forms** (`pkg/raytrace/sdf.go`,
+  `pkg/raydir`): a sphere-traced signed-distance object (`Marched`) renders shapes
+  triangles can't — **Mandelbulb**, **Menger sponge**, **Sierpinski** (fractals),
+  **mandala** (radial fold), **melt** (Dali-style smooth-min metaballs) and an
+  **Escher** infinite interlocking-ring lattice — each a formula, not a mesh, so an
+  infinite world ships as a name. It composes with the path tracer, materials,
+  shadows/GI and the BVH like any primitive. The director authors them via
+  `kind:"fractal"` (alias `sdf`) + `name`; a "surreal/dream" prompt composes a dusk
+  tableau of several forms. Unknown form names are dropped by the sanitiser.
+  Protocol doc and the three adapters advertise the `fractal` kind.
 - **The experience — walk a world the AI dreams up** (`cmd/rayexplore`,
   `pkg/raydir/fly.go`): a free-fly camera through a `World` the brain authors and
   **extends on the fly** — walk forward and new regions are composed ahead of you,

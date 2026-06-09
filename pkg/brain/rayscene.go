@@ -112,8 +112,42 @@ func refRayScene(req Request) Response {
 			break
 		}
 	}
+	if name, ok := fractalFor(p.Prompt); ok { // a ray-marched fractal/mandala form
+		spec.Objects = append(spec.Objects, ObjSpec{
+			Kind: "fractal", Name: name, Y: 1.6, Z: 1, R: 1.4,
+			Color: [3]float64{0.85, 0.78, 0.95}, Reflect: 0.2,
+		})
+	}
+	if hasAny(p.Prompt, "surreal", "dream", "dali", "dalí") {
+		// a small surreal tableau: dusk sky, a melting form and a glowing mandala.
+		spec.SkyTop, spec.SkyBot = [3]float64{0.15, 0.12, 0.30}, [3]float64{0.95, 0.50, 0.30}
+		spec.Objects = append(spec.Objects,
+			ObjSpec{Kind: "fractal", Name: "melt", X: -3, Y: 1, Z: 2, R: 1.2, Color: [3]float64{0.9, 0.4, 0.42}, Reflect: 0.2},
+			ObjSpec{Kind: "fractal", Name: "mandala", X: 3, Y: 1.6, Z: 3, R: 1.6, Color: [3]float64{0.4, 0.85, 0.85}, Emit: [3]float64{0.3, 0.8, 0.8}},
+		)
+	}
 	data, _ := json.Marshal(spec)
 	return Response{Protocol: Protocol, Kind: "move", Ray: data, Reasoning: "reference scene author"}
+}
+
+// fractalFor maps a prompt keyword to a ray-marched form name (see raydir's SDF
+// library), excluding the "surreal/dream" combo which is handled separately.
+func fractalFor(prompt string) (string, bool) {
+	switch {
+	case hasAny(prompt, "mandelbulb", "fractal"):
+		return "mandelbulb", true
+	case hasAny(prompt, "menger", "sponge"):
+		return "menger", true
+	case hasAny(prompt, "sierpinski"):
+		return "sierpinski", true
+	case hasAny(prompt, "mandala"):
+		return "mandala", true
+	case hasAny(prompt, "escher", "tessellat", "lattice", "tiling"):
+		return "escher", true
+	case hasAny(prompt, "melt", "metaball"):
+		return "melt", true
+	}
+	return "", false
 }
 
 func hasAny(s string, subs ...string) bool {

@@ -72,6 +72,18 @@ func objectsFromSpec(o brain.ObjSpec, at raytrace.Vec3, includePlane bool) []ray
 			return []raytrace.Object{raytrace.NewInstanceMat(m, xf, objMaterial(o))}
 		}
 		return []raytrace.Object{raytrace.NewInstance(m, xf)}
+	case "fractal", "sdf":
+		// a ray-marched signed-distance form: fractal, mandala or melting blob,
+		// reconstructed from a name (a formula, not geometry).
+		mat := objMaterial(o)
+		if mat.Color.LenSq() == 0 && mat.Tex == nil {
+			mat.Color = raytrace.Vec3{X: 0.8, Y: 0.8, Z: 0.82}
+		}
+		mr, ok := raytrace.NewMarched(o.Name, specCenter(o, at), specScale(o), mat)
+		if !ok {
+			return nil // unknown form
+		}
+		return []raytrace.Object{mr}
 	default:
 		return []raytrace.Object{raytrace.Sphere{
 			Center: specCenter(o, at), Radius: specScale(o), Mat: objMaterial(o),
@@ -117,11 +129,17 @@ func specHasMaterial(o brain.ObjSpec) bool {
 const maxRegionObjects = 256
 
 var knownKinds = map[string]bool{
-	"": true, "sphere": true, "box": true, "pyramid": true,
-	"cylinder": true, "tree": true, "house": true, "plane": true, "mesh": true,
+	"": true, "sphere": true, "box": true, "pyramid": true, "cylinder": true,
+	"tree": true, "house": true, "plane": true, "mesh": true, "fractal": true, "sdf": true,
 }
 
 func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) && math.Abs(f) < 1e6 }
+
+// knownFractal reports whether a ray-marched form name is recognised.
+func knownFractal(name string) bool {
+	_, ok := raytrace.NewMarched(name, raytrace.Vec3{}, 1, raytrace.Material{})
+	return ok
+}
 
 // validObj rejects an object with an unknown kind or a non-finite coordinate.
 func validObj(o brain.ObjSpec) bool {
@@ -130,6 +148,9 @@ func validObj(o brain.ObjSpec) bool {
 	}
 	if o.Kind == "mesh" && meshFor(o.Name) == nil {
 		return false // unknown named model: drop it
+	}
+	if (o.Kind == "fractal" || o.Kind == "sdf") && !knownFractal(o.Name) {
+		return false // unknown ray-marched form: drop it
 	}
 	return finite(o.X) && finite(o.Y) && finite(o.Z) && finite(o.R) &&
 		finite(o.S[0]) && finite(o.S[1]) && finite(o.S[2])

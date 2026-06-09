@@ -143,7 +143,7 @@ The `move` object covers every board/word/card game:
 | `world` | scene brief (`fold_pct`, `relief_pct`, …) | `world` (4 directives ∈ `{-1,0,1}`) |
 | `rpg` | `you`, `w`, `h`, `units[]`, `enemies[]` | `rpg` (`[]{id,dx,dy}`) |
 | `ray` | `spheres[]{id,x,y,z}` | `ray` (`[]{id,dx,dy,dz}`, each ∈ `{-1,0,1}`) |
-| `rayscene` | `{prompt}` | `ray` (a scene graph: `{objects[]{kind:sphere\|box\|pyramid\|cylinder\|tree\|house\|mesh\|plane,name,tex,x,y,z,r,s:[hx,hy,hz],color,emit,glass,metal,reflect,rough}, light, skyTop, skyBottom}`; `kind:mesh` instances a named model — `name` ∈ the renderer's mesh library, e.g. `crystal`, `rock`, plus any `.obj` loaded; a mesh that sets material fields is tinted per placement; `tex` names a surface texture — `checker`, `marble`, `wood`, `stone`, `clouds`, or any image loaded) |
+| `rayscene` | `{prompt}` | `ray` (a scene graph: `{objects[]{kind:sphere\|box\|pyramid\|cylinder\|tree\|house\|mesh\|fractal\|plane,name,tex,x,y,z,r,s:[hx,hy,hz],color,emit,glass,metal,reflect,rough}, light, skyTop, skyBottom}`; `kind:mesh` instances a named model — `name` ∈ the renderer's mesh library, e.g. `crystal`, `rock`, plus any `.obj` loaded; `kind:fractal` (alias `sdf`) ray-marches a named signed-distance form — `name` ∈ `mandelbulb`, `menger`, `sierpinski`, `mandala`, `melt`, `escher`; a mesh/fractal that sets material fields is tinted per placement; `tex` names a surface texture — `checker`, `marble`, `wood`, `stone`, `clouds`, or any image loaded) |
 
 `state` is opaque to the transport: a brain parses only the games it advertises.
 
