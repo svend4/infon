@@ -1,10 +1,12 @@
 // Command rayview is an interactive terminal navigator for the ray tracer. Type a
 // command (or several) then Enter to fly the camera; the frame redraws
-// flicker-free through the diff renderer. It is portable (line-based stdin), so it
-// runs anywhere with no raw-TTY handling.
+// flicker-free through the diff renderer. In path-trace mode an empty line
+// (just Enter) PROGRESSIVELY REFINES the current view (accumulates more samples,
+// less noise) instead of restarting. Portable: line-based stdin, no raw-TTY.
 //
 //	a/d orbit   w/s dolly in/out   q/e raise/lower   r/f tilt
-//	+/- field of view   p toggle path tracer   n toggle denoiser   x quit
+//	+/- field of view   p toggle path tracer   n toggle denoiser
+//	(path mode) <Enter> refine   x quit
 package main
 
 import (
@@ -23,6 +25,7 @@ import (
 
 func main() {
 	const cols, rows = 80, 40
+	const pxW, pxH = cols * 2, rows * 4
 	scene := raysource.DemoScene()
 	scene.BuildBVH()
 	target := raytrace.Vec3{X: 0, Y: 1, Z: 0}
@@ -32,34 +35,50 @@ func main() {
 	denoise := 0
 	mode := terminal.DetectCapability().BestBlitMode()
 	dr := terminal.NewDiffRenderer()
+	pathOpt := raytrace.PathOptions{Samples: 6, MaxDepth: 5, Seed: 1, MIS: true}
+	var acc *raytrace.Accumulator
 
-	render := func() {
+	camera := func() raytrace.Camera {
 		pos := raytrace.Vec3{X: math.Sin(angle) * radius, Y: height, Z: math.Cos(angle) * radius}
 		d := target.Sub(pos)
-		cam := raytrace.Camera{
+		return raytrace.Camera{
 			Pos:   pos,
 			Yaw:   math.Atan2(d.X, d.Z),
 			Pitch: math.Atan2(d.Y, math.Hypot(d.X, d.Z)) + pitch,
 			FOV:   fov,
 		}
+	}
+
+	render := func(dirty bool) {
+		cam := camera()
 		var im image.Image
+		status := ""
 		if pathT {
-			im = raytrace.PathRender(scene, cam, cols*2, rows*4, raytrace.PathOptions{Samples: 8, MaxDepth: 5, Seed: 1, NEE: true})
+			if acc == nil || dirty {
+				acc = raytrace.NewAccumulator(pxW, pxH)
+			}
+			acc.AddSamples(scene, cam, pathOpt)
+			im = acc.Image()
+			status = fmt.Sprintf("path %d spp", acc.Samples())
 		} else {
-			im = raytrace.Render(scene, cam, cols*2, rows*4, raytrace.Options{Samples: 1})
+			im = raytrace.Render(scene, cam, pxW, pxH, raytrace.Options{Samples: 1})
+			status = "raster"
 		}
 		if denoise > 0 {
 			im = raytrace.Denoise(im, denoise, 0.12)
 		}
 		rm, _ := babe.ParseRenderMode(mode)
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, cols, rows, rm)))
-		fmt.Printf("\n[a/d orbit w/s dolly q/e height r/f tilt +/- fov | p path:%v n denoise:%d | x quit] ", pathT, denoise)
+		fmt.Printf("\n[a/d orbit w/s dolly q/e height r/f tilt +/- fov | p:%v n:%d | %s | Enter=refine x=quit] ", pathT, denoise, status)
 	}
 
-	render()
+	render(true)
 	sc := bufio.NewScanner(os.Stdin)
 	for sc.Scan() {
-		for _, ch := range strings.ToLower(strings.TrimSpace(sc.Text())) {
+		line := strings.ToLower(strings.TrimSpace(sc.Text()))
+		dirty := false
+		for _, ch := range line {
+			dirty = true
 			switch ch {
 			case 'a':
 				angle -= 0.2
@@ -93,6 +112,6 @@ func main() {
 				return
 			}
 		}
-		render()
+		render(dirty)
 	}
 }

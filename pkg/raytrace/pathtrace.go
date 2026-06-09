@@ -247,11 +247,13 @@ func (b camBasis) lensRay(px, py float64, cam Camera, rg *rng) Ray {
 	return Ray{Origin: orig, Dir: focal.Sub(orig).Norm()}
 }
 
-// PathRender renders the scene with Monte-Carlo global illumination.
-func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image {
-	img := image.NewRGBA(image.Rect(0, 0, pxW, pxH))
+// pathSum renders opt.Samples paths per pixel and returns the SUM of linear
+// radiance per pixel (row-major), pre-tone-map. Parallel and deterministic given
+// Seed. PathRender and Accumulator are both built on it.
+func pathSum(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) []Vec3 {
+	buf := make([]Vec3, pxW*pxH)
 	if pxW <= 0 || pxH <= 0 {
-		return img
+		return buf
 	}
 	spp := opt.Samples
 	if spp < 1 {
@@ -262,7 +264,6 @@ func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image
 		depth = 6
 	}
 	b := cam.basis(pxW, pxH)
-	inv := 1.0 / float64(spp)
 	s.gatherEmitters()
 	mode := opt.mode()
 
@@ -292,11 +293,84 @@ func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image
 						v := float64(y) + rg.f()
 						acc = acc.Add(s.radiance(b.lensRay(u, v, cam, rg), depth, rg, mode))
 					}
-					img.SetRGBA(x, y, toRGBA(acc.Scale(inv)))
+					buf[y*pxW+x] = acc
 				}
 			}
 		}()
 	}
 	wg.Wait()
+	return buf
+}
+
+// PathRender renders the scene with Monte-Carlo global illumination.
+func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, pxW, pxH))
+	if pxW <= 0 || pxH <= 0 {
+		return img
+	}
+	spp := opt.Samples
+	if spp < 1 {
+		spp = 1
+	}
+	buf := pathSum(s, cam, pxW, pxH, opt)
+	inv := 1.0 / float64(spp)
+	for y := 0; y < pxH; y++ {
+		for x := 0; x < pxW; x++ {
+			img.SetRGBA(x, y, toRGBA(buf[y*pxW+x].Scale(inv)))
+		}
+	}
+	return img
+}
+
+// Accumulator progressively averages path-traced samples, so a viewer can refine
+// an image over time (more samples = less noise) without restarting. Each
+// AddSamples call offsets the seed so batches are decorrelated.
+type Accumulator struct {
+	w, h    int
+	sum     []Vec3
+	samples int
+}
+
+// NewAccumulator makes an accumulator for a w x h image.
+func NewAccumulator(w, h int) *Accumulator { return &Accumulator{w: w, h: h, sum: make([]Vec3, w*h)} }
+
+// Reset clears it (call when the camera or scene changes).
+func (a *Accumulator) Reset() {
+	for i := range a.sum {
+		a.sum[i] = Vec3{}
+	}
+	a.samples = 0
+}
+
+// Samples reports how many samples per pixel have been accumulated so far.
+func (a *Accumulator) Samples() int { return a.samples }
+
+// AddSamples folds another opt.Samples paths per pixel into the running average.
+func (a *Accumulator) AddSamples(s *Scene, cam Camera, opt PathOptions) {
+	o := opt
+	o.Seed = opt.Seed + uint64(a.samples) + 1
+	batch := pathSum(s, cam, a.w, a.h, o)
+	for i := range a.sum {
+		a.sum[i] = a.sum[i].Add(batch[i])
+	}
+	spp := opt.Samples
+	if spp < 1 {
+		spp = 1
+	}
+	a.samples += spp
+}
+
+// Image tone-maps the current running average into an RGBA image.
+func (a *Accumulator) Image() image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, a.w, a.h))
+	inv := 1.0
+	if a.samples > 0 {
+		inv = 1.0 / float64(a.samples)
+	}
+	for y := 0; y < a.h; y++ {
+		for x := 0; x < a.w; x++ {
+			img.SetRGBA(x, y, toRGBA(a.sum[y*a.w+x].Scale(inv)))
+		}
+	}
 	return img
 }
