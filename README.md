@@ -33,6 +33,25 @@ tvcp game                              # real-time Snake (build with -tags exper
   `DIRECTOR_URL`, `RESTORE_API_URL`, `TVCP_STREAM_COHERENCE`. See
   [docs/EXTERNAL_MODELS.md](docs/EXTERNAL_MODELS.md) and [docs/NEURAL_GRAPHICS_ROADMAP.md](docs/NEURAL_GRAPHICS_ROADMAP.md).
 
+### 🌍 Walk an AI-authored world — together, in the terminal
+
+The thesis made literal: an AI **director** describes a 3-D world as a compact
+scene graph (game `rayscene`), and each machine renders it locally with a CPU
+ray/path tracer (`pkg/raytrace`). Several people (and the AI) walk the **same**
+growing world together — seeing each other, with chat and optional voice — while
+the world itself never crosses the wire. Only *meaning* does: region descriptions
+(~100 bytes), poses (44 bytes), short text/voice.
+
+```bash
+go run ./cmd/rayexplore                       # walk a world the AI grows ahead of you
+go run ./cmd/raymeet -host 5000               # the director hub
+go run ./cmd/raymeet localhost:5000 5001      # ...a guest joins; /msg to chat, -voice for audio
+go run ./cmd/ray3d -renderer bdpt -spp 32 -png out.png   # any of 5 renderers
+```
+
+See **[docs/SHARED_WORLD.md](docs/SHARED_WORLD.md)** for the full guide (group
+mode, voice, and driving it with a real `BRAIN_URL` model).
+
 ## ⚡ Key Features
 
 - **🚀 Ultra-low bandwidth:** 382 kbps total (vs 1.8 Mbps for Zoom)
