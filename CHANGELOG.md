@@ -63,6 +63,13 @@ adopting, and it was reimplemented better).
   **extends on the fly** — walk forward and new regions are composed ahead of you,
   each shipped as a compact scene description (meaning, not pixels) and ray-traced
   locally. Offline with the reference brain, or a real director via `BRAIN_URL`.
+- **The shared world — two walkers, one space** (`cmd/raymeet`,
+  `pkg/raydir/pose.go`): two peers "call in" over UDP and walk the *same* growing
+  world together, each seeing the other's glowing avatar. The world is never sent:
+  both sides derive it identically from the director's region script, so the only
+  thing on the wire is a 40-byte `Pose` per tick — meaning, not pixels, even for
+  multiplayer. Verified live: two processes exchange poses and each places the
+  other at the correct position.
 - **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
   exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
 

@@ -102,10 +102,15 @@ func (w *World) Grow(b brain.Brain, prompt string, at raytrace.Vec3) (int, error
 }
 
 // Scene builds a renderable, BVH-accelerated scene from the floor and all props.
-func (w *World) Scene() *raytrace.Scene {
+func (w *World) Scene() *raytrace.Scene { return w.SceneWith(nil) }
+
+// SceneWith is Scene plus extra transient objects (e.g. a remote player's avatar)
+// that change every frame and so can't live in the persistent prop list.
+func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	s := &raytrace.Scene{SkyTop: w.SkyTop, SkyBottom: w.SkyBottom}
 	s.Objects = append(s.Objects, w.floor)
 	s.Objects = append(s.Objects, w.props...)
+	s.Objects = append(s.Objects, extra...)
 	s.BuildBVH()
 	return s
 }
