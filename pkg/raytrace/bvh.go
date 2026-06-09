@@ -1,6 +1,9 @@
 package raytrace
 
-import "math"
+import (
+	"math"
+	"sort"
+)
 
 // bvh is a bounding-volume hierarchy over a mesh's triangles: a binary tree of
 // axis-aligned boxes that turns the O(n) triangle scan into O(log n) for large
@@ -103,7 +106,8 @@ func buildBVH(tris []Triangle) *bvh {
 		if count <= 4 {
 			return id // leaf
 		}
-		// split on the longest centroid axis at its midpoint.
+		// split with the surface-area heuristic on the longest centroid axis:
+		// sort by centroid, then sweep for the partition of least expected cost.
 		cb := emptyAABB()
 		for i := 0; i < count; i++ {
 			cb = cb.expand(cents[b.idx[start+i]])
@@ -116,19 +120,23 @@ func buildBVH(tris []Triangle) *bvh {
 		if ext.Z > axis(ext, ax) {
 			ax = 2
 		}
-		mid := (axis(cb.min, ax) + axis(cb.max, ax)) / 2
-		l, r := start, start+count-1
-		for l <= r {
-			if axis(cents[b.idx[l]], ax) < mid {
-				l++
-			} else {
-				b.idx[l], b.idx[r] = b.idx[r], b.idx[l]
-				r--
-			}
+		sub := b.idx[start : start+count]
+		sort.Slice(sub, func(i, j int) bool {
+			return axis(cents[sub[i]], ax) < axis(cents[sub[j]], ax)
+		})
+		left := make([]float64, count)
+		lb := emptyAABB()
+		for i := 0; i < count; i++ {
+			lb = lb.union(boxes[sub[i]])
+			left[i] = lb.area() * float64(i+1)
 		}
-		leftCount := l - start
-		if leftCount == 0 || leftCount == count {
-			leftCount = count / 2 // degenerate split: halve by position
+		leftCount, bestCost := count/2, 1e300
+		rb := emptyAABB()
+		for i := count - 1; i >= 1; i-- {
+			rb = rb.union(boxes[sub[i]])
+			if cost := left[i-1] + rb.area()*float64(count-i); cost < bestCost {
+				bestCost, leftCount = cost, i
+			}
 		}
 		li := build(start, leftCount)
 		ri := build(start+leftCount, count-leftCount)
