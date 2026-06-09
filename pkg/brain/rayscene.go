@@ -71,6 +71,12 @@ func refRayScene(req Request) Response {
 			Color: [3]float64{0.6, 0.6, 0.65}, Rough: 0.4,
 		})
 	}
+	if hasAny(p.Prompt, "tree", "forest", "wood", "park") {
+		spec.Objects = append(spec.Objects, ObjSpec{Kind: "tree", X: -3, Y: 0, Z: -1, R: 1.2})
+	}
+	if hasAny(p.Prompt, "house", "home", "village", "town", "cabin") {
+		spec.Objects = append(spec.Objects, ObjSpec{Kind: "house", X: 3, Y: 0, Z: -1, R: 1.1})
+	}
 	data, _ := json.Marshal(spec)
 	return Response{Protocol: Protocol, Kind: "move", Ray: data, Reasoning: "reference scene author"}
 }

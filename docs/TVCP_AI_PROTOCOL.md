@@ -143,7 +143,7 @@ The `move` object covers every board/word/card game:
 | `world` | scene brief (`fold_pct`, `relief_pct`, …) | `world` (4 directives ∈ `{-1,0,1}`) |
 | `rpg` | `you`, `w`, `h`, `units[]`, `enemies[]` | `rpg` (`[]{id,dx,dy}`) |
 | `ray` | `spheres[]{id,x,y,z}` | `ray` (`[]{id,dx,dy,dz}`, each ∈ `{-1,0,1}`) |
-| `rayscene` | `{prompt}` | `ray` (a scene graph: `{objects[]{kind:sphere\|box\|plane,x,y,z,r,s:[hx,hy,hz],color,emit,glass,metal,reflect,rough}, light, skyTop, skyBottom}`) |
+| `rayscene` | `{prompt}` | `ray` (a scene graph: `{objects[]{kind:sphere\|box\|pyramid\|cylinder\|tree\|house\|plane,x,y,z,r,s:[hx,hy,hz],color,emit,glass,metal,reflect,rough}, light, skyTop, skyBottom}`) |
 
 `state` is opaque to the transport: a brain parses only the games it advertises.
 

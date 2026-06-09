@@ -58,9 +58,11 @@ adopting, and it was reimplemented better).
   tvcp camera (`tvcp call --ray`), the brain driving the camera/world
   (`game:ray`), and the brain **authoring a full material scene from a prompt**
   (`game:rayscene`, formalised in the tvcp-ai/1 protocol + adapters). The scene
-  graph now includes **box geometry** (`kind:"box"` with half-extents `s`, 12
-  triangles), so the director can build recognizable structures — walls, towers,
-  pedestals — not just spheres.
+  graph now includes **named procedural meshes** — `box`, `pyramid`, `cylinder`
+  and the composites `tree` (trunk + foliage) and `house` (walls + roof) — so the
+  director can build a recognizable *place* (a grove, a village) rather than only
+  abstract spheres, all reconstructed locally from a name (no geometry on the
+  wire).
 - **The experience — walk a world the AI dreams up** (`cmd/rayexplore`,
   `pkg/raydir/fly.go`): a free-fly camera through a `World` the brain authors and
   **extends on the fly** — walk forward and new regions are composed ahead of you,

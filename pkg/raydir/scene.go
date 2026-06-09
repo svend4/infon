@@ -38,50 +38,46 @@ func objectsFromSpec(o brain.ObjSpec, at raytrace.Vec3, includePlane bool) []ray
 		c := vec3(o.Color)
 		return []raytrace.Object{raytrace.Plane{Y: o.Y, Size: 1, C1: c, C2: c.Scale(0.6)}}
 	case "box":
-		half := raytrace.Vec3{X: o.S[0], Y: o.S[1], Z: o.S[2]}
-		if half.LenSq() == 0 {
-			r := o.R
-			if r <= 0 {
-				r = 1
-			}
-			half = raytrace.Vec3{X: r, Y: r, Z: r}
-		}
-		return boxObjects(raytrace.Vec3{X: o.X + at.X, Y: o.Y + at.Y, Z: o.Z + at.Z}, half, objMaterial(o))
+		return boxObjects(specCenter(o, at), specHalf(o), objMaterial(o))
+	case "pyramid":
+		return pyramidObjects(specCenter(o, at), specHalf(o), objMaterial(o))
+	case "cylinder":
+		h := specHalf(o)
+		return cylinderObjects(specCenter(o, at), h.X, h.Y, objMaterial(o), 16)
+	case "tree":
+		return treeObjects(specCenter(o, at), specScale(o), objMaterial(o))
+	case "house":
+		return houseObjects(specCenter(o, at), specScale(o), objMaterial(o))
 	default:
-		r := o.R
-		if r <= 0 {
-			r = 1
-		}
 		return []raytrace.Object{raytrace.Sphere{
-			Center: raytrace.Vec3{X: o.X + at.X, Y: o.Y + at.Y, Z: o.Z + at.Z}, Radius: r, Mat: objMaterial(o),
+			Center: specCenter(o, at), Radius: specScale(o), Mat: objMaterial(o),
 		}}
 	}
 }
 
-// boxObjects builds an axis-aligned cuboid (12 triangles) centred at c with the
-// given half-extents.
-func boxObjects(c, half raytrace.Vec3, mat raytrace.Material) []raytrace.Object {
-	mk := func(sx, sy, sz float64) raytrace.Vec3 {
-		return raytrace.Vec3{X: c.X + sx*half.X, Y: c.Y + sy*half.Y, Z: c.Z + sz*half.Z}
+// specCenter is the object's world position (its declared point plus the region
+// offset).
+func specCenter(o brain.ObjSpec, at raytrace.Vec3) raytrace.Vec3 {
+	return raytrace.Vec3{X: o.X + at.X, Y: o.Y + at.Y, Z: o.Z + at.Z}
+}
+
+// specHalf is the half-extents for boxes/pyramids/cylinders: S if given, else a
+// cube/square of half-size R (default 1).
+func specHalf(o brain.ObjSpec) raytrace.Vec3 {
+	h := raytrace.Vec3{X: o.S[0], Y: o.S[1], Z: o.S[2]}
+	if h.LenSq() == 0 {
+		r := specScale(o)
+		h = raytrace.Vec3{X: r, Y: r, Z: r}
 	}
-	p := [8]raytrace.Vec3{
-		mk(-1, -1, -1), mk(1, -1, -1), mk(1, 1, -1), mk(-1, 1, -1), // z-
-		mk(-1, -1, 1), mk(1, -1, 1), mk(1, 1, 1), mk(-1, 1, 1), // z+
+	return h
+}
+
+// specScale is R, defaulting to 1 (sphere radius / composite scale).
+func specScale(o brain.ObjSpec) float64 {
+	if o.R <= 0 {
+		return 1
 	}
-	quad := func(a, b, cc, d int) []raytrace.Object {
-		return []raytrace.Object{
-			raytrace.Triangle{A: p[a], B: p[b], C: p[cc], Mat: mat},
-			raytrace.Triangle{A: p[a], B: p[cc], C: p[d], Mat: mat},
-		}
-	}
-	var t []raytrace.Object
-	t = append(t, quad(0, 1, 2, 3)...) // z-
-	t = append(t, quad(4, 5, 6, 7)...) // z+
-	t = append(t, quad(0, 1, 5, 4)...) // y-
-	t = append(t, quad(3, 2, 6, 7)...) // y+
-	t = append(t, quad(1, 2, 6, 5)...) // x+
-	t = append(t, quad(0, 3, 7, 4)...) // x-
-	return t
+	return o.R
 }
 
 // BuildScene turns a brain.SceneSpec into a renderable raytrace.Scene.

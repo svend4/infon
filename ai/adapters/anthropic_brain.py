@@ -45,7 +45,7 @@ SYS = ("You are a game and art partner speaking the tvcp-ai/1 format. Reply with
        "moving each sphere in state.spheres (by id); dx,dy,dz each -1,0,1. "
        "kind=move with game=rayscene -> reply a JSON object with key ray = a scene graph "
        "{objects:[{kind,x,y,z,r,s:[hx,hy,hz],color:[r,g,b],emit:[r,g,b],glass,metal,reflect,rough}],light:[x,y,z],"
-       "skyTop:[r,g,b],skyBottom:[r,g,b]}; kind is sphere, box (s=half-extents) or plane; author the world that "
+       "skyTop:[r,g,b],skyBottom:[r,g,b]}; kind is sphere, box/pyramid/cylinder (s=half-extents), tree, house, or plane; author the world that "
        "state.prompt describes (use emit for lights, glass~1.5, metal/reflect for shiny). "
        "kind=move with game=rpg -> reply a JSON object with key rpg = a list of {id,dx,dy}, where "
        "for each of your units (state.units, by id) dx,dy are -1,0,1 stepping toward the nearest "
