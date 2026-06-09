@@ -36,6 +36,10 @@ const (
 	// ModeTriangle renders diagonal/triangle glyphs (◤◥◣◢) chosen by best-match,
 	// for crisp slanted edges (mountains, sails, sun discs). From pkg/glyphset.
 	ModeTriangle
+	// ModeASCII renders one glyph per cell from a dark->light luminance ramp
+	// (classic ASCII art), area-averaged and colored. Lowest bandwidth and the
+	// most portable mode: no Unicode or sub-cell color pairs required.
+	ModeASCII
 )
 
 // String returns the mode's CLI name.
@@ -55,6 +59,8 @@ func (m RenderMode) String() string {
 		return "octant"
 	case ModeTriangle:
 		return "triangle"
+	case ModeASCII:
+		return "ascii"
 	default:
 		return "quadrant"
 	}
@@ -79,6 +85,8 @@ func ParseRenderMode(name string) (RenderMode, bool) {
 		return ModeOctant, true
 	case "triangle", "tri", "diagonal", "diag":
 		return ModeTriangle, true
+	case "ascii", "ramp", "text", "art":
+		return ModeASCII, true
 	default:
 		return ModeQuadrant, false
 	}
@@ -102,6 +110,8 @@ func ImageToFrameMode(img image.Image, w, h int, mode RenderMode) *terminal.Fram
 		return ImageToFrameOctant(img, w, h)
 	case ModeTriangle:
 		return glyphset.RenderTriangles(img, w, h)
+	case ModeASCII:
+		return ImageToFrameASCII(img, w, h)
 	default:
 		return ImageToFrame(img, w, h)
 	}

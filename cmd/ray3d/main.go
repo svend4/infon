@@ -96,7 +96,7 @@ func main() {
 	pngPath := flag.String("png", "", "export a PNG (720x480) instead of drawing")
 	gifPath := flag.String("gif", "", "export an orbit GIF instead of drawing")
 	frames := flag.Int("frames", 24, "frames in the GIF orbit")
-	mode := flag.String("mode", "auto", "terminal mode: auto|halfblock|sextant|octant|braille|perceptual|optimal|quadrant|sixel|kitty")
+	mode := flag.String("mode", "auto", "terminal mode: auto|halfblock|sextant|octant|braille|perceptual|optimal|quadrant|ascii|sixel|kitty")
 	pathT := flag.Bool("path", false, "use the Monte-Carlo path tracer (global illumination)")
 	depth := flag.Int("depth", 6, "path tracer max bounces")
 	nee := flag.Bool("nee", true, "path tracer: next-event estimation (direct light sampling)")

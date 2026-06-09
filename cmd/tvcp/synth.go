@@ -88,7 +88,7 @@ func runSynth() {
 	if envMode := os.Getenv("TVCP_RENDER_MODE"); envMode != "" {
 		m, ok := babe.ParseRenderMode(envMode)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "Unknown TVCP_RENDER_MODE %q (use quadrant|perceptual|optimal|halfblock|sextant|braille|octant|triangle)\n", envMode)
+			fmt.Fprintf(os.Stderr, "Unknown TVCP_RENDER_MODE %q (use quadrant|perceptual|optimal|halfblock|sextant|braille|octant|triangle|ascii)\n", envMode)
 			os.Exit(1)
 		}
 		mode = m
