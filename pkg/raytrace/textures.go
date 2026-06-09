@@ -42,6 +42,28 @@ func (t CheckerTex) At(_, _ float64, p Vec3) Vec3 {
 	return t.B
 }
 
+// WaveNormalTex is a procedural tangent-space normal map: a sinusoidal height
+// field h(p) = sin(f*x)*sin(f*z) whose surface gradient tilts the normal, giving
+// a rippled/egg-carton bump without any geometry. Assign it to Material.Bump.
+// Freq is the ripple frequency (world units), Amp the bump strength.
+type WaveNormalTex struct {
+	Freq float64
+	Amp  float64
+}
+
+// At implements Texture, returning an RGB-encoded tangent-space normal.
+func (w WaveNormalTex) At(_, _ float64, p Vec3) Vec3 {
+	f := w.Freq
+	if f <= 0 {
+		f = 1
+	}
+	// tangent-plane slopes = -d/dx, -d/dz of the height field.
+	dx := -w.Amp * f * math.Cos(f*p.X) * math.Sin(f*p.Z)
+	dz := -w.Amp * f * math.Sin(f*p.X) * math.Cos(f*p.Z)
+	n := Vec3{X: dx, Y: dz, Z: 1}.Norm()
+	return Vec3{X: 0.5*n.X + 0.5, Y: 0.5*n.Y + 0.5, Z: 0.5*n.Z + 0.5}
+}
+
 // ImageTex samples an image by UV (0..1, v top-down). With Wrap it tiles,
 // otherwise it clamps. sRGB is decoded toward linear so it composes with the
 // renderer's output gamma. Used both for surfaces and as an equirectangular

@@ -44,6 +44,7 @@ type Material struct {
 	Metal    float64 // metalness for the path tracer's GGX lobe (0 = dielectric .. 1 = metal)
 	Disperse float64 // glass only: per-channel IOR spread (chromatic dispersion); 0 = none
 	Tex      Texture // optional surface texture; overrides Color when set
+	Bump     Texture // optional tangent-space normal map (RGB-encoded); perturbs the shading normal for surface detail without geometry
 
 	// Principled selects the unified Disney-style BSDF (path tracer): one surface
 	// blending a Lambert diffuse lobe and a GGX specular lobe, driven by Metal and
@@ -368,6 +369,17 @@ func (s *Scene) gatherEmitters() {
 }
 
 func (s *Scene) closest(r Ray, tMin, tMax float64) (Hit, bool) {
+	h, ok := s.closestRaw(r, tMin, tMax)
+	if ok && h.Mat.Bump != nil {
+		h.N = perturbNormal(h)
+		if h.N.Dot(r.Dir) > 0 { // keep the perturbed normal facing the ray
+			h.N = h.N.Neg()
+		}
+	}
+	return h, ok
+}
+
+func (s *Scene) closestRaw(r Ray, tMin, tMax float64) (Hit, bool) {
 	if s.sbvh != nil {
 		return s.sbvh.closest(r, tMin, tMax)
 	}
@@ -380,6 +392,21 @@ func (s *Scene) closest(r Ray, tMin, tMax float64) (Hit, bool) {
 		}
 	}
 	return best, found
+}
+
+// perturbNormal applies a material's tangent-space normal map at the hit: it
+// decodes the RGB-encoded normal, builds a tangent frame from the geometric
+// normal, and returns the perturbed shading normal. A flat map (0.5,0.5,1)
+// leaves the normal unchanged.
+func perturbNormal(h Hit) Vec3 {
+	c := h.Mat.Bump.At(h.U, h.V, h.P)
+	tn := Vec3{X: 2*c.X - 1, Y: 2*c.Y - 1, Z: 2*c.Z - 1}
+	t, b := basisAround(h.N)
+	n := t.Scale(tn.X).Add(b.Scale(tn.Y)).Add(h.N.Scale(tn.Z))
+	if n.LenSq() < geomEps {
+		return h.N
+	}
+	return n.Norm()
 }
 
 func (s *Scene) anyHit(r Ray, tMin, tMax float64) bool {
