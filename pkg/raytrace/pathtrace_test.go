@@ -39,6 +39,27 @@ func TestPathSkyLightsTheScene(t *testing.T) {
 	}
 }
 
+func TestNEELightsSmallEmitterAtLowSPP(t *testing.T) {
+	build := func() *Scene {
+		return &Scene{
+			Objects: []Object{
+				Plane{Y: 0, Size: 1, C1: Vec3{0.8, 0.8, 0.8}, C2: Vec3{0.8, 0.8, 0.8}},
+				Sphere{Center: Vec3{0, 3, 0}, Radius: 0.4, Mat: Material{Emit: Vec3{20, 20, 20}}},
+			},
+			// Black sky: the small emissive sphere is the only light, so naive path
+			// tracing rarely finds it at low spp while NEE samples it every bounce.
+		}
+	}
+	cam := Camera{Pos: Vec3{0, 2, 5}, Yaw: math.Pi, Pitch: -0.35, FOV: 1.0}
+	naive := PathRender(build(), cam, 32, 32, PathOptions{Samples: 8, MaxDepth: 4, Seed: 7, NEE: false})
+	nee := PathRender(build(), cam, 32, 32, PathOptions{Samples: 8, MaxDepth: 4, Seed: 7, NEE: true})
+	nr, ng, nb, _ := naive.At(16, 24).RGBA()
+	er, eg, eb, _ := nee.At(16, 24).RGBA()
+	if lum(er, eg, eb) <= lum(nr, ng, nb) {
+		t.Errorf("NEE floor (%.0f) should beat naive (%.0f) at 8 spp", lum(er, eg, eb), lum(nr, ng, nb))
+	}
+}
+
 func TestPathEmissiveIsBright(t *testing.T) {
 	sc := &Scene{
 		Objects: []Object{Sphere{Center: Vec3{0, 0, 0}, Radius: 1, Mat: Material{Emit: Vec3{1, 1, 1}}}},

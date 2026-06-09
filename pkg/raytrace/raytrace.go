@@ -278,7 +278,19 @@ type Scene struct {
 	AOSamples int
 	AORadius  float64
 
-	sbvh *objBVH // optional top-level acceleration structure (see BuildBVH)
+	sbvh *objBVH  // optional top-level acceleration structure (see BuildBVH)
+	emit []Sphere // emissive spheres, cached for next-event estimation
+}
+
+// gatherEmitters caches the scene's emissive spheres so the path tracer can
+// sample them directly (next-event estimation). Called by PathRender.
+func (s *Scene) gatherEmitters() {
+	s.emit = s.emit[:0]
+	for _, o := range s.Objects {
+		if sp, ok := o.(Sphere); ok && sp.Mat.Emit.LenSq() > 0 {
+			s.emit = append(s.emit, sp)
+		}
+	}
 }
 
 func (s *Scene) closest(r Ray, tMin, tMax float64) (Hit, bool) {

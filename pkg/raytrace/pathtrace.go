@@ -62,23 +62,30 @@ type PathOptions struct {
 	Samples  int    // paths per pixel
 	MaxDepth int    // maximum bounces (default 6)
 	Seed     uint64 // base seed for reproducibility
+	NEE      bool   // next-event estimation: sample emissive spheres directly (less noise)
 }
 
-// radiance follows one path and returns the light gathered along it.
-func (s *Scene) radiance(r Ray, maxDepth int, rg *rng) Vec3 {
+// radiance follows one path and returns the light gathered along it. With nee the
+// path samples emissive spheres directly at each diffuse vertex and suppresses
+// the implicit emission on the following bounce to avoid double counting.
+func (s *Scene) radiance(r Ray, maxDepth int, rg *rng, nee bool) Vec3 {
 	throughput := Vec3{X: 1, Y: 1, Z: 1}
 	var out Vec3
+	addEmit := true
 	for d := 0; d < maxDepth; d++ {
 		h, ok := s.closest(r, shadowEps, tFar)
 		if !ok {
 			out = out.Add(throughput.Mul(s.sky(r.Dir)))
 			break
 		}
-		out = out.Add(throughput.Mul(h.Mat.Emit))
+		if addEmit {
+			out = out.Add(throughput.Mul(h.Mat.Emit))
+		}
 
 		switch {
 		case h.Mat.Glass > 0:
 			r = s.scatterGlass(r, h, rg)
+			addEmit = true
 		case h.Mat.Reflect > 0:
 			dir := r.Dir.Reflect(h.N).Norm()
 			if h.Mat.Rough > 0 {
@@ -93,9 +100,15 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng) Vec3 {
 			}
 			throughput = throughput.Mul(tint)
 			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: dir}
+			addEmit = true
 		default:
-			throughput = throughput.Mul(h.albedo())
+			alb := h.albedo()
+			if nee {
+				out = out.Add(throughput.Mul(s.sampleEmitters(h, alb, rg)))
+			}
+			throughput = throughput.Mul(alb)
 			r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: cosineSample(h.N, rg)}
+			addEmit = !nee
 		}
 
 		// Russian roulette after a few bounces.
@@ -110,6 +123,38 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng) Vec3 {
 		}
 	}
 	return out
+}
+
+// sampleEmitters is the next-event estimator: it picks one emissive sphere, draws
+// a point on its surface, and returns the direct diffuse contribution through an
+// unoccluded shadow ray (area-light form; the Lambert 1/pi cancels in the math).
+func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng) Vec3 {
+	n := len(s.emit)
+	if n == 0 {
+		return Vec3{}
+	}
+	li := s.emit[int(rg.next()%uint64(n))]
+	q := li.Center.Add(rg.unit().Scale(li.Radius)) // point on the light sphere
+	d := q.Sub(h.P)
+	dist := d.Len()
+	if dist < geomEps {
+		return Vec3{}
+	}
+	wi := d.Scale(1 / dist)
+	cosS := h.N.Dot(wi)
+	if cosS <= 0 {
+		return Vec3{}
+	}
+	cosL := q.Sub(li.Center).Norm().Dot(wi.Neg())
+	if cosL <= 0 {
+		return Vec3{}
+	}
+	so := h.P.Add(h.N.Scale(shadowEps))
+	if s.anyHit(Ray{Origin: so, Dir: wi}, shadowEps, dist-2*shadowEps) {
+		return Vec3{}
+	}
+	g := cosS * cosL * 4 * li.Radius * li.Radius / (dist * dist) / float64(n)
+	return alb.Mul(li.Mat.Emit).Scale(g)
 }
 
 func (s *Scene) scatterGlass(r Ray, h Hit, rg *rng) Ray {
@@ -170,6 +215,8 @@ func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image
 	}
 	b := cam.basis(pxW, pxH)
 	inv := 1.0 / float64(spp)
+	s.gatherEmitters()
+	nee := opt.NEE
 
 	rows := make(chan int, pxH)
 	for y := 0; y < pxH; y++ {
@@ -195,7 +242,7 @@ func PathRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) image.Image
 					for i := 0; i < spp; i++ {
 						u := float64(x) + rg.f()
 						v := float64(y) + rg.f()
-						acc = acc.Add(s.radiance(b.lensRay(u, v, cam, rg), depth, rg))
+						acc = acc.Add(s.radiance(b.lensRay(u, v, cam, rg), depth, rg, nee))
 					}
 					img.SetRGBA(x, y, toRGBA(acc.Scale(inv)))
 				}
