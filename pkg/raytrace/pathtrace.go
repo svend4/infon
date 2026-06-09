@@ -127,7 +127,12 @@ pathLoop:
 	for d := 0; d < maxDepth; d++ {
 		h, ok := s.closest(r, shadowEps, tFar)
 		if !ok {
-			out = out.Add(throughput.Mul(s.sky(r.Dir)))
+			sky := s.sky(r.Dir)
+			if mode >= 1 && s.Env != nil && !specularPrev { // MIS against env-NEE
+				pdfE := s.Env.Pdf(r.Dir)
+				sky = sky.Scale(prevPdfB * prevPdfB / (prevPdfB*prevPdfB + pdfE*pdfE))
+			}
+			out = out.Add(throughput.Mul(sky))
 			break
 		}
 		// Emission reaching the eye along this path (BSDF-sampling side).
@@ -247,6 +252,9 @@ pathLoop:
 			alb := h.albedo()
 			if mode >= 1 {
 				out = out.Add(throughput.Mul(s.sampleEmitters(h, alb, rg, mode == 2)))
+				if s.Env != nil {
+					out = out.Add(throughput.Mul(s.sampleEnv(h, alb, rg)))
+				}
 			}
 			dir := cosineSample(h.N, rg)
 			prevPdfB = math.Max(0, h.N.Dot(dir)) / math.Pi
@@ -307,6 +315,27 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool) Vec3 {
 		contrib = contrib.Scale(pdfL * pdfL / (pdfL*pdfL + pdfB*pdfB))
 	}
 	return contrib
+}
+
+// sampleEnv is next-event estimation for the environment: importance-sample a
+// bright env direction, test visibility to infinity, and return the MIS-weighted
+// (power heuristic vs the cosine BSDF) direct contribution. Radiance is read from
+// s.sky so it stays consistent with the BSDF-sampling side.
+func (s *Scene) sampleEnv(h Hit, alb Vec3, rg *rng) Vec3 {
+	we, _, pdfE := s.Env.Sample(rg)
+	if pdfE <= 0 {
+		return Vec3{}
+	}
+	ndl := h.N.Dot(we)
+	if ndl <= 0 {
+		return Vec3{}
+	}
+	if s.anyHit(Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: we}, shadowEps, tFar) {
+		return Vec3{}
+	}
+	pdfB := ndl / math.Pi
+	w := pdfE * pdfE / (pdfE*pdfE + pdfB*pdfB)
+	return alb.Scale(1 / math.Pi).Mul(s.sky(we)).Scale(ndl / pdfE * w)
 }
 
 // refract returns the refracted direction of unit d through the unit normal n

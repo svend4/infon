@@ -272,13 +272,14 @@ func (b camBasis) ray(px, py float64) Ray {
 type Scene struct {
 	Objects   []Object
 	Light     Vec3
-	LightInt  float64 // light strength (default 1 if 0)
-	Ambient   float64 // 0..1 ambient term
-	SkyTop    Vec3    // looking up
-	SkyBottom Vec3    // looking toward the horizon/down
-	SkyTex    Texture // optional equirectangular environment map (overrides the gradient)
-	MaxBounce int     // reflection/refraction bounce budget (0 = none)
-	AttenK    float64 // linear distance attenuation coefficient (0 = none)
+	LightInt  float64     // light strength (default 1 if 0)
+	Ambient   float64     // 0..1 ambient term
+	SkyTop    Vec3        // looking up
+	SkyBottom Vec3        // looking toward the horizon/down
+	SkyTex    Texture     // optional equirectangular environment map (overrides the gradient)
+	Env       *EnvSampler // optional importance sampler for the environment (path-tracer env-NEE)
+	MaxBounce int         // reflection/refraction bounce budget (0 = none)
+	AttenK    float64     // linear distance attenuation coefficient (0 = none)
 
 	// Soft shadows: a light of radius LightRadius sampled ShadowSamples times.
 	LightRadius   float64
