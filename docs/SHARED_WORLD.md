@@ -73,7 +73,7 @@ corrupt the world — it just falls back to a safe region.
 |---|---|---|
 | host → guests | a region's scene graph (`Region`) | ~100–300 bytes, once per region |
 | any → all | a participant's pose (`Pose`) | 44 bytes per tick |
-| any → all | chat (`network.TextMessage`) / voice (`PacketTypeAudio`) | a line / a 20 ms PCM chunk |
+| any → all | chat (`ChatMsg`, id-tagged + deduped) / voice (`EncodeVoice`, origin-tagged) | a line / a 20 ms PCM chunk |
 | guest → host | region ack (have-set) | tiny, ~1/s |
 
 No geometry, no frames, no video. A walker who explores for an hour received a
@@ -100,9 +100,14 @@ it idempotently and ack what they have, so loss and late joins self-heal.
 
 - The reference director composes a coherent but repetitive world; the real
   novelty comes from a live `BRAIN_URL` model.
-- Voice is wired and degrades gracefully but needs real audio hardware to hear;
-  it isn't mixed for large groups (each stream plays as it arrives).
-- Reliability is ack-based for regions (the state that must persist); poses and
-  chat are loss-tolerant (a pose is replaced next tick).
-- Geometry is procedural primitives + composites; arbitrary `.obj` models are a
-  natural next step (the renderer already supports meshes and instancing).
+- Voice is wired and degrades gracefully but needs real audio hardware to hear.
+  Concurrent speakers are now mixed at the listener (`VoiceMixer`: per-speaker
+  jitter buffers summed each frame), not played back-to-back.
+- Reliability is ack-based for regions (the state that must persist) and id-based
+  for chat (`ChatSync`: unique ids, dedup, hub re-broadcast — so a dropped line
+  self-heals without double-display); poses stay loss-tolerant (replaced next
+  tick).
+- Geometry is procedural primitives + composites *and* named meshes: `kind:mesh`
+  instances a model from the renderer's library (built-in `crystal`/`rock`, plus
+  any `.obj` loaded via `LoadMeshDir`), placed as a shared `Instance` — so a
+  hundred copies cost one mesh, and still only a name crosses the wire.

@@ -62,7 +62,12 @@ adopting, and it was reimplemented better).
   and the composites `tree` (trunk + foliage) and `house` (walls + roof) — so the
   director can build a recognizable *place* (a grove, a village) rather than only
   abstract spheres, all reconstructed locally from a name (no geometry on the
-  wire).
+  wire). A new `kind:mesh` instances a model from a named **mesh library**
+  (`pkg/raydir/meshlib.go`): the built-ins `crystal` and `rock`, plus any `.obj`
+  loaded with `LoadMeshDir` — so a deployment extends the director's vocabulary
+  with no code change, and a hundred placements share one mesh via cheap
+  `Instance` transforms while still sending only a name over the wire. Unknown
+  model names are dropped by the same sanitiser that guards the rest of a spec.
 - **The experience — walk a world the AI dreams up** (`cmd/rayexplore`,
   `pkg/raydir/fly.go`): a free-fly camera through a `World` the brain authors and
   **extends on the fly** — walk forward and new regions are composed ahead of you,
@@ -85,15 +90,25 @@ adopting, and it was reimplemented better).
   the disconnected. Each participant sees the others as distinctly-coloured
   avatars. Verified live with three participants: all report `walkers:3` and the
   guests' worlds fill from the host's broadcasts.
-- **Talk in the shared world** (`cmd/raymeet`, `pkg/raydir/chat.go`): a `/message`
-  is relayed through the hub to everyone and shown in a chat log under the view
-  (reusing the existing `network.TextMessage`), with a `-name`. Verified live: one
-  guest's message reaches the other guest and the hub.
-- **Voice in the shared world** (`cmd/raymeet -voice`): the mic is captured in
-  20 ms PCM chunks and relayed on the same hub path as chat (`PacketTypeAudio`,
-  reusing `internal/audio`); received audio is played back. It falls back to
-  text-only when there is no audio device, so the experience never depends on
-  hardware. Chat/pose/world relay all share one `sendGroup`/`relayToOthers` path.
+- **Talk in the shared world — reliably** (`cmd/raymeet`, `pkg/raydir/chat.go`,
+  `pkg/raydir/chatsync.go`): a `/message` is relayed through the hub to everyone
+  and shown in a chat log under the view, with a `-name`. Delivery is reliable over
+  lossy UDP without a server of record (`ChatSync`): every message carries a
+  globally-unique id (origin in the high 32 bits, a per-origin sequence in the
+  low 32); receivers **dedup by id**, the hub keeps a recent ring of every message
+  and **re-broadcasts** it, and a guest re-sends its own ring to the hub — so a
+  dropped message self-heals and is never shown twice. Verified live: a guest's
+  message reaches the other guest and the hub.
+- **Voice in the shared world — mixed** (`cmd/raymeet -voice`,
+  `pkg/raydir/voicemix.go`): the mic is captured in 20 ms PCM chunks and relayed on
+  the same hub path as chat (`PacketTypeAudio`, reusing `internal/audio`). Each
+  speaker's frame is tagged with its origin id and fed to a `VoiceMixer` that keeps
+  a per-speaker jitter buffer and, on a steady playback pull, **sums one frame from
+  every active speaker** (with saturation) into a single output stream — so people
+  talking at once blend instead of serialising and lagging. Buffers are bounded and
+  silent speakers pruned. It falls back to text-only when there is no audio device,
+  so the experience never depends on hardware. Chat/pose/world relay all share one
+  `sendGroup`/`relayToOthers` path.
 - **Reliable world delivery (acks, not blind re-broadcast)** (`cmd/raymeet`,
   `pkg/raydir` `EncodeAck`/`Known`/`MissingRegions`): a guest periodically acks
   the region indices it has; the host re-sends only the missing regions, only to

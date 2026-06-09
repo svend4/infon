@@ -80,6 +80,7 @@ func main() {
 	}
 	chat := raydir.NewChatLog(6)
 	var chatMu sync.Mutex
+	csync := raydir.NewChatSync(selfID, *host) // reliable chat: ids + dedup + re-broadcast
 
 	// director's brain (host only): reference offline, or a live endpoint via BRAIN_URL.
 	var b brain.Brain = brain.Local{}
@@ -147,9 +148,8 @@ func main() {
 		stateMu.Unlock()
 	}
 	sendChat := func(msg string) {
-		if payload, e := network.EncodeTextMessage(network.NewTextMessage(name, msg)); e == nil {
-			sendGroup(network.PacketTypeTextChat, payload)
-		}
+		m := csync.Compose(name, msg)
+		sendGroup(network.PacketTypeTextChat, raydir.EncodeChatMsgs([]raydir.ChatMsg{m}))
 		chatMu.Lock()
 		chat.Add(name, msg)
 		chatMu.Unlock()
@@ -163,17 +163,19 @@ func main() {
 	// audio device, so the experience never depends on hardware.
 	voiceOn := false
 	var play audio.AudioPlayback
+	var mixer *raydir.VoiceMixer // sums concurrent speakers into one output stream
 	if *voice {
 		af := audio.DefaultFormat()
+		frame := af.SampleRate / 50 // 20ms
 		capDev, e1 := audio.NewDefaultCapture()
 		plDev, e2 := audio.NewDefaultPlayback()
 		if e1 == nil && e2 == nil && capDev.Open() == nil {
 			if plDev.Open() == nil {
-				voiceOn, play = true, plDev
+				voiceOn, play, mixer = true, plDev, raydir.NewVoiceMixer(frame)
 				defer func() { _ = capDev.Close() }()
 				defer func() { _ = plDev.Close() }()
-				go func() {
-					buf := make([]int16, af.SampleRate/50) // 20ms
+				go func() { // capture: ship 20ms PCM chunks tagged with our id
+					buf := make([]int16, frame)
 					t := time.NewTicker(20 * time.Millisecond)
 					defer t.Stop()
 					for range t.C {
@@ -181,9 +183,15 @@ func main() {
 						if e != nil || n == 0 {
 							continue
 						}
-						ap := &network.AudioPacket{Timestamp: uint64(time.Now().UnixMilli()), SampleRate: uint16(af.SampleRate), Channels: uint8(af.Channels), Codec: network.AudioCodecPCM, Samples: append([]int16(nil), buf[:n]...)}
-						if payload, e := network.EncodeAudioPacket(ap); e == nil {
-							sendGroup(network.PacketTypeAudio, payload)
+						sendGroup(network.PacketTypeAudio, raydir.EncodeVoice(selfID, buf[:n]))
+					}
+				}()
+				go func() { // playback: pull mixed frames at a steady rate
+					t := time.NewTicker(20 * time.Millisecond)
+					defer t.Stop()
+					for range t.C {
+						if f := mixer.Mix(); f != nil {
+							_, _ = play.Write(f)
 						}
 					}
 				}()
@@ -265,19 +273,32 @@ func main() {
 					}
 				}
 			case network.PacketTypeTextChat:
-				if tm, de := network.DecodeTextMessage(p.Payload); de == nil {
-					chatMu.Lock()
-					chat.Add(tm.Sender, tm.Message)
-					chatMu.Unlock()
-					relayToOthers(addr, network.PacketTypeTextChat, p.Payload)
-				}
-			case network.PacketTypeAudio:
-				if voiceOn && play != nil {
-					if ap, de := network.DecodeAudioPacket(p.Payload); de == nil && len(ap.Samples) > 0 {
-						_, _ = play.Write(ap.Samples)
+				// reliable chat: dedup by message id, show only the new ones, and (on
+				// the hub) relay just those onward. Re-broadcasts of seen ids are dropped.
+				if msgs, de := raydir.DecodeChatMsgs(p.Payload); de == nil {
+					var fresh []raydir.ChatMsg
+					for _, m := range msgs {
+						if csync.Observe(m) {
+							chatMu.Lock()
+							chat.Add(m.Sender, m.Text)
+							chatMu.Unlock()
+							fresh = append(fresh, m)
+						}
+					}
+					if len(fresh) > 0 {
+						relayToOthers(addr, network.PacketTypeTextChat, raydir.EncodeChatMsgs(fresh))
 					}
 				}
-				relayToOthers(addr, network.PacketTypeAudio, p.Payload)
+			case network.PacketTypeAudio:
+				// feed each speaker's frame into the mixer (kept separate, summed at
+				// playback) rather than writing straight to the device, so simultaneous
+				// talkers blend instead of serialising.
+				if origin, samples, de := raydir.DecodeVoice(p.Payload); de == nil {
+					if voiceOn && mixer != nil && origin != selfID {
+						mixer.Add(origin, samples)
+					}
+					relayToOthers(addr, network.PacketTypeAudio, p.Payload)
+				}
 			case network.PacketTypeControl:
 				// a guest's region ack: re-send only what it is missing, to it alone.
 				if *host && addr != nil {
@@ -408,6 +429,15 @@ func main() {
 				known := world.Known()
 				worldMu.Unlock()
 				sendTo(hubAddr, network.PacketTypeControl, raydir.EncodeAck(known))
+			}
+		}
+
+		// reliable chat retransmit: every ~1s re-send the recent ring so a dropped
+		// message self-heals (the hub re-broadcasts everyone's; a guest re-sends its
+		// own to the hub). Receivers dedup by id, so this never double-shows.
+		if tick%8 == 4 {
+			if recent := csync.Recent(); len(recent) > 0 {
+				sendGroup(network.PacketTypeTextChat, raydir.EncodeChatMsgs(recent))
 			}
 		}
 
