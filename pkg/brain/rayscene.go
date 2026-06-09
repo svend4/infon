@@ -24,6 +24,7 @@ type SceneSpec struct {
 type ObjSpec struct {
 	Kind    string     `json:"kind"`
 	Name    string     `json:"name"` // for kind "mesh": the named model to instance
+	Tex     string     `json:"tex"`  // optional named surface texture (checker, marble, wood, stone, clouds, or a loaded image)
 	X       float64    `json:"x"`
 	Y       float64    `json:"y"`
 	Z       float64    `json:"z"`
@@ -83,6 +84,12 @@ func refRayScene(req Request) Response {
 	}
 	if hasAny(p.Prompt, "rock", "stone", "boulder") {
 		spec.Objects = append(spec.Objects, ObjSpec{Kind: "mesh", Name: "rock", X: 3, Y: 0.5, Z: 1, R: 1})
+	}
+	for _, tx := range []string{"marble", "wood", "checker", "stone", "clouds"} {
+		if strings.Contains(p.Prompt, tx) { // texture the diffuse sphere on request
+			spec.Objects[1].Tex = tx
+			break
+		}
 	}
 	data, _ := json.Marshal(spec)
 	return Response{Protocol: Protocol, Kind: "move", Ray: data, Reasoning: "reference scene author"}

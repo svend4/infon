@@ -17,7 +17,7 @@ import (
 func vec3(a [3]float64) raytrace.Vec3 { return raytrace.Vec3{X: a[0], Y: a[1], Z: a[2]} }
 
 func objMaterial(o brain.ObjSpec) raytrace.Material {
-	return raytrace.Material{
+	m := raytrace.Material{
 		Color:   vec3(o.Color),
 		Emit:    vec3(o.Emit),
 		Glass:   o.Glass,
@@ -25,6 +25,12 @@ func objMaterial(o brain.ObjSpec) raytrace.Material {
 		Reflect: o.Reflect,
 		Rough:   o.Rough,
 	}
+	if o.Tex != "" { // a named texture overrides the flat colour where known
+		if t := TextureFor(o.Tex); t != nil {
+			m.Tex = t
+		}
+	}
+	return m
 }
 
 // objectsFromSpec turns one ObjSpec into renderable objects, offset by `at`. A box
@@ -102,7 +108,8 @@ func specScale(o brain.ObjSpec) float64 {
 // "mesh" placement wants to override the model's own baked material with its own.
 func specHasMaterial(o brain.ObjSpec) bool {
 	return o.Color != [3]float64{} || o.Emit != [3]float64{} ||
-		o.Glass != 0 || o.Metal != 0 || o.Reflect != 0 || o.Rough != 0
+		o.Glass != 0 || o.Metal != 0 || o.Reflect != 0 || o.Rough != 0 ||
+		(o.Tex != "" && TextureFor(o.Tex) != nil)
 }
 
 // maxRegionObjects caps how many objects one authored scene may contribute, so a
