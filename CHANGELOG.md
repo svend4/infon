@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 🎨 CPU ray-tracing & rendering engine (branch `claude/epic-sagan-EWTTr`)
+
+A full, clean-room CPU renderer in `pkg/raytrace`, grown into a small research
+renderer with **five unbiased light-transport algorithms** that are
+cross-validated against each other (each one's mean image matches the path
+tracer's, in linear space). Pure Go (+ stdlib); `go build ./...` and
+`go test ./...` are green, `golangci-lint` clean. Inspired by — but copying
+nothing from — the GPL Neo3dEngine (an evaluation concluded its rendering and
+networking are a strict subset of this layer; only its ASCII-ramp idea was worth
+adopting, and it was reimplemented better).
+
+#### Added — light-transport renderers (all unbiased, mutually validated)
+- **Monte-Carlo path tracer** (`pathtrace.go`): global illumination with
+  next-event estimation, multiple importance sampling (power heuristic), Russian
+  roulette, a progressive accumulator and temporal reprojection.
+- **Bidirectional path tracing** (`bdpt.go`, `bdpt_connect.go`): eye × light
+  subpaths, all s/t connections, balance-heuristic MIS.
+- **Light (particle) tracer** (`lighttrace.go`): light→camera splatting (the t=1
+  strategy); excels at caustics that reach the camera.
+- **Metropolis light transport** (`pssmlt.go`): primary-sample-space MLT with
+  large/small mutations and a bootstrap normalisation.
+- **Progressive photon mapping** (`ppm.go`) and **ReSTIR direct lighting**
+  (`reservoir.go`, `restir.go`): RIS reservoirs with unbiased spatial reuse,
+  ~7–12× lower direct-lighting variance in many-light scenes.
+
+#### Added — sampling, materials, effects
+- **Sampling**: Owen-scrambled Sobol (0,2) low-discrepancy sampling (`sobol.go`,
+  −18…49% AA error), cosine/GGX importance sampling.
+- **Materials**: GGX/Cook-Torrance metal, Disney principled BSDF, dielectric
+  glass with chromatic dispersion, **subsurface scattering** (volumetric random
+  walk), **thin-film interference** (iridescence), **normal/bump mapping** with
+  UV-aligned tangents.
+- **Camera/effects**: depth of field, **motion blur** (objects *and* camera),
+  caustics (photon map + PPM), **heterogeneous participating media** (delta /
+  Woodcock tracking), distance fog, volumetric god-rays, à-trous denoiser
+  (+albedo/normal guides), bloom, auto-exposure, ACES tone mapping.
+- **Geometry & acceleration**: spheres, Möller–Trumbore triangles, planes,
+  meshes (`.obj`/`.mtl`), **instancing** with affine transforms, a two-level SAH
+  BVH; importance-sampled environment maps.
+- **Textures**: checker, sRGB image, and **procedural noise** (Perlin, FBM,
+  Worley) with marble/cellular wrappers.
+
+#### Added — terminal output, transport & AI
+- **Output modes**: half-block, sextant, octant, braille, perceptual (OKLab),
+  optimal, triangle, **ASCII luminance ramp** (from Neo3dEngine, improved with
+  area averaging + colour), plus Sixel and Kitty pixel protocols.
+- **Scene transport**: the whole world over Reed-Solomon (`wire.go`, ~100 bytes),
+  delta-stream animation and broadcast/spectator streams.
+- **AI integration** (`pkg/raydir`, `internal/raysource`): the ray world as a
+  tvcp camera (`tvcp call --ray`), the brain driving the camera/world
+  (`game:ray`), and the brain **authoring a full material scene from a prompt**
+  (`game:rayscene`, formalised in the tvcp-ai/1 protocol + adapters).
+- **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
+  exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
+
 ### 🧠🌐 tvcp-ai/1 — agents, governance & the semantic substrate (PR #11)
 
 The `feat/ai-next` "second nervous system" matured from a protocol into an open,

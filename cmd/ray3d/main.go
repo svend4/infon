@@ -1,12 +1,17 @@
 // Command ray3d renders a small CPU ray-traced scene — spheres on a checkerboard
 // floor with Lambert/Blinn-Phong shading, hard shadows, a mirror and glass —
-// into the terminal using truecolor glyph modes (no ASCII ramp). With -path it
-// switches to the Monte-Carlo path tracer (global illumination). It can instead
-// export a PNG or an orbit GIF, add an .obj mesh, and it demonstrates the "scene
-// over Reed-Solomon" codec: the whole world is shipped as ~100 bytes.
+// into the terminal using truecolor glyph modes (no ASCII ramp). With -renderer
+// it switches among all the engines: the Monte-Carlo path tracer, bidirectional
+// path tracing, Metropolis light transport, the light tracer, progressive photon
+// mapping and ReSTIR direct lighting. It can instead export a PNG or an orbit
+// GIF, add an .obj mesh, and it demonstrates the "scene over Reed-Solomon" codec:
+// the whole world is shipped as ~100 bytes.
 //
 //	go run ./cmd/ray3d                      # raster render to the terminal
 //	go run ./cmd/ray3d -path -spp 64        # path-traced global illumination
+//	go run ./cmd/ray3d -renderer bdpt -spp 32   # bidirectional path tracing
+//	go run ./cmd/ray3d -renderer mlt -spp 64    # Metropolis light transport
+//	go run ./cmd/ray3d -renderer ppm            # progressive photon mapping
 //	go run ./cmd/ray3d -png out.png         # export a still
 //	go run ./cmd/ray3d -gif orbit.gif       # export a turntable
 //	go run ./cmd/ray3d -mode sextant        # denser glyph mode
@@ -54,8 +59,8 @@ func orbitCam(angle float64) raytrace.Camera {
 }
 
 type opts struct {
+	renderer string // raster | path | bdpt | mlt | lighttrace | ppm | restir
 	spp      int
-	path     bool
 	depth    int
 	nee      bool
 	mis      bool
@@ -65,12 +70,23 @@ type opts struct {
 	exposure float64
 }
 
-// renderImage picks the raster or the path tracer, then optionally denoises.
+// renderImage dispatches to the selected renderer, then optionally denoises.
 func renderImage(scene *raytrace.Scene, cam raytrace.Camera, w, h int, o opts) image.Image {
 	var img image.Image
-	if o.path {
+	switch o.renderer {
+	case "path":
 		img = raytrace.PathRender(scene, cam, w, h, raytrace.PathOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1, NEE: o.nee, MIS: o.mis, Sobol: true})
-	} else {
+	case "bdpt":
+		img = raytrace.BDPTRender(scene, cam, w, h, raytrace.BDPTOptions{Samples: o.spp, MaxDepth: o.depth, Seed: 1})
+	case "mlt":
+		img = raytrace.MLTRender(scene, cam, w, h, raytrace.MLTOptions{Mutations: o.spp * w * h, Bootstrap: 10000, MaxDepth: o.depth, NEE: o.nee, MIS: o.mis, Seed: 1})
+	case "lighttrace":
+		img = raytrace.LightTraceRender(scene, cam, w, h, raytrace.LightTraceOptions{Paths: o.spp * w * h, MaxBounce: o.depth, Seed: 1})
+	case "ppm":
+		img = raytrace.PPMRender(scene, cam, w, h, raytrace.PPMOptions{Passes: max(o.spp, 8), PhotonsPerPass: 100000, Radius: 0.4, MaxBounce: o.depth, Seed: 1})
+	case "restir":
+		img = raytrace.ReSTIRRender(scene, cam, w, h, raytrace.ReSTIROptions{Candidates: max(o.spp, 8), SpatialPasses: 2, SpatialK: 5, Radius: 16, Seed: 1})
+	default: // raster
 		img = raytrace.Render(scene, cam, w, h, raytrace.Options{Samples: o.spp})
 	}
 	if o.denoise > 0 {
@@ -98,6 +114,7 @@ func main() {
 	frames := flag.Int("frames", 24, "frames in the GIF orbit")
 	mode := flag.String("mode", "auto", "terminal mode: auto|halfblock|sextant|octant|braille|perceptual|optimal|quadrant|ascii|sixel|kitty")
 	pathT := flag.Bool("path", false, "use the Monte-Carlo path tracer (global illumination)")
+	renderer := flag.String("renderer", "", "renderer: raster|path|bdpt|mlt|lighttrace|ppm|restir (default raster; -path forces path)")
 	depth := flag.Int("depth", 6, "path tracer max bounces")
 	nee := flag.Bool("nee", true, "path tracer: next-event estimation (direct light sampling)")
 	mis := flag.Bool("mis", false, "path tracer: multiple importance sampling (light + BSDF)")
@@ -107,7 +124,15 @@ func main() {
 	exposure := flag.Float64("exposure", 1, "exposure multiplier (0 = auto to mid-grey)")
 	flag.Parse()
 
-	o := opts{spp: *spp, path: *pathT, depth: *depth, nee: *nee, mis: *mis, denoise: *denoise, gdenoise: *gdenoise, bloom: *bloom, exposure: *exposure}
+	rname := *renderer
+	if rname == "" {
+		if *pathT {
+			rname = "path"
+		} else {
+			rname = "raster"
+		}
+	}
+	o := opts{renderer: rname, spp: *spp, depth: *depth, nee: *nee, mis: *mis, denoise: *denoise, gdenoise: *gdenoise, bloom: *bloom, exposure: *exposure}
 	w := demoWire()
 
 	const ecc = 10
@@ -118,6 +143,13 @@ func main() {
 		dec = w
 	}
 	scene := dec.Build(0.14)
+	// An emissive "sun" area light so the global-illumination renderers
+	// (path/bdpt/mlt/lighttrace/ppm/restir) have an emitter to sample; the raster
+	// renderer keeps using Scene.Light.
+	scene.Objects = append(scene.Objects, raytrace.Sphere{
+		Center: raytrace.Vec3{X: 6, Y: 9, Z: -4}, Radius: 1.5,
+		Mat: raytrace.Material{Color: raytrace.Vec3{X: 1, Y: 1, Z: 0.95}, Emit: raytrace.Vec3{X: 12, Y: 12, Z: 11}},
+	})
 	scene.BuildBVH()
 
 	if *objPath != "" {
@@ -129,7 +161,7 @@ func main() {
 		writeGIF(*gifPath, scene, *cols, *rows, *frames, o)
 	case *pngPath != "":
 		so := o
-		if !so.path && so.spp < 2 {
+		if so.renderer == "raster" && so.spp < 2 {
 			so.spp = 2
 		}
 		writePNG(*pngPath, renderImage(scene, orbitCam(*angle), 720, 480, so))
@@ -141,8 +173,8 @@ func main() {
 }
 
 func pathTag(o opts) string {
-	if o.path {
-		return fmt.Sprintf(" (path tracer, %d spp)", o.spp)
+	if o.renderer != "raster" {
+		return fmt.Sprintf(" (%s, %d spp)", o.renderer, o.spp)
 	}
 	return ""
 }
