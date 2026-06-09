@@ -74,7 +74,9 @@ func (b aabb) hit(r Ray, tMin, tMax float64) bool {
 		if t1 < tMax {
 			tMax = t1
 		}
-		if tMax <= tMin {
+		// strict <: keep a degenerate single-point interval (tMax == tMin) so a flat,
+		// axis-aligned box — e.g. a flat quad mesh hit perpendicularly — isn't culled.
+		if tMax < tMin {
 			return false
 		}
 	}

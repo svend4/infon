@@ -402,16 +402,32 @@ type Scene struct {
 	sbvh     *objBVH    // optional top-level acceleration structure (see BuildBVH)
 	emit     []Sphere   // emissive spheres, cached for next-event estimation
 	emitTris []Triangle // emissive triangles (area lights), cached for NEE
+
+	// Power-weighted light selection (importance sampling of many lights): per
+	// emitter power (luminance x area), its inclusive cumulative sum and the total,
+	// in the order spheres then triangles. NEE picks a light proportional to power.
+	emitPow   []float64
+	emitCum   []float64
+	emitTotal float64
 }
 
-// gatherEmitters caches the scene's emissive spheres and triangles so the path
-// tracer can sample them directly (next-event estimation). Called by PathRender.
-// Triangles are top-level emissive area lights (e.g. an authored emissive box face
-// or glowing panel); emissive geometry hidden inside a Mesh/Instance is still lit
-// correctly by BSDF sampling, just not NEE-sampled.
+// lumOf is the photometric luminance of a colour (used to weight light power).
+func lumOf(v Vec3) float64 { return 0.2126*v.X + 0.7152*v.Y + 0.0722*v.Z }
+
+// gatherEmitters caches the scene's emissive geometry so the path tracer can sample
+// it directly (next-event estimation), and precomputes power weights so brighter,
+// bigger lights are sampled more often (importance sampling of many lights). It
+// gathers emissive spheres, top-level emissive triangles, and emissive triangles
+// inside meshes/instances (transformed to world space, honouring an instance's
+// material override). Called by PathRender.
 func (s *Scene) gatherEmitters() {
 	s.emit = s.emit[:0]
 	s.emitTris = s.emitTris[:0]
+	addTri := func(t Triangle) {
+		if _, a := triNormalArea(t); a > 0 { // skip degenerate (zero-area) triangles
+			s.emitTris = append(s.emitTris, t)
+		}
+	}
 	for _, o := range s.Objects {
 		switch g := o.(type) {
 		case Sphere:
@@ -420,9 +436,47 @@ func (s *Scene) gatherEmitters() {
 			}
 		case Triangle:
 			if g.Mat.Emit.LenSq() > 0 {
-				s.emitTris = append(s.emitTris, g)
+				addTri(g)
+			}
+		case *Mesh:
+			for _, t := range g.Tris {
+				if t.Mat.Emit.LenSq() > 0 {
+					addTri(t)
+				}
+			}
+		case *Instance:
+			if mesh, ok := g.obj.(*Mesh); ok {
+				for _, t := range mesh.Tris {
+					mat := t.Mat
+					if g.mat != nil { // an instance material override can make it emit
+						mat = *g.mat
+					}
+					if mat.Emit.LenSq() > 0 {
+						addTri(Triangle{A: g.m.mul(t.A).Add(g.t), B: g.m.mul(t.B).Add(g.t), C: g.m.mul(t.C).Add(g.t), Mat: mat})
+					}
+				}
 			}
 		}
+	}
+	// power weights: luminance x surface area, in the order spheres then triangles.
+	s.emitPow = s.emitPow[:0]
+	s.emitCum = s.emitCum[:0]
+	s.emitTotal = 0
+	addPow := func(p float64) {
+		if p <= 0 {
+			p = 1e-6 // keep every emitter selectable (and its MIS weight finite)
+		}
+		s.emitTotal += p
+		s.emitPow = append(s.emitPow, p)
+		s.emitCum = append(s.emitCum, s.emitTotal)
+	}
+	for i := range s.emit {
+		e := s.emit[i]
+		addPow(lumOf(e.Mat.Emit) * 4 * math.Pi * e.Radius * e.Radius)
+	}
+	for i := range s.emitTris {
+		_, a := triNormalArea(s.emitTris[i])
+		addPow(lumOf(s.emitTris[i].Mat.Emit) * a)
 	}
 }
 

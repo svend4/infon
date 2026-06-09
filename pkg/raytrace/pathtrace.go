@@ -15,6 +15,7 @@ import (
 	"image"
 	"math"
 	"runtime"
+	"sort"
 	"sync"
 )
 
@@ -167,18 +168,27 @@ func triSamplePoint(t Triangle, rg *rng) Vec3 {
 	return t.A.Add(t.B.Sub(t.A).Scale(u)).Add(t.C.Sub(t.A).Scale(v))
 }
 
-// emitterArea returns the surface area of the emitter (sphere or triangle) whose
-// surface contains p, for the light-sampling pdf when a BSDF ray hits an emitter
-// under MIS. The area form unifies spheres (4*pi*r^2) and triangles.
-func (s *Scene) emitterArea(p Vec3) (float64, bool) {
-	for _, e := range s.emit {
+// emitterAreaW returns the surface area and power-weighted selection probability of
+// the emitter (sphere or triangle) whose surface contains p — used to form the
+// light-sampling pdf when a BSDF ray hits an emitter under MIS. The pdf must match
+// NEE's power-weighted selection, so it returns the same per-light weight.
+func (s *Scene) emitterAreaW(p Vec3) (area, wsel float64, ok bool) {
+	wOf := func(i int) float64 {
+		if s.emitTotal > 0 && i < len(s.emitPow) {
+			return s.emitPow[i] / s.emitTotal
+		}
+		return 0
+	}
+	for i := range s.emit {
+		e := s.emit[i]
 		if math.Abs(p.Sub(e.Center).Len()-e.Radius) < 1e-3 {
-			return 4 * math.Pi * e.Radius * e.Radius, true
+			return 4 * math.Pi * e.Radius * e.Radius, wOf(i), true
 		}
 	}
-	for _, t := range s.emitTris {
-		n, area := triNormalArea(t)
-		if area == 0 || math.Abs(p.Sub(t.A).Dot(n)) > 1e-3 {
+	for j := range s.emitTris {
+		t := s.emitTris[j]
+		n, a := triNormalArea(t)
+		if a == 0 || math.Abs(p.Sub(t.A).Dot(n)) > 1e-3 {
 			continue // off this triangle's plane
 		}
 		v0, v1, v2 := t.B.Sub(t.A), t.C.Sub(t.A), p.Sub(t.A)
@@ -190,10 +200,10 @@ func (s *Scene) emitterArea(p Vec3) (float64, bool) {
 		vv := (d11*v2.Dot(v0) - d01*v2.Dot(v1)) / den
 		ww := (d00*v2.Dot(v1) - d01*v2.Dot(v0)) / den
 		if vv >= -1e-4 && ww >= -1e-4 && vv+ww <= 1+1e-4 {
-			return area, true
+			return a, wOf(len(s.emit) + j), true
 		}
 	}
-	return 0, false
+	return 0, 0, false
 }
 
 // radiance follows one path. mode 0 = naive (BSDF only), 1 = NEE only, 2 = MIS
@@ -255,9 +265,9 @@ pathLoop:
 			case mode == 0 || specularPrev:
 				out = out.Add(throughput.Mul(h.Mat.Emit))
 			case mode == 2 && nEmit > 0:
-				if area, okE := s.emitterArea(h.P); okE {
+				if area, wsel, okE := s.emitterAreaW(h.P); okE && wsel > 0 {
 					if cosL := -h.N.Dot(r.Dir); cosL > geomEps {
-						pdfL := (1 / (float64(nEmit) * area)) * h.T * h.T / cosL
+						pdfL := wsel / area * h.T * h.T / cosL
 						w := prevPdfB * prevPdfB / (prevPdfB*prevPdfB + pdfL*pdfL)
 						out = out.Add(throughput.Mul(h.Mat.Emit).Scale(w))
 					}
@@ -436,15 +446,21 @@ pathLoop:
 // the BSDF-sampling pdf (power heuristic).
 func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64) Vec3 {
 	n := len(s.emit) + len(s.emitTris)
-	if n == 0 {
+	if n == 0 || s.emitTotal <= 0 {
 		return Vec3{}
 	}
-	// Pick one emitter uniformly across spheres and triangles, draw a point on it,
-	// and note its normal, area and emission.
+	// Pick one emitter with probability proportional to its power (importance
+	// sampling of many lights), draw a point on it, and note its normal, area,
+	// emission and selection probability.
+	pick := sort.SearchFloat64s(s.emitCum, rg.f()*s.emitTotal)
+	if pick >= n {
+		pick = n - 1
+	}
+	wsel := s.emitPow[pick] / s.emitTotal
 	var q, nL, Le Vec3
 	var area float64
 	twoSided := false
-	if pick := int(rg.next() % uint64(n)); pick < len(s.emit) {
+	if pick < len(s.emit) {
 		li := s.emit[pick]
 		q = li.Center.Add(rg.unit().Scale(li.Radius))
 		nL = q.Sub(li.Center).Norm()
@@ -479,8 +495,7 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64)
 	if s.anyHit(Ray{Origin: so, Dir: wi, Time: time}, shadowEps, dist-2*shadowEps) {
 		return Vec3{}
 	}
-	areaPdf := 1 / (float64(n) * area)
-	pdfL := areaPdf * dist * dist / cosL
+	pdfL := wsel / area * dist * dist / cosL // power-weighted light pick, area form
 	// diffuse: f = alb/pi, estimator = f * cosS * Le / pdfL.
 	contrib := alb.Scale(1 / math.Pi).Mul(Le).Scale(cosS / pdfL)
 	if mis {

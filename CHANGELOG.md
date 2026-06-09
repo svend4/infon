@@ -20,11 +20,16 @@ adopting, and it was reimplemented better).
 #### Added — light-transport renderers (all unbiased, mutually validated)
 - **Monte-Carlo path tracer** (`pathtrace.go`): global illumination with
   next-event estimation, multiple importance sampling (power heuristic), Russian
-  roulette, a progressive accumulator and temporal reprojection. NEE samples both
-  emissive **spheres and triangles** (top-level emissive geometry — an authored
-  emissive box face or glowing panel becomes a proper area light), with the
-  matching area-form MIS weight on BSDF-sampled emitter hits; verified unbiased
-  (NEE+MIS mean == pure-BSDF mean) and markedly less noisy at equal spp.
+  roulette, a progressive accumulator and temporal reprojection. NEE samples
+  emissive **spheres, triangles, and emissive geometry inside meshes/instances**
+  (transformed to world space, honouring an instance's material override) — so an
+  authored emissive panel, or an emissive `.obj`, is a proper area light, lit
+  correctly by GI rather than found only by chance. Lights are chosen by
+  **importance (power = luminance x area)**, not uniformly, cutting noise when a
+  scene mixes bright and dim lights; the matching power-weighted, area-form MIS
+  weight is applied on BSDF-sampled emitter hits. Verified unbiased (NEE+MIS mean
+  == pure-BSDF mean) for single, many, and in-mesh lights. (Also fixes a BVH slab
+  test that culled a flat, axis-aligned quad mesh hit perpendicularly.)
 - **Bidirectional path tracing** (`bdpt.go`, `bdpt_connect.go`): eye × light
   subpaths, all s/t connections, balance-heuristic MIS.
 - **Light (particle) tracer** (`lighttrace.go`): light→camera splatting (the t=1
