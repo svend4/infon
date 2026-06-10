@@ -47,6 +47,13 @@ existing region/portal/map/director architecture.
   `rayexplore -materialize` makes each new region render in from blocks over a beat.
   Tested: pixelation makes blocks uniform and cuts the colour count; t=1 is sharp
   and earlier t is coarser.
+- **The Flyer (летун)** (`pkg/raydir/flyer.go`): a predator in the world — the
+  flyer the hackers warn about (Castaneda's): a dark, flattened shadow that stalks
+  the walker and, catching up, drains your "luminosity". It is slower than you can
+  run, so it's a thing to keep ahead of. `rayexplore -flyer` shows a luminosity
+  meter that falls when it's on you (with a warning) and recovers when you escape.
+  Local and deterministic; tested: it pursues and closes in, faces you, drains only
+  within reach, is a dark several-lobed shape, and the world steps it to a catch.
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two

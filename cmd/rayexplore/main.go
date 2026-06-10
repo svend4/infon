@@ -27,6 +27,7 @@
 //	go run ./cmd/rayexplore -layer lower -path       # descend to the dark lower world
 //	go run ./cmd/rayexplore -funnel -path            # a swirling transit funnel (vortex portal)
 //	go run ./cmd/rayexplore -materialize             # each region renders in from voxel blocks
+//	go run ./cmd/rayexplore -flyer                   # a predator stalks you (drains luminosity)
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -139,6 +140,7 @@ func main() {
 	layer := flag.String("layer", "", "vertical layer: upper (airy) | lower (dark, a descent tunnel)")
 	funnel := flag.Bool("funnel", false, "a swirling transit funnel (vortex) ahead — a portal at its mouth (best with -path)")
 	materialize := flag.Bool("materialize", false, "each new region 'renders in' from coarse voxel blocks to sharp, the way a dream forms")
+	flyer := flag.Bool("flyer", false, "a predator (the 'flyer') stalks you and drains your luminosity — keep ahead of it")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -305,6 +307,10 @@ func main() {
 	if *creatures { // give the world a flock of its own, ahead of the start
 		world.SpawnFlock(14, cam.Pos.Add(raytrace.Vec3{Y: 4, Z: 16}), 20)
 	}
+	if *flyer { // a predator that hunts the walker
+		world.SpawnFlyer(cam.Pos.Add(raytrace.Vec3{X: 6, Z: 12}))
+	}
+	luminosity := 1.0
 	var guideMsg string
 
 	start, lastTick := time.Now(), time.Now()
@@ -322,6 +328,13 @@ func main() {
 		world.StepCreatures(dt, cam.Pos)               // the inhabitants live and react
 		world.StepWeather(dt, cam.Pos)                 // rain/snow drifts around you
 		world.ObserveWalker(raydir.PoseOf(cam), dt)    // read how you move (for mood)
+		if *flyer {                                    // the predator hunts; it drains you when close
+			if world.StepFlyer(dt, cam.Pos) {
+				luminosity = math.Max(0, luminosity-dt*0.3)
+			} else {
+				luminosity = math.Min(1, luminosity+dt*0.08)
+			}
+		}
 		featMu.Lock()
 		feat = world.Ambient()
 		featMu.Unlock()
@@ -434,6 +447,12 @@ func main() {
 		}
 		if m := world.MoodName(); m != "" {
 			season += " | 🎭" + m
+		}
+		if *flyer {
+			season += fmt.Sprintf(" | ✨%.0f%%", luminosity*100)
+			if luminosity < 0.45 {
+				fmt.Printf("\n  ⚠ the flyer is draining your luminosity — run!")
+			}
 		}
 		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d%s | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f g=grow t=time p=path m=map Enter=refine x=quit] ",
 			who, world.Chunks(), world.Props(), mins/60, mins%60, spp, season, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
