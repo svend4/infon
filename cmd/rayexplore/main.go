@@ -557,7 +557,11 @@ func main() {
 		line := strings.TrimSpace(sc.Text())
 		if *sprites && strings.HasPrefix(line, "?") { // question the nearest dream character
 			if sp := world.NearestSprite(cam.Pos, 10); sp != nil {
-				spriteMsg = sp.Name + ": " + sp.Answer(strings.TrimPrefix(line, "?"))
+				ans := sp.Answer(strings.TrimPrefix(line, "?"))
+				if raydir.LucidTell(ans) { // the answer reads as a deflection, not a real reply
+					ans += "  ⟨a lucid tell — it deflected⟩"
+				}
+				spriteMsg = sp.Name + ": " + ans
 			} else {
 				spriteMsg = "(no one near to ask)"
 			}
