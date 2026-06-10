@@ -29,6 +29,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   mandala — complementing the SDF mandala and the N/S mirror. Tested: the copy count
   (n and 2n), rotational closure (rotating every copy by 2π/n lands on another copy,
   all on the motif's ring), and reflected-triangle winding.
+- **Figure-eight & rosette motions** (`pkg/raydir/anim.go`, from the movement
+  archetypes of `svend4/data2`): two new local motions for animated objects —
+  `figure8` (a Gerono lemniscate, the ∞ path that pinches through its centre) and
+  `rosette` (a small fast loop riding a slow one — a spirograph of nested orbits).
+  The reference author understands "infinity"/"lemniscate" and "spirograph"/
+  "rosette". Tested: both are periodic, figure8 reaches ±amp and crosses its centre,
+  rosette's radius varies (nested), and the keywords author them.
 
 ### 🔌 Interop — a hexagram-thinking brain directs the world
 

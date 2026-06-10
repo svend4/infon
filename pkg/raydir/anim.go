@@ -17,6 +17,7 @@ import (
 // (a seed becoming a tree), the rest are repeating motions.
 var animKinds = map[string]bool{
 	"bob": true, "orbit": true, "drift": true, "pulse": true, "wander": true, "grow": true,
+	"figure8": true, "rosette": true,
 }
 
 // growSpec scales an object up from a sprout to its full size over `age` seconds,
@@ -100,6 +101,18 @@ func animateSpec(o brain.ObjSpec, t float64, seed int) brain.ObjSpec {
 		s2 := hash01(seed + 1)
 		o.X += amp * (math.Sin(phase) + 0.5*math.Sin(2.3*phase+6*s2))
 		o.Z += amp * (math.Cos(0.8*phase) + 0.5*math.Sin(1.7*phase+6*s2))
+	case "figure8": // a lemniscate (Gerono) — the "figure-eight" movement archetype
+		if amp == 0 {
+			amp = 2.5
+		}
+		o.X += amp * math.Sin(phase)
+		o.Z += amp * math.Sin(phase) * math.Cos(phase)
+	case "rosette": // nested orbits — a small fast loop riding a slow one (spirograph)
+		if amp == 0 {
+			amp = 2.5
+		}
+		o.X += amp*math.Cos(phase) + amp*0.4*math.Cos(5*phase)
+		o.Z += amp*math.Sin(phase) + amp*0.4*math.Sin(5*phase)
 	}
 	return o
 }
