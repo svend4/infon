@@ -98,6 +98,80 @@ func (g *BubbleGraph) Bubbles() []Bubble {
 // Len is the number of bubbles.
 func (g *BubbleGraph) Len() int { return len(g.order) }
 
+// Layout arranges the bubbles on the X/Z plane by a force-directed simulation
+// (Coulomb repulsion between every pair, Hooke springs along transits, mild
+// centring, with the home bubble pinned at the origin), the way the InfoAquarium
+// graph (svend4/in4n) lays itself out. It starts from a deterministic circle, so
+// the result is reproducible, and overwrites each bubble's At.X/At.Z (Y is kept).
+func (g *BubbleGraph) Layout(iters int) {
+	n := len(g.order)
+	if n == 0 {
+		return
+	}
+	for i, id := range g.order { // deterministic initial ring
+		a := float64(i) / float64(n) * 2 * math.Pi
+		g.bubbles[id].At.X = math.Cos(a) * 10
+		g.bubbles[id].At.Z = math.Sin(a) * 10
+	}
+	const (
+		rep  = 220.0 // Coulomb repulsion
+		spr  = 0.09  // Hooke spring stiffness
+		rest = 8.0   // spring rest length
+		damp = 0.85  // velocity damping
+		dt   = 0.1
+	)
+	home := g.Home()
+	vel := make(map[int][2]float64, n)
+	for it := 0; it < iters; it++ {
+		force := make(map[int][2]float64, n)
+		for i := 0; i < n; i++ { // pairwise repulsion
+			for j := i + 1; j < n; j++ {
+				a, b := g.bubbles[g.order[i]], g.bubbles[g.order[j]]
+				dx, dz := a.At.X-b.At.X, a.At.Z-b.At.Z
+				d2 := dx*dx + dz*dz + 0.01
+				d := math.Sqrt(d2)
+				fx, fz := rep/d2*dx/d, rep/d2*dz/d
+				f := force[a.ID]
+				f[0], f[1] = f[0]+fx, f[1]+fz
+				force[a.ID] = f
+				f = force[b.ID]
+				f[0], f[1] = f[0]-fx, f[1]-fz
+				force[b.ID] = f
+			}
+		}
+		for _, a := range g.order { // springs along transits (each edge once)
+			for b := range g.links[a] {
+				if a >= b {
+					continue
+				}
+				A, B := g.bubbles[a], g.bubbles[b]
+				dx, dz := B.At.X-A.At.X, B.At.Z-A.At.Z
+				d := math.Hypot(dx, dz) + 1e-6
+				fx, fz := spr*(d-rest)*dx/d, spr*(d-rest)*dz/d
+				f := force[a]
+				f[0], f[1] = f[0]+fx, f[1]+fz
+				force[a] = f
+				f = force[b]
+				f[0], f[1] = f[0]-fx, f[1]-fz
+				force[b] = f
+			}
+		}
+		for _, id := range g.order { // mild centring + integrate
+			b := g.bubbles[id]
+			fx, fz := force[id][0]-b.At.X*0.01, force[id][1]-b.At.Z*0.01
+			v := vel[id]
+			v[0], v[1] = (v[0]+fx)*damp, (v[1]+fz)*damp
+			vel[id] = v
+			b.At.X += v[0] * dt
+			b.At.Z += v[1] * dt
+		}
+		if home >= 0 { // pin home at the origin — the anchor of the structure
+			g.bubbles[home].At.X, g.bubbles[home].At.Z = 0, 0
+			vel[home] = [2]float64{}
+		}
+	}
+}
+
 // Route is the shortest chain of transits from `from` to `to` (inclusive of both),
 // or nil if unreachable. Breadth-first, so it minimises the number of transits.
 func (g *BubbleGraph) Route(from, to int) []int {

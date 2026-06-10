@@ -111,7 +111,13 @@ existing region/portal/map/director architecture.
   bubbles (BFS), and `BubbleMap` draws the structure diagram (transits as lines,
   bubbles as discs — home gold, current cyan, dead-ends dim — numbered/named, with
   a route highlighted). Pure data, fully tested (add/link undirected, routing incl.
-  self and unreachable, the diagram draws nodes and edges).
+  self and unreachable, the diagram draws nodes and edges). **Force-directed layout**
+  (`BubbleGraph.Layout`, after the InfoAquarium graph of `svend4/in4n`): Coulomb
+  repulsion between every pair, Hooke springs along transits, mild centring, with
+  home pinned at the origin, from a deterministic ring — so the structure
+  auto-arranges into an organic diagram instead of hand-placed coordinates. Tested:
+  deterministic, home pinned, no overlaps, and graph-near bubbles land spatially
+  nearer than graph-far ones.
 - **Bird's-eye fog-of-war map** (`pkg/raydir/cartograph.go`): the world drawn from
   above the way the hackers' maps look. A coarse `Cartograph` grid is revealed as
   you walk (`World.Reveal`), and `Render` fills the explored ground while the rest

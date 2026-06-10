@@ -1,6 +1,7 @@
 package raydir
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
@@ -87,5 +88,51 @@ func TestBubbleMapRenders(t *testing.T) {
 	}
 	if bright < 50 {
 		t.Errorf("the bubble diagram should draw nodes/edges, only %d bright px", bright)
+	}
+}
+
+func bdist(g *BubbleGraph, a, b int) float64 {
+	x, _ := g.Get(a)
+	y, _ := g.Get(b)
+	return math.Hypot(x.At.X-y.At.X, x.At.Z-y.At.Z)
+}
+
+// Layout is deterministic, pins home at the origin, separates nodes (no overlap),
+// and places graph-near bubbles spatially nearer than graph-far ones.
+func TestBubbleLayout(t *testing.T) {
+	g, ids := sampleGraph()
+	g.Layout(400)
+	home, forest, _, cave, _ := ids[0], ids[1], ids[2], ids[3], ids[4]
+
+	// home pinned at the origin
+	if h, _ := g.Get(home); math.Hypot(h.At.X, h.At.Z) > 1e-6 {
+		t.Errorf("home should be pinned at the origin, got %+v", h.At)
+	}
+	// no two bubbles overlap, and all finite
+	for i := 0; i < g.Len(); i++ {
+		for j := i + 1; j < g.Len(); j++ {
+			d := bdist(g, g.order[i], g.order[j])
+			if math.IsNaN(d) || math.IsInf(d, 0) {
+				t.Fatal("layout produced a non-finite position")
+			}
+			if d < 1.5 {
+				t.Errorf("bubbles %d,%d overlap (d=%.2f)", g.order[i], g.order[j], d)
+			}
+		}
+	}
+	// a one-transit neighbour sits nearer than a three-transit world
+	if bdist(g, home, forest) >= bdist(g, home, cave) {
+		t.Errorf("graph-near should be spatially near: home-forest %.1f, home-cave %.1f",
+			bdist(g, home, forest), bdist(g, home, cave))
+	}
+	// determinism: a second run from the same graph gives the same positions
+	g2, _ := sampleGraph()
+	g2.Layout(400)
+	for _, id := range g.order {
+		a, _ := g.Get(id)
+		b, _ := g2.Get(id)
+		if math.Hypot(a.At.X-b.At.X, a.At.Z-b.At.Z) > 1e-9 {
+			t.Fatalf("layout should be deterministic; bubble %d differs", id)
+		}
 	}
 }
