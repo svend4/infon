@@ -26,6 +26,7 @@
 //	go run ./cmd/rayexplore -mirror                  # dream symmetry: a north-south mirror world
 //	go run ./cmd/rayexplore -layer lower -path       # descend to the dark lower world
 //	go run ./cmd/rayexplore -funnel -path            # a swirling transit funnel (vortex portal)
+//	go run ./cmd/rayexplore -materialize             # each region renders in from voxel blocks
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -137,6 +138,7 @@ func main() {
 	mirror := flag.Bool("mirror", false, "dream symmetry: the world is doubled by a north-south reflection (turn around to see it)")
 	layer := flag.String("layer", "", "vertical layer: upper (airy) | lower (dark, a descent tunnel)")
 	funnel := flag.Bool("funnel", false, "a swirling transit funnel (vortex) ahead — a portal at its mouth (best with -path)")
+	materialize := flag.Bool("materialize", false, "each new region 'renders in' from coarse voxel blocks to sharp, the way a dream forms")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -222,7 +224,7 @@ func main() {
 	dr := terminal.NewDiffRenderer()
 	dayT := 0.32     // time of day; the 't' key steps it through dawn/noon/dusk/night
 	showMap := false // overlay the minimap of named places (toggle with 'm')
-	switch *layer { // a vertical layer paints its own sky (instead of a time of day)
+	switch *layer {  // a vertical layer paints its own sky (instead of a time of day)
 	case "upper":
 		world.SetLayer(raydir.LayerUpper)
 	case "lower":
@@ -245,7 +247,7 @@ func main() {
 	if *funnel { // a swirling transit funnel ahead, linking deeper into the world
 		world.AddFunnel(raytrace.Vec3{X: 0, Z: 16}, raytrace.Translate(raytrace.Vec3{Z: 40}))
 	}
-	if *portals {              // a non-Euclidean window ahead, linking to the place behind you
+	if *portals { // a non-Euclidean window ahead, linking to the place behind you
 		world.AddPortal(raytrace.NewPortal(
 			raytrace.Vec3{X: 0, Y: 2.2, Z: 20}, raytrace.Vec3{X: 2.5}, raytrace.Vec3{Y: 2.2},
 			raytrace.Translate(raytrace.Vec3{Z: -30})))
@@ -259,6 +261,7 @@ func main() {
 	// keeps sharpening toward a clean render; moving or growing restarts it.
 	refiner := raydir.NewRefiner(pxW, pxH, 4, 256, pathOpt)
 
+	formStart := time.Now() // when the current region began "rendering in" (materialize)
 	// grow authors a new region ahead and rebuilds the scene.
 	grow := func() {
 		jitter := math.Sin(float64(world.Chunks())*1.7) * 2.5
@@ -277,9 +280,10 @@ func main() {
 			}
 		}
 		scene = world.Scene()
-		refiner.Reset()       // the scene changed
-		capturePending = true // a new place worth a postcard
-		regionsSinceFork++    // toward the next crossroads
+		refiner.Reset()        // the scene changed
+		capturePending = true  // a new place worth a postcard
+		regionsSinceFork++     // toward the next crossroads
+		formStart = time.Now() // the new region renders in from blocks
 	}
 
 	// optional procedural soundscape: synthesise the world's ambient locally and
@@ -390,6 +394,11 @@ func main() {
 			im = raytrace.TunnelVision(im, 0.85)
 		case "double":
 			im = raytrace.DoubleVision(im, pxW/24, 0)
+		}
+		if *materialize { // the region renders in from coarse voxel blocks to sharp
+			if ft := time.Since(formStart).Seconds() / 1.4; ft < 1 {
+				im = raytrace.Materialize(im, ft)
+			}
 		}
 		if tlog != nil && capturePending { // a postcard of this place
 			place := "the world"

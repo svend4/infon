@@ -40,6 +40,13 @@ existing region/portal/map/director architecture.
   stepping in transits you elsewhere. `rayexplore -funnel`. Tested: the orbs glow
   and sit within the radius, the funnel narrows downward, it spins with time, and a
   linked funnel adds both its orbs and a transit portal.
+- **"Materialize" — the world renders in** (`pkg/raytrace/materialize.go`): the moment
+  a dream forms, as the site describes it — first "large rectangular pixel-blocks",
+  then everything "adjusts itself" into a normal image. `Pixelate` gives the blocky
+  voxel look; `Materialize(img, t)` sweeps from coarse blocks (t=0) to sharp (t=1).
+  `rayexplore -materialize` makes each new region render in from blocks over a beat.
+  Tested: pixelation makes blocks uniform and cuts the colour count; t=1 is sharp
+  and earlier t is coarser.
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two

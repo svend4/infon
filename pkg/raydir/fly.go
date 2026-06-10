@@ -340,7 +340,7 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	}
 	s.Objects = append(s.Objects, w.portals...) // non-Euclidean windows
 	s.Objects = append(s.Objects, w.decor...)   // placed decor (story beacons, etc.)
-	if w.weather != nil { // rain/snow particles, and fog that hazes the distance
+	if w.weather != nil {                       // rain/snow particles, and fog that hazes the distance
 		s.Objects = append(s.Objects, w.weather.Objects()...)
 		if d, c, on := w.weather.Fog(); on {
 			s.FogDensity, s.FogColor = d, c

@@ -14,8 +14,8 @@ import (
 
 // VoxelTerrain is a height field with a surface colour at each map point.
 type VoxelTerrain struct {
-	Height func(x, z float64) float64    // terrain height
-	Shade  func(x, z, h float64) Vec3    // surface colour (channels 0..1)
+	Height func(x, z float64) float64 // terrain height
+	Shade  func(x, z, h float64) Vec3 // surface colour (channels 0..1)
 }
 
 // FBMTerrain builds procedural fractal hills with a height-banded palette (water,

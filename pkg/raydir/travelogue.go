@@ -83,10 +83,10 @@ func (tl *Travelogue) Render(cols int) image.Image {
 		b := tl.Moments[0].Thumb.Bounds()
 		tw, th = b.Dx(), b.Dy()
 	}
-	const m = 8                                 // margin / gap
-	_, fh := microfont.Measure("Ag", 1)         // caption height
-	capH := fh + 4                              // place + clock on one line
-	_, tfh := microfont.Measure(tl.Title, 2)    // title bar height
+	const m = 8                              // margin / gap
+	_, fh := microfont.Measure("Ag", 1)      // caption height
+	capH := fh + 4                           // place + clock on one line
+	_, tfh := microfont.Measure(tl.Title, 2) // title bar height
 	titleH := tfh + 2*m
 	cellW, cellH := tw, th+capH
 	rows := (len(tl.Moments) + cols - 1) / cols

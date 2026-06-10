@@ -31,8 +31,8 @@ func TestFunnelObjects(t *testing.T) {
 func TestFunnelNarrows(t *testing.T) {
 	at := raytrace.Vec3{}
 	objs := FunnelObjects(at, 0)
-	rim := objs[0]                  // first ring (rim)
-	point := objs[len(objs)-1]      // last ring (point)
+	rim := objs[0]             // first ring (rim)
+	point := objs[len(objs)-1] // last ring (point)
 	rr := math.Hypot(rim.(raytrace.Sphere).Center.X, rim.(raytrace.Sphere).Center.Z)
 	pr := math.Hypot(point.(raytrace.Sphere).Center.X, point.(raytrace.Sphere).Center.Z)
 	if pr >= rr {

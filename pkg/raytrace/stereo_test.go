@@ -54,7 +54,7 @@ func comX(img image.Image) float64 {
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
 			r, g, bl, _ := img.At(x, y).RGBA()
-			w := float64(r+g+bl)
+			w := float64(r + g + bl)
 			sw += w
 			swx += w * float64(x)
 		}
@@ -70,8 +70,8 @@ func TestStereoParallax(t *testing.T) {
 	cam := Camera{Pos: Vec3{Y: 1}, Yaw: 0, FOV: 1}
 	render := func(center Vec3) (float64, float64) {
 		s := &Scene{
-			Objects:   []Object{Sphere{Center: center, Radius: 1, Mat: Material{Emit: Vec3{X: 5, Y: 5, Z: 5}}}},
-			SkyTop:    Vec3{}, SkyBottom: Vec3{},
+			Objects: []Object{Sphere{Center: center, Radius: 1, Mat: Material{Emit: Vec3{X: 5, Y: 5, Z: 5}}}},
+			SkyTop:  Vec3{}, SkyBottom: Vec3{},
 		}
 		s.BuildBVH()
 		l, r := StereoCameras(cam, 0.6)
