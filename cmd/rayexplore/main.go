@@ -15,6 +15,7 @@
 //	go run ./cmd/rayexplore -weather rain           # rain (or snow/fog) that follows you
 //	go run ./cmd/rayexplore -seasons                 # walk forward through spring→summer→autumn→winter
 //	go run ./cmd/rayexplore -mood                    # the world's tone follows how you move
+//	go run ./cmd/rayexplore -path -style oil         # a painted (oil/ink/poster) look
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -95,10 +96,12 @@ func main() {
 	weather := flag.String("weather", "", "weather that follows you: rain | snow | fog")
 	seasons := flag.Bool("seasons", false, "walk through the year: foliage, ground and sky shift spring→summer→autumn→winter")
 	mood := flag.Bool("mood", false, "the director reads how you move (linger/press on/wander) and shifts the tone of what it builds")
+	style := flag.String("style", "", "non-photoreal look: oil | ink | poster")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
 	pxW, pxH := *cols*2, *rows*4
+	painterStyle, _ := raytrace.ParsePainterly(*style) // StyleNone when unset/unknown
 
 	// Pick the director: a real tvcp-ai/1 brain if BRAIN_URL is set, else the
 	// built-in reference author (offline, deterministic).
@@ -234,6 +237,9 @@ func main() {
 		}
 		if *grade {
 			im = raytrace.Grade(im, raytrace.GradeOptions{BloomThresh: 1.0, BloomStrength: 0.4, Vignette: 0.35, AgX: true})
+		}
+		if painterStyle != raytrace.StyleNone { // an oil/ink/poster look over the frame
+			im = raytrace.Painterly(im, painterStyle)
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
 		if showMap {

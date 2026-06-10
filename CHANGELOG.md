@@ -40,6 +40,18 @@ adopting, and it was reimplemented better).
   (`reservoir.go`, `restir.go`): RIS reservoirs with unbiased spatial reuse,
   ~7–12× lower direct-lighting variance in many-light scenes.
 
+#### Added — non-photorealistic rendering (a painter's eye)
+- **Painterly post — oil, ink, poster** (`pkg/raytrace/painterly.go`): a non-photoreal
+  "look" over any finished frame, in the spirit of a Dalí/Escher art-world. The
+  operators are classic: a **Kuwahara filter** (edge-preserving smoothing that
+  flattens regions into brush strokes while keeping edges crisp), a **Sobel
+  ink-edge** pass (dark contours), and **colour quantisation** (palette reduction),
+  combined into named styles — `oil` (soft painted regions with faint outlines),
+  `ink` (bold contours over flat colour), `poster` (few flat colours, strong
+  outlines). `rayexplore -style oil|ink|poster`. Tested: Kuwahara flattens noise yet
+  keeps a hard edge, quantise reduces the colour count, ink darkens edges and leaves
+  flat regions alone.
+
 #### Added — sampling, materials, effects
 - **Sampling**: Owen-scrambled Sobol (0,2) low-discrepancy sampling (`sobol.go`,
   −18…49% AA error), cosine/GGX importance sampling.
