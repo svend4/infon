@@ -23,13 +23,15 @@ func TestGatesZeroGapIsPerfect(t *testing.T) {
 	}
 }
 
-func TestGatesTolerateModestGap(t *testing.T) {
+func TestGatesTolerateModestNoise(t *testing.T) {
 	sim := DemoScenario()
-	// a small steady bias: the per-unit baseline absorbs most of it, so the
-	// engine's conclusions should still hold.
-	rep := Compare(sim, ApplyGap(sim, GapModel{Bias: 0.06, Noise: 0.03, Seed: 1}))
+	// modest zero-mean noise (no drift): the baseline absorbs it and the severity
+	// distribution is preserved, so every gate — including the KS distribution test —
+	// should still pass. A systematic bias is drift and is meant to be caught (see
+	// TestKSGateDiscriminates and the bias case in cmd/raygates).
+	rep := Compare(sim, ApplyGap(sim, GapModel{Noise: 0.04, Seed: 1}))
 	if !rep.Pass {
-		t.Errorf("a modest sim-to-real gap should still pass: %+v", rep.Gates)
+		t.Errorf("a modest zero-mean gap should still pass: %+v", rep.Gates)
 	}
 }
 
@@ -71,5 +73,41 @@ func TestGateDirection(t *testing.T) {
 	}
 	if !good.Pass {
 		t.Error("0.1 <= 0.15 should pass a lower-is-better gate")
+	}
+}
+
+func gateByName(rep GateReport, name string) *Gate {
+	for i := range rep.Gates {
+		if rep.Gates[i].Name == name {
+			return &rep.Gates[i]
+		}
+	}
+	return nil
+}
+
+func TestKS2Statistic(t *testing.T) {
+	if d := ks2([]float64{1, 2, 3}, []float64{1, 2, 3}); d != 0 {
+		t.Errorf("identical samples should give D=0, got %.3f", d)
+	}
+	if d := ks2([]float64{0, 0, 0}, []float64{1, 1, 1}); d != 1 {
+		t.Errorf("disjoint samples should give D=1, got %.3f", d)
+	}
+	if d := ks2([]float64{0, 0, 1, 1}, []float64{0, 1, 1, 1}); d <= 0 || d >= 1 {
+		t.Errorf("partly-overlapping samples should give 0<D<1, got %.3f", d)
+	}
+}
+
+func TestKSGateDiscriminates(t *testing.T) {
+	sim := DemoScenario()
+	zero := gateByName(Compare(sim, ApplyGap(sim, GapModel{})), "severity-KS")
+	if zero == nil {
+		t.Fatal("Compare should include a severity-KS gate")
+	}
+	if zero.Metric != 0 || !zero.Pass {
+		t.Errorf("zero gap should give KS D=0 and pass, got D=%.3f pass=%v", zero.Metric, zero.Pass)
+	}
+	big := gateByName(Compare(sim, ApplyGap(sim, GapModel{Noise: 0.6, Seed: 1})), "severity-KS")
+	if big.Metric <= zero.Metric {
+		t.Errorf("a large gap should widen the KS distance (%.3f) beyond zero-gap (%.3f)", big.Metric, zero.Metric)
 	}
 }

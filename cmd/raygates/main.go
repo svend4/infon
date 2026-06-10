@@ -39,18 +39,26 @@ func main() {
 	}
 	reps := make([]fleet.GateReport, len(profiles))
 
-	fmt.Println("sim-to-real gates (sim: demo logistics scenario)")
-	fmt.Printf("  %-18s %-7s %-7s %-8s %-7s %s\n", "profile", "level", "cause", "sevMAE", "bridge", "verdict")
 	for i, p := range profiles {
-		rep := fleet.Compare(sim, fleet.ApplyGap(sim, p.gap))
-		reps[i] = rep
-		m := metricByName(rep)
+		reps[i] = fleet.Compare(sim, fleet.ApplyGap(sim, p.gap))
+	}
+
+	fmt.Println("sim-to-real gates (sim: demo logistics scenario)")
+	fmt.Printf("  %-18s", "profile")
+	for _, g := range reps[0].Gates {
+		fmt.Printf(" %-9s", shortLabel(g.Name))
+	}
+	fmt.Println(" verdict")
+	for i, p := range profiles {
+		fmt.Printf("  %-18s", p.name)
+		for _, g := range reps[i].Gates {
+			fmt.Printf(" %-9.3f", g.Metric)
+		}
 		verdict := "PASS"
-		if !rep.Pass {
+		if !reps[i].Pass {
 			verdict = "FAIL"
 		}
-		fmt.Printf("  %-18s %-7.2f %-7.2f %-8.3f %-7.2f %s\n", p.name,
-			m["level-agreement"], m["cause-agreement"], m["severity-MAE"], m["bridge-agreement"], verdict)
+		fmt.Printf(" %s\n", verdict)
 	}
 
 	img := drawDashboard(profiles, reps)
@@ -67,21 +75,36 @@ func main() {
 	fmt.Printf("wrote %s.png\n", *out)
 }
 
-func metricByName(rep fleet.GateReport) map[string]float64 {
-	m := map[string]float64{}
-	for _, g := range rep.Gates {
-		m[g.Name] = g.Metric
+// shortLabel is a compact column header for a gate name.
+func shortLabel(name string) string {
+	switch name {
+	case "level-agreement":
+		return "level"
+	case "cause-agreement":
+		return "cause"
+	case "severity-MAE":
+		return "sevMAE"
+	case "bridge-agreement":
+		return "bridge"
+	case "severity-KS":
+		return "KS"
+	default:
+		return name
 	}
-	return m
 }
 
+// drawDashboard lays the gates out dynamically (one column per gate), so new gates
+// like severity-KS appear without re-wiring.
 func drawDashboard(profiles []profile, reps []fleet.GateReport) image.Image {
 	const (
-		w     = 760
 		rowH  = 40
 		top   = 64
-		nameX = 16
+		nameW = 160
+		cellW = 92
+		vW    = 78
 	)
+	nG := len(reps[0].Gates)
+	w := nameW + nG*cellW + vW + 16
 	h := top + len(profiles)*rowH + 14
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	dim := color.RGBA{R: 150, G: 150, B: 170, A: 255}
@@ -91,38 +114,31 @@ func drawDashboard(profiles []profile, reps []fleet.GateReport) image.Image {
 	fail := color.RGBA{R: 185, G: 65, B: 65, A: 255}
 	fillRect(img, 0, 0, w, h, ink)
 	microfont.Draw(img, 16, 12, 2, "SIM -> REAL CONFORMANCE GATES", white)
-	microfont.Draw(img, 16, 40, 1, "same conclusions on noisy telemetry? (info150 triage gates)", dim)
+	microfont.Draw(img, 16, 40, 1, "same conclusions AND distribution (KS) on noisy telemetry?", dim)
 
-	gates := []string{"level-agreement", "cause-agreement", "severity-MAE", "bridge-agreement"}
-	short := []string{"level", "cause", "sevMAE", "bridge"}
-	colX := []int{210, 320, 430, 545}
-	for i, s := range short {
-		microfont.Draw(img, colX[i], top-12, 1, s, dim)
+	for i, g := range reps[0].Gates {
+		microfont.Draw(img, nameW+i*cellW, top-12, 1, shortLabel(g.Name), dim)
 	}
-	microfont.Draw(img, 662, top-12, 1, "verdict", dim)
+	microfont.Draw(img, nameW+nG*cellW+6, top-12, 1, "verdict", dim)
 
 	for r, p := range profiles {
 		y := top + r*rowH
-		microfont.Draw(img, nameX, y+rowH/2-4, 1, p.name, white)
-		gmap := map[string]fleet.Gate{}
-		for _, g := range reps[r].Gates {
-			gmap[g.Name] = g
-		}
-		for i, gn := range gates {
-			g := gmap[gn]
+		microfont.Draw(img, 14, y+rowH/2-4, 1, p.name, white)
+		for i, g := range reps[r].Gates {
+			x := nameW + i*cellW
 			cell := fail
 			if g.Pass {
 				cell = pass
 			}
-			fillRect(img, colX[i]-6, y+6, 96, rowH-14, cell)
-			microfont.Draw(img, colX[i], y+rowH/2-4, 1, fmt.Sprintf("%.2f", g.Metric), ink)
+			fillRect(img, x-2, y+6, cellW-8, rowH-14, cell)
+			microfont.Draw(img, x, y+rowH/2-4, 1, fmt.Sprintf("%.2f", g.Metric), ink)
 		}
 		vcol, vtxt := fail, "FAIL"
 		if reps[r].Pass {
 			vcol, vtxt = pass, "PASS"
 		}
-		fillRect(img, 656, y+6, 78, rowH-14, vcol)
-		microfont.Draw(img, 672, y+rowH/2-4, 1, vtxt, ink)
+		fillRect(img, nameW+nG*cellW, y+6, vW-4, rowH-14, vcol)
+		microfont.Draw(img, nameW+nG*cellW+14, y+rowH/2-4, 1, vtxt, ink)
 	}
 	return img
 }

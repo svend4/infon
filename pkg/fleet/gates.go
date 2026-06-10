@@ -1,5 +1,10 @@
 package fleet
 
+import (
+	"math"
+	"sort"
+)
+
 // gates.go is the sim-to-real conformance harness — info150's triage4 evaluation
 // gates (triage accuracy, classification F1, vitals MAE) repurposed to answer the
 // Part 1 / variant-E question: does the monitoring engine, validated in
@@ -59,17 +64,22 @@ type GateReport struct {
 	Pass  bool
 }
 
-// Compare runs the engine over the sim and the real readings and scores the four
-// gates: level agreement, dominant-cause agreement, severity MAE, and bridge
-// (shared-cause) agreement. Overall pass requires every gate.
+// Compare runs the engine over the sim and the real readings and scores five
+// gates: level agreement, dominant-cause agreement, severity MAE, bridge
+// (shared-cause) agreement, and a Kolmogorov-Smirnov two-sample test on the
+// severity *distributions* (not just their means) — so a real run whose severities
+// drift in shape, not only on average, is caught. Overall pass requires every gate.
 func Compare(sim, real []Reading) GateReport {
 	simAs := runLatest(sim)
 	realAs := runLatest(real)
+	simSev, realSev := severitySamples(sim), severitySamples(real)
+	ksD := ks2(simSev, realSev)
 	gates := []Gate{
 		gate("level-agreement", agreeFrac(simAs, realAs, func(a Assessment) string { return a.Level.String() }), 0.75, true),
 		gate("cause-agreement", agreeFrac(simAs, realAs, func(a Assessment) string { return a.Worst }), 0.75, true),
 		gate("severity-MAE", severityMAE(simAs, realAs), 0.15, false),
 		gate("bridge-agreement", bridgeJaccard(simAs, realAs), 0.5, true),
+		gate("severity-KS", ksD, ksCritical(len(simSev), len(realSev)), false),
 	}
 	all := true
 	for _, g := range gates {
@@ -78,6 +88,55 @@ func Compare(sim, real []Reading) GateReport {
 		}
 	}
 	return GateReport{Gates: gates, Pass: all}
+}
+
+// severitySamples assesses every reading and returns the severity of each — the
+// sample of the run's severity distribution.
+func severitySamples(readings []Reading) []float64 {
+	e := NewMonitoringEngine()
+	out := make([]float64, 0, len(readings))
+	for _, r := range readings {
+		out = append(out, e.Assess(r).Severity)
+	}
+	return out
+}
+
+// ks2 is the two-sample Kolmogorov-Smirnov statistic D = sup|F_a - F_b|: the
+// largest gap between the two empirical CDFs (0 = identical distributions, 1 =
+// disjoint).
+func ks2(a, b []float64) float64 {
+	if len(a) == 0 || len(b) == 0 {
+		return 0
+	}
+	sa := append([]float64(nil), a...)
+	sb := append([]float64(nil), b...)
+	sort.Float64s(sa)
+	sort.Float64s(sb)
+	na, nb := len(sa), len(sb)
+	i, j := 0, 0
+	var d float64
+	for i < na && j < nb {
+		x := math.Min(sa[i], sb[j])
+		for i < na && sa[i] <= x {
+			i++
+		}
+		for j < nb && sb[j] <= x {
+			j++
+		}
+		if dd := math.Abs(float64(i)/float64(na) - float64(j)/float64(nb)); dd > d {
+			d = dd
+		}
+	}
+	return d
+}
+
+// ksCritical is the KS critical value at alpha=0.05: D above this rejects "same
+// distribution". D <= ksCritical passes the gate.
+func ksCritical(na, nb int) float64 {
+	if na == 0 || nb == 0 {
+		return 1
+	}
+	return 1.36 * math.Sqrt(float64(na+nb)/float64(na*nb))
 }
 
 func gate(name string, metric, thresh float64, higher bool) Gate {
