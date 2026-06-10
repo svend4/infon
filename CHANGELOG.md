@@ -25,6 +25,13 @@ existing region/portal/map/director architecture.
   writes a PNG; separate, cheap, no path tracing. Tested: terrain is deterministic
   and bounded, the render fills its size, draws terrain (not only sky), and a hill
   ahead rises higher on screen than flat ground.
+- **Dream optics** (`pkg/raytrace/dreamoptics.go`): the "unusual visual effects in
+  lucid dreams" the site catalogues, as screen-space warps — `PerspectiveSkew` (the
+  "complete violation of the laws of perspective", a lean to one side),
+  `TunnelVision` (the surround closing to black around a central circle), and
+  `DoubleVision` (the image splitting into a ghosted double). `rayexplore -optic
+  skew|tunnel|double`. Tested: a line is sheared, the corners darken while the
+  centre stays, one dot becomes two, and dimensions are preserved.
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two

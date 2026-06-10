@@ -22,6 +22,7 @@
 //	go run ./cmd/rayexplore -story                   # the world unfolds as a story, in chapters
 //	go run ./cmd/rayexplore -branch                  # branching paths: walk left/right at a crossroads
 //	go run ./cmd/rayexplore -maze -path              # a "square forest" labyrinth of blocks and roads
+//	go run ./cmd/rayexplore -optic tunnel            # dream optics: tunnel vision / skew / double
 //	go run ./cmd/rayexplore -mirror                  # dream symmetry: a north-south mirror world
 //	go run ./cmd/rayexplore -layer lower -path       # descend to the dark lower world
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
@@ -128,6 +129,7 @@ func main() {
 	portals := flag.Bool("portals", false, "drop an Escher portal ahead — a non-Euclidean window (best with -path)")
 	dream := flag.Bool("dream", false, "lens & film post: chromatic aberration, barrel warp, grain, vignette")
 	stereo := flag.Bool("stereo", false, "render in depth: a red-cyan anaglyph (view with red/cyan glasses)")
+	optic := flag.String("optic", "", "dream optics: skew (broken perspective) | tunnel (tunnel vision) | double (split image)")
 	ris := flag.Int("ris", 0, "ReSTIR/RIS candidate lights per pixel (path mode): cleaner many-light worlds (e.g. 16)")
 	story := flag.Bool("story", false, "follow a story: the world unfolds in chapters, a beacon marks each threshold")
 	maze := flag.Bool("maze", false, "a 'square forest': a flat grid of jungle/building blocks split by roads — a labyrinth to walk")
@@ -375,6 +377,14 @@ func main() {
 		if *dream { // a lens-and-film pass; grain shimmers from the frame counter
 			dreamFrame++
 			im = raytrace.Dream(im, raytrace.DreamOptions{Chroma: 0.012, Grain: 0.04, Vignette: 0.25, Distort: 0.12, Seed: uint32(dreamFrame)})
+		}
+		switch *optic { // a dream optical oddity over the frame
+		case "skew":
+			im = raytrace.PerspectiveSkew(im, 0.35)
+		case "tunnel":
+			im = raytrace.TunnelVision(im, 0.85)
+		case "double":
+			im = raytrace.DoubleVision(im, pxW/24, 0)
 		}
 		if tlog != nil && capturePending { // a postcard of this place
 			place := "the world"
