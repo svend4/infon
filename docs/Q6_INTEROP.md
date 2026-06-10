@@ -49,3 +49,12 @@ Keep the engines apart; let them meet at the data. `infon` is the Go renderer an
 shared world; `meta` is the maths; `pro2` is the model; `info150` is the applied
 systems layer. The only things that cross the boundary are **six bits** and a small
 **JSON protocol** — which is exactly why each can evolve on its own.
+
+## The manifest — `nautilus.json`
+
+This interop surface is declared, machine-readable, at the repo root in
+[`nautilus.json`](../nautilus.json): infon's id and role on Q6, the protocols and
+schema it speaks, the brain adapters it ships, and its links to the sibling nodes.
+A test (`nautilus_test.go`) checks every file the manifest points at actually
+exists, so the declaration can't drift from the repo. (Modeled on this doc; the
+fields are infon's own — reconcile with the wider federation schema as it settles.)
