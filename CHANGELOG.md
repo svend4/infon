@@ -63,6 +63,13 @@ adopting, and it was reimplemented better).
   outlines). `rayexplore -style oil|ink|poster`. Tested: Kuwahara flattens noise yet
   keeps a hard edge, quantise reduces the colour count, ink darkens edges and leaves
   flat regions alone.
+- **Dream post — lens & film** (`pkg/raytrace/dream.go`): a screen-space "lens and
+  film" pass that pushes a frame toward the dreamlike — chromatic aberration (the
+  colour channels drift apart toward the edges), barrel/pincushion lens distortion
+  (a curved, bilinearly-resampled field), seeded film grain, and a soft vignette.
+  `rayexplore -path -dream` (grain shimmers from a per-frame seed). Tested: grain
+  adds variance to a flat image and is deterministic in its seed, the vignette
+  darkens corners, and chroma separates the R and B channels at an edge.
 
 #### Added — sampling, materials, effects
 - **Sampling**: Owen-scrambled Sobol (0,2) low-discrepancy sampling (`sobol.go`,

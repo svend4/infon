@@ -17,6 +17,7 @@
 //	go run ./cmd/rayexplore -mood                    # the world's tone follows how you move
 //	go run ./cmd/rayexplore -path -style oil         # a painted (oil/ink/poster) look
 //	go run ./cmd/rayexplore -path -portals           # an Escher portal: a non-Euclidean window
+//	go run ./cmd/rayexplore -path -dream             # a lens-and-film dream pass
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -99,6 +100,7 @@ func main() {
 	mood := flag.Bool("mood", false, "the director reads how you move (linger/press on/wander) and shifts the tone of what it builds")
 	style := flag.String("style", "", "non-photoreal look: oil | ink | poster")
 	portals := flag.Bool("portals", false, "drop an Escher portal ahead — a non-Euclidean window (best with -path)")
+	dream := flag.Bool("dream", false, "lens & film post: chromatic aberration, barrel warp, grain, vignette")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -191,6 +193,7 @@ func main() {
 	var guideMsg string
 
 	start, lastTick := time.Now(), time.Now()
+	dreamFrame := 0
 	render := func() {
 		now := time.Now()
 		dt := now.Sub(lastTick).Seconds() // wall-clock frame step for movers
@@ -247,6 +250,10 @@ func main() {
 		}
 		if painterStyle != raytrace.StyleNone { // an oil/ink/poster look over the frame
 			im = raytrace.Painterly(im, painterStyle)
+		}
+		if *dream { // a lens-and-film pass; grain shimmers from the frame counter
+			dreamFrame++
+			im = raytrace.Dream(im, raytrace.DreamOptions{Chroma: 0.012, Grain: 0.04, Vignette: 0.25, Distort: 0.12, Seed: uint32(dreamFrame)})
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
 		if showMap {
