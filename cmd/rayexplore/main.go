@@ -29,6 +29,7 @@
 //	go run ./cmd/rayexplore -materialize             # each region renders in from voxel blocks
 //	go run ./cmd/rayexplore -flyer                   # a predator stalks you (drains luminosity)
 //	go run ./cmd/rayexplore -sprites                 # dream characters: type "?question" to ask one
+//	go run ./cmd/rayexplore -intention               # type "!a theme" and hold it: the world bends to your will
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -143,6 +144,7 @@ func main() {
 	materialize := flag.Bool("materialize", false, "each new region 'renders in' from coarse voxel blocks to sharp, the way a dream forms")
 	flyer := flag.Bool("flyer", false, "a predator (the 'flyer') stalks you and drains your luminosity — keep ahead of it")
 	sprites := flag.Bool("sprites", false, "dream characters you can question: type '?your question' to ask the nearest")
+	intention := flag.Bool("intention", false, "the art of intention: type '!a theme' and hold it — the world grown ahead bends to your will")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -211,7 +213,7 @@ func main() {
 		}
 	}
 	if world.Chunks() == 0 {
-		if _, err := world.Grow(b, world.BiasPrompt(seed()), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
+		if _, err := world.Grow(b, world.BiasPrompt(world.IntendPrompt(seed())), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
 			fmt.Fprintln(os.Stderr, "director failed to author the first region:", err)
 		}
 		if tale != nil {
@@ -270,7 +272,7 @@ func main() {
 	grow := func() {
 		jitter := math.Sin(float64(world.Chunks())*1.7) * 2.5
 		frontZ += 14
-		n, err := world.Grow(b, world.BiasPrompt(seed()), raytrace.Vec3{X: jitter, Y: 0, Z: frontZ})
+		n, err := world.Grow(b, world.BiasPrompt(world.IntendPrompt(seed())), raytrace.Vec3{X: jitter, Y: 0, Z: frontZ})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "grow failed:", err)
 			return
@@ -336,6 +338,7 @@ func main() {
 		world.StepWeather(dt, cam.Pos)                 // rain/snow drifts around you
 		world.ObserveWalker(raydir.PoseOf(cam), dt)    // read how you move (for mood)
 		world.StepSprites(dt)                          // dream characters drift
+		world.HoldIntention(dt)                        // sustain the held intention (no-op if none)
 		if *flyer {                                    // the predator hunts; it drains you when close
 			if world.StepFlyer(dt, cam.Pos) {
 				luminosity = math.Max(0, luminosity-dt*0.3)
@@ -465,6 +468,9 @@ func main() {
 				fmt.Printf("\n  ⚠ the flyer is draining your luminosity — run!")
 			}
 		}
+		if th, st := world.Intention(); th != "" {
+			season += fmt.Sprintf(" | 🔮%s %.0f%%", th, st*100)
+		}
 		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d%s | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f g=grow t=time p=path m=map Enter=refine x=quit] ",
 			who, world.Chunks(), world.Props(), mins/60, mins%60, spp, season, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
 	}
@@ -492,6 +498,15 @@ func main() {
 				spriteMsg = sp.Name + ": " + sp.Answer(strings.TrimPrefix(line, "?"))
 			} else {
 				spriteMsg = "(no one near to ask)"
+			}
+			render()
+			continue
+		}
+		if *intention && strings.HasPrefix(line, "!") { // set or clear the held intention
+			if theme := strings.TrimSpace(strings.TrimPrefix(line, "!")); theme == "" {
+				world.ClearIntention()
+			} else {
+				world.SetIntention(theme)
 			}
 			render()
 			continue

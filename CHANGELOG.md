@@ -63,6 +63,15 @@ existing region/portal/map/director architecture.
   Tested: answers are deterministic and thematic, the dream question is deflected,
   `LucidTell` separates deflection from admission, sprites drift near home, and the
   world finds the nearest and renders them.
+- **The art of intention** (`pkg/raydir/intention.go`): the hackers' central art — you
+  hold a wish (a theme) and, the longer you sustain it, the more strongly the world
+  grown ahead bends to it. A flicker changes nothing; a sustained intention manifests
+  (`IntendPrompt` weaves the theme in as `HoldIntention` builds its strength, until
+  the theme takes the prompt over). It composes with the mood bias (mood sets the
+  tone, intention the subject). `rayexplore -intention`: type `!a theme` and hold it.
+  Tested: strength builds and resets on change, the prompt is unchanged while weak,
+  coloured as it builds and taken over when sustained, and a held intention actually
+  manifests (the director grows the theme into the world).
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two

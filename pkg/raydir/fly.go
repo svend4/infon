@@ -90,6 +90,8 @@ type World struct {
 	funnels           []funnelObj          // swirling transit funnels (animated)
 	flyer             *Flyer               // optional predator that stalks the walker
 	sprites           []*Sprite            // dream characters you can question
+	intent            string               // held intention theme (bends what's grown ahead)
+	intentStr         float64              // intention strength (0..1), builds while held
 }
 
 // Reveal marks the area around p as explored on the bird's-eye map (fog-of-war).
