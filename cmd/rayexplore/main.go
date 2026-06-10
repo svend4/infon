@@ -142,6 +142,7 @@ func main() {
 	start, lastGuide := time.Now(), time.Now()
 	render := func() {
 		world.SetAnimTime(time.Since(start).Seconds()) // keep the world alive
+		world.Tread(cam.Pos)                           // wear a path where you walk
 		featMu.Lock()
 		feat = world.Ambient()
 		featMu.Unlock()

@@ -13,9 +13,30 @@ import (
 // Animated objects are kept apart from the static props and re-placed each frame at
 // the current time.
 
-// animKinds is the set of recognised motions.
+// animKinds is the set of recognised motions. "grow" is a one-way development
+// (a seed becoming a tree), the rest are repeating motions.
 var animKinds = map[string]bool{
-	"bob": true, "orbit": true, "drift": true, "pulse": true, "wander": true,
+	"bob": true, "orbit": true, "drift": true, "pulse": true, "wander": true, "grow": true,
+}
+
+// growSpec scales an object up from a sprout to its full size over `age` seconds,
+// so a planted seed grows into a tree and then stays — the world develops, not just
+// oscillates. Monotonic; capped at full size.
+func growSpec(o brain.ObjSpec, age float64) brain.ObjSpec {
+	rate := o.ASpeed
+	if rate <= 0 {
+		rate = 0.08 // ~11s from sprout to full
+	}
+	f := 0.12 + 0.88*clampf(age*rate, 0, 1)
+	if o.R > 0 {
+		o.R *= f
+	} else {
+		o.R = f
+	}
+	for i := range o.S {
+		o.S[i] *= f
+	}
+	return o
 }
 
 // isAnimated reports whether name is a recognised motion.

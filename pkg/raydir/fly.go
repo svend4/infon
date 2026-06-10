@@ -71,7 +71,22 @@ type World struct {
 	sndForest         int
 	sndBirds          bool
 	sndHum            bool
+	trace             *Trace // worn paths (the world's memory of being walked)
 }
+
+// Tread records a walker stepping at p, so paths wear into the ground over time.
+func (w *World) Tread(p raytrace.Vec3) {
+	if w.trace == nil {
+		w.trace = NewTrace(1.5)
+	}
+	w.trace.Tread(p)
+}
+
+// Trace returns the world's path-wear (may be nil if nothing has been walked).
+func (w *World) Trace() *Trace { return w.trace }
+
+// SetTrace restores previously-saved path wear.
+func (w *World) SetTrace(t *Trace) { w.trace = t }
 
 // SetClouds toggles a volumetric cloud bank (a participating medium; path tracer
 // only, and costly — opt in).
@@ -83,6 +98,7 @@ type animObj struct {
 	spec brain.ObjSpec
 	at   raytrace.Vec3
 	seed int
+	born float64 // animation-clock time when it appeared (for "grow")
 }
 
 // SetAnimTime sets the shared animation clock (seconds) used to place moving
@@ -152,16 +168,22 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	s.Objects = append(s.Objects, w.floor)
 	s.Objects = append(s.Objects, w.props...)
 	s.Objects = append(s.Objects, sun...)
-	// moving objects: re-place each from the shared animation clock.
+	// moving (and growing) objects: re-place each from the shared animation clock.
 	for _, a := range w.animated {
-		if a.spec.Kind == "water" {
+		switch {
+		case a.spec.Kind == "water":
 			s.Objects = append(s.Objects, waterObject(a.spec, a.at, w.animTime))
-			continue
+		case a.spec.Anim == "grow":
+			s.Objects = append(s.Objects, objectsFromSpec(growSpec(a.spec, w.animTime-a.born), a.at, false)...)
+		default:
+			s.Objects = append(s.Objects, objectsFromSpec(animateSpec(a.spec, w.animTime, a.seed), a.at, false)...)
 		}
-		s.Objects = append(s.Objects, objectsFromSpec(animateSpec(a.spec, w.animTime, a.seed), a.at, false)...)
 	}
 	if w.clouds { // volumetric cloud bank that drifts with the world frontier
 		s.Medium = raytrace.CloudMedium(raytrace.Vec3{X: 0, Y: 11, Z: w.lastAt.Z}, 26, 0.5)
+	}
+	if w.trace != nil { // worn paths the world remembers
+		s.Objects = append(s.Objects, w.trace.Objects()...)
 	}
 	s.Objects = append(s.Objects, extra...)
 	s.BuildBVH()

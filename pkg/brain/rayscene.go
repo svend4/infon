@@ -168,6 +168,10 @@ func refRayScene(req Request) Response {
 			Anim: "wander", AAmp: 3, ASpeed: 0.25,
 		})
 	}
+	if hasAny(p.Prompt, "seed", "sapling", "sprout", "growing", "grow") {
+		// a young tree that grows over time — the world develops, not just oscillates
+		spec.Objects = append(spec.Objects, ObjSpec{Kind: "tree", X: -2.5, Z: 1.5, R: 1.4, Anim: "grow", ASpeed: 0.1})
+	}
 	spec.Name = sceneName(p.Prompt) // a place name for the map / landmarks
 	data, _ := json.Marshal(spec)
 	return Response{Protocol: Protocol, Kind: "move", Ray: data, Reasoning: "reference scene author"}

@@ -140,6 +140,14 @@ func main() {
 			}
 			fmt.Printf("resumed %d regions from %s\n", len(loaded), *worldFile)
 		}
+		if tr, e := raydir.LoadTrace(*worldFile + ".trace"); e == nil { // the world's worn paths
+			world.SetTrace(tr)
+		}
+		defer func() {
+			if t := world.Trace(); t != nil {
+				_ = t.Save(*worldFile + ".trace")
+			}
+		}()
 	}
 
 	self := raydir.FlyCam{Pos: raytrace.Vec3{X: 0, Y: 2.2, Z: 0}, Pitch: -0.08, FOV: math.Pi / 3}
@@ -625,6 +633,10 @@ func main() {
 		stateMu.Unlock()
 		worldMu.Lock()
 		world.SetAnimTime(time.Since(sessionStart).Seconds()) // advance the living world
+		world.Tread(self.Pos)                                 // wear paths where walkers go
+		for _, op := range otherPos {
+			world.Tread(op)
+		}
 		scene := world.SceneWith(extra)
 		chunks := world.Chunks()
 		tod := world.Time

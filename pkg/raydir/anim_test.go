@@ -99,3 +99,36 @@ func TestRefSceneAnimKeyword(t *testing.T) {
 		t.Error("'flock of birds' should author an orbiting object")
 	}
 }
+
+// A seed grows monotonically from a sprout to full size, then stays.
+func TestGrowSpec(t *testing.T) {
+	o := brain.ObjSpec{Kind: "tree", R: 2, Anim: "grow", ASpeed: 0.1}
+	young, old := growSpec(o, 0).R, growSpec(o, 1000).R
+	if young <= 0 || young >= old {
+		t.Errorf("a sprout should be small and grow: young %.2f old %.2f", young, old)
+	}
+	if old > 2+1e-9 {
+		t.Errorf("growth should cap at full size, got %.2f", old)
+	}
+	if growSpec(o, 6).R <= growSpec(o, 2).R {
+		t.Error("growth should be monotonic in time")
+	}
+}
+
+// In a world, a planted tree is short at first and tall once grown: a ray at
+// canopy height misses the sprout but hits the mature tree.
+func TestWorldGrows(t *testing.T) {
+	w := NewWorld()
+	w.AddRegion(Region{Index: 0, At: raytrace.Vec3{Z: 5}, Spec: brain.SceneSpec{Objects: []brain.ObjSpec{
+		{Kind: "tree", X: 0, Z: 0, R: 2, Anim: "grow", ASpeed: 0.5},
+	}}})
+	probe := raytrace.Ray{Origin: raytrace.Vec3{X: 5, Y: 2.5, Z: 5}, Dir: raytrace.Vec3{X: -1, Y: 0, Z: 0}}
+	w.SetAnimTime(0)
+	if _, hit := nearestHit(w.SceneWith(nil), probe); hit {
+		t.Error("a fresh sprout should be too short to meet a canopy-height ray")
+	}
+	w.SetAnimTime(40) // fully grown
+	if _, hit := nearestHit(w.SceneWith(nil), probe); !hit {
+		t.Error("a grown tree should reach canopy height")
+	}
+}

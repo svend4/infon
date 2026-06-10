@@ -161,6 +161,15 @@ adopting, and it was reimplemented better).
   reference brain, or a live model via `-url`): it asks for many scenes and reports
   how renderable, rich and varied they are (`BenchDirector`) — a quick objective
   read before a live session.
+- **A world with memory & consequence** (`pkg/raydir/anim.go`, `trace.go`): the
+  world develops and remembers. A `grow` motion makes a planted seed scale up into a
+  full tree over time (monotonic, from the shared clock — born when it appears), so
+  regions mature instead of only oscillating. A `Trace` records foot traffic per
+  ground cell and renders it as worn earth, so **paths emerge where walkers actually
+  go** (`World.Tread`); the wear is encodable and persists between sessions as a
+  `.trace` sidecar next to a saved world. The reference author plants a growing
+  sapling on a keyword (seed/sapling/sprout). Verified live: a tree grows from
+  sprout to full, a winding path wears in, and the trace round-trips to disk.
 - **An AI inside the world — a guide companion** (`pkg/raydir/guide.go`): not an
   off-stage director but a participant. A `Guide` walks with you, leads a tour of the
   world's named landmarks (nearest-first), faces its motion, and comments on where

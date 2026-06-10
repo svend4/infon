@@ -82,7 +82,7 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 		if validObj(o) && (isAnimated(o.Anim) || o.Kind == "water") {
 			// a moving object (or water): keep its spec and rebuild it each frame from
 			// the shared clock (see SceneWith), rather than baking it into static props.
-			w.animated = append(w.animated, animObj{spec: o, at: at, seed: len(w.animated)*97 + index})
+			w.animated = append(w.animated, animObj{spec: o, at: at, seed: len(w.animated)*97 + index, born: w.animTime})
 			n += len(objectsFromSpec(o, at, false))
 			continue
 		}
