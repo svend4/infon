@@ -40,6 +40,17 @@ adopting, and it was reimplemented better).
   (`reservoir.go`, `restir.go`): RIS reservoirs with unbiased spatial reuse,
   ~7–12× lower direct-lighting variance in many-light scenes.
 
+#### Added — richer materials for the director
+- **Subsurface & thin-film, authorable** (`brain.ObjSpec` `sss`/`sssRad`/`film`/`filmIor`):
+  the renderer's subsurface scattering (translucent wax, jade, skin) and thin-film
+  iridescence (soap, oil, pearl) are now exposed in the scene protocol, so the AI
+  director can ask for them by name. `objMaterial` maps the fields (the base colour
+  tints the subsurface interior), they're clamped like every other untrusted field,
+  and the reference author understands the keywords — "wax"/"jade"/"skin" grow a
+  translucent surface, "soap"/"iridescent"/"oil"/"pearl" a thin-film one. Tested:
+  the fields map, count as a material override, clamp, the keywords author the right
+  material, and a subsurface object renders lit. Documented in the protocol.
+
 #### Added — engine wiring into the walk
 - **ReSTIR many-lights in the walk** (`World.SetRIS`, `rayexplore -ris N`): the
   renderer's ReSTIR/RIS direct-lighting estimator (resampled importance sampling

@@ -35,6 +35,12 @@ func objMaterial(o brain.ObjSpec) raytrace.Material {
 			m.Bump = b
 		}
 	}
+	if o.SSS > 0 { // subsurface scattering (wax/jade/skin); the base colour tints the interior
+		m.SSS, m.SSSRadius, m.SSSColor = o.SSS, o.SSSRad, m.Color
+	}
+	if o.Film > 0 { // thin-film iridescence (soap/oil/pearl)
+		m.Film, m.FilmIOR = o.Film, o.FilmIOR
+	}
 	return m
 }
 
@@ -142,6 +148,7 @@ func specScale(o brain.ObjSpec) float64 {
 func specHasMaterial(o brain.ObjSpec) bool {
 	return o.Color != [3]float64{} || o.Emit != [3]float64{} ||
 		o.Glass != 0 || o.Metal != 0 || o.Reflect != 0 || o.Rough != 0 ||
+		o.SSS != 0 || o.Film != 0 ||
 		(o.Tex != "" && TextureFor(o.Tex) != nil) ||
 		(o.Bump != "" && BumpFor(o.Bump) != nil)
 }
@@ -194,6 +201,10 @@ func clampObj(o brain.ObjSpec) brain.ObjSpec {
 	o.Metal = clampf(o.Metal, 0, 1)
 	o.Reflect = clampf(o.Reflect, 0, 1)
 	o.Rough = clampf(o.Rough, 0, 1)
+	o.SSS = clampf(o.SSS, 0, 3)
+	o.SSSRad = clampf(o.SSSRad, 0, 20)
+	o.Film = clampf(o.Film, 0, 2000)
+	o.FilmIOR = clampf(o.FilmIOR, 0, 3)
 	return o
 }
 

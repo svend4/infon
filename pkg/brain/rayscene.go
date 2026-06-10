@@ -50,6 +50,15 @@ type ObjSpec struct {
 	Anim   string  `json:"anim,omitempty"`
 	AAmp   float64 `json:"aamp,omitempty"`
 	ASpeed float64 `json:"aspd,omitempty"`
+	// Subsurface scattering (wax, marble, jade, skin): SSS is the boundary index of
+	// refraction (0 = off; ~1.3-1.4), SSSRad the mean free path in world units
+	// (smaller = denser/more opaque). The object's colour tints the interior.
+	SSS    float64 `json:"sss,omitempty"`
+	SSSRad float64 `json:"sssRad,omitempty"`
+	// Thin-film interference (soap, oil, pearl, opal): Film is the film thickness in
+	// nanometres (0 = off; ~100-600), FilmIOR its refractive index (default 1.33).
+	Film    float64 `json:"film,omitempty"`
+	FilmIOR float64 `json:"filmIor,omitempty"`
 }
 
 // refRayScene is the reference scenographer for game "rayscene": it authors a
@@ -127,6 +136,16 @@ func refRayScene(req Request) Response {
 			spec.Objects[1].Tex = tx
 			break
 		}
+	}
+	if hasAny(p.Prompt, "wax", "jade", "skin", "candle", "alabaster", "translucent") {
+		// translucent: light enters and scatters under the surface.
+		spec.Objects[1].SSS, spec.Objects[1].SSSRad, spec.Objects[1].Rough = 1.35, 0.6, 0.4
+		spec.Objects[1].Tex = ""
+	}
+	if hasAny(p.Prompt, "soap", "bubble", "iridescent", "oil", "pearl", "nacre", "opal") {
+		// a thin film: a mirror tinted by angle/thickness interference.
+		spec.Objects[1].Film, spec.Objects[1].FilmIOR = 320, 1.33
+		spec.Objects[1].Tex = ""
 	}
 	if name, ok := fractalFor(p.Prompt); ok { // a ray-marched fractal/mandala form
 		spec.Objects = append(spec.Objects, ObjSpec{
