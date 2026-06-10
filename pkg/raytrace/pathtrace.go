@@ -277,6 +277,16 @@ pathLoop:
 		}
 
 		switch {
+		case h.Mat.Link != nil:
+			// Portal: a seamless window into a linked place. Teleport the ray by the
+			// portal's transform and continue unattenuated, so what's beyond the
+			// portal is drawn as if it were just there — impossible, Escher-like space.
+			L := h.Mat.Link
+			nd := L.ApplyDir(r.Dir).Norm()
+			r = Ray{Origin: L.Apply(h.P).Add(nd.Scale(shadowEps)), Dir: nd, Time: tm}
+			specularPrev = true // a straight-through view: count emitters/sky directly beyond
+			prevPdfB = 0
+			continue pathLoop
 		case h.Mat.SSS > 0:
 			// Dielectric boundary: Fresnel-reflect (the highlight), or transmit and
 			// random-walk the subsurface medium. Branch is chosen by the Fresnel

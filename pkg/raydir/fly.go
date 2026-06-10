@@ -80,7 +80,12 @@ type World struct {
 	seasonal          bool                 // foliage/ground/sky follow the season along the walk
 	frontierZ         float64              // furthest applied region depth (the seasonal frontier)
 	mood              *Mood                // optional: reads how you move and biases the director
+	portals           []raytrace.Object    // optional Escher portals (non-Euclidean windows)
 }
+
+// AddPortal places a portal (a non-Euclidean window; see raytrace.NewPortal) into
+// the world. Portals are seen through only by the path tracer.
+func (w *World) AddPortal(o raytrace.Object) { w.portals = append(w.portals, o) }
 
 // SetMoodSensing turns mood reading on or off. When on, the world watches how the
 // walker moves and biases the prompts it grows toward a matching tone.
@@ -298,6 +303,7 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	if w.flock != nil { // living inhabitants, re-placed each frame
 		s.Objects = append(s.Objects, w.flock.Objects()...)
 	}
+	s.Objects = append(s.Objects, w.portals...) // non-Euclidean windows
 	if w.weather != nil { // rain/snow particles, and fog that hazes the distance
 		s.Objects = append(s.Objects, w.weather.Objects()...)
 		if d, c, on := w.weather.Fog(); on {

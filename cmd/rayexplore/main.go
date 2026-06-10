@@ -16,6 +16,7 @@
 //	go run ./cmd/rayexplore -seasons                 # walk forward through spring→summer→autumn→winter
 //	go run ./cmd/rayexplore -mood                    # the world's tone follows how you move
 //	go run ./cmd/rayexplore -path -style oil         # a painted (oil/ink/poster) look
+//	go run ./cmd/rayexplore -path -portals           # an Escher portal: a non-Euclidean window
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -97,6 +98,7 @@ func main() {
 	seasons := flag.Bool("seasons", false, "walk through the year: foliage, ground and sky shift spring→summer→autumn→winter")
 	mood := flag.Bool("mood", false, "the director reads how you move (linger/press on/wander) and shifts the tone of what it builds")
 	style := flag.String("style", "", "non-photoreal look: oil | ink | poster")
+	portals := flag.Bool("portals", false, "drop an Escher portal ahead — a non-Euclidean window (best with -path)")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -146,6 +148,11 @@ func main() {
 	world.SetTime(dayT)
 	world.SetClouds(*clouds)
 	world.SetWeather(*weather) // rain/snow/fog that follows the walker (before the scene is built so fog bakes in)
+	if *portals {              // a non-Euclidean window ahead, linking to the place behind you
+		world.AddPortal(raytrace.NewPortal(
+			raytrace.Vec3{X: 0, Y: 2.2, Z: 20}, raytrace.Vec3{X: 2.5}, raytrace.Vec3{Y: 2.2},
+			raytrace.Translate(raytrace.Vec3{Z: -30})))
+	}
 	scene := world.Scene()
 	pathOpt := raytrace.PathOptions{Samples: 4, MaxDepth: 5, Seed: 1, NEE: true, MIS: true, Sobol: true}
 	// progressive refinement: stand still (press Enter) and the path-traced view

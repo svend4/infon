@@ -40,6 +40,18 @@ adopting, and it was reimplemented better).
   (`reservoir.go`, `restir.go`): RIS reservoirs with unbiased spatial reuse,
   ~7–12× lower direct-lighting variance in many-light scenes.
 
+#### Added — non-Euclidean space (Escher portals)
+- **Portals** (`pkg/raytrace/portal.go`, `Material.Link`): a finite rectangular
+  doorway that teleports any ray that crosses it by an affine transform and lets it
+  continue *unattenuated* — so you look straight through to wherever it links: a far
+  part of the world, a rotated copy, or (linking to just behind itself) an endless
+  Escher corridor. The teleport is one early case in the path tracer's bounce loop
+  (`Material.Link != nil`: move the ray by the link transform and continue), so it
+  composes with everything else. Tested: the ray reaches a place the straight ray
+  never could; an identity portal is perfectly invisible (a seamless window); the
+  rectangle is hit inside and missed outside; the affine `Apply`/`ApplyDir` helpers
+  are correct. `rayexplore -path -portals` drops one into the walk.
+
 #### Added — non-photorealistic rendering (a painter's eye)
 - **Painterly post — oil, ink, poster** (`pkg/raytrace/painterly.go`): a non-photoreal
   "look" over any finished frame, in the spirit of a Dalí/Escher art-world. The

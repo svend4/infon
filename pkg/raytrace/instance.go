@@ -88,6 +88,12 @@ func (a Transform) Mul(b Transform) Transform {
 	return Transform{M: a.M.mulM(b.M), T: a.M.mul(b.T).Add(a.T)}
 }
 
+// Apply maps a point through the affine transform (M*p + T).
+func (a Transform) Apply(p Vec3) Vec3 { return a.M.mul(p).Add(a.T) }
+
+// ApplyDir maps a direction through the linear part only (no translation).
+func (a Transform) ApplyDir(v Vec3) Vec3 { return a.M.mul(v) }
+
 // Instance is a transformed placement of a (bounded) object.
 type Instance struct {
 	obj     Object

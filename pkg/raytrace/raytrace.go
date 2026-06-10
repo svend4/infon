@@ -69,6 +69,12 @@ type Material struct {
 	// angle/thickness-dependent interference colour.
 	Film    float64
 	FilmIOR float64
+
+	// Portal link (non-Euclidean space): when set, a ray that hits this surface is
+	// teleported by this affine transform and continues unattenuated — the surface
+	// is a seamless window into the linked place rather than a thing to be lit.
+	// Built by the Portal object (see portal.go); nil for ordinary materials.
+	Link *Transform
 }
 
 // Hit records the nearest intersection along a ray.
