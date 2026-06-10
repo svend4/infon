@@ -146,6 +146,7 @@ func main() {
 	funnel := flag.Bool("funnel", false, "a swirling transit funnel (vortex) ahead — a portal at its mouth (best with -path)")
 	materialize := flag.Bool("materialize", false, "each new region 'renders in' from coarse voxel blocks to sharp, the way a dream forms")
 	flyer := flag.Bool("flyer", false, "a predator (the 'flyer') stalks you and drains your luminosity — keep ahead of it")
+	robots := flag.Int("robots", 0, "spawn N patrolling robots — the logistics yard shares your world (status beacons green->red)")
 	sprites := flag.Bool("sprites", false, "dream characters you can question: type '?your question' to ask the nearest")
 	intention := flag.Bool("intention", false, "the art of intention: type '!a theme' and hold it — the world grown ahead bends to your will")
 	hexagram := flag.String("hexagram", "", "cast a world from an I-Ching hexagram: six lines like 101010 or yynnyn")
@@ -338,6 +339,17 @@ func main() {
 	if *flyer { // a predator that hunts the walker
 		world.SpawnFlyer(cam.Pos.Add(raytrace.Vec3{X: 6, Z: 12}))
 	}
+	if *robots > 0 { // a yard of patrolling machines shares the walker's world
+		for i := 0; i < *robots; i++ {
+			c := cam.Pos.Add(raytrace.Vec3{X: float64(i*3) - float64(*robots), Z: 10})
+			loop := []raytrace.Vec3{c, c.Add(raytrace.Vec3{X: 4}), c.Add(raytrace.Vec3{X: 4, Z: 5}), c.Add(raytrace.Vec3{Z: 5})}
+			status := 0.0
+			if *robots > 1 {
+				status = float64(i) / float64(*robots-1)
+			}
+			world.SpawnRobot(raydir.NewRobot(c, loop, status))
+		}
+	}
 	if *sprites { // a few dream characters to meet and question
 		world.AddSprite(raydir.NewSprite("Mira", cam.Pos.Add(raytrace.Vec3{X: -3, Z: 9}), 1))
 		world.AddSprite(raydir.NewSprite("Ko", cam.Pos.Add(raytrace.Vec3{X: 4, Z: 13}), 3))
@@ -362,6 +374,7 @@ func main() {
 		world.StepWeather(dt, cam.Pos)                 // rain/snow drifts around you
 		world.ObserveWalker(raydir.PoseOf(cam), dt)    // read how you move (for mood)
 		world.StepSprites(dt)                          // dream characters drift
+		world.StepRobots(dt)                           // patrolling machines move on their rounds
 		world.HoldIntention(dt)                        // sustain the held intention (no-op if none)
 		if *flyer {                                    // the predator hunts; it drains you when close
 			if world.StepFlyer(dt, cam.Pos) {

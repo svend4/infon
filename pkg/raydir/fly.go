@@ -93,6 +93,7 @@ type World struct {
 	intent            string               // held intention theme (bends what's grown ahead)
 	intentStr         float64              // intention strength (0..1), builds while held
 	memory            *Memory              // the director's memory of past regions (RAG-style recall)
+	robots            []*Robot             // patrolling machines (the logistics yard in the world)
 }
 
 // SetMemory turns the director's region memory on or off. When on, every grown
@@ -279,7 +280,7 @@ func (w *World) SetAnimTime(sec float64) { w.animTime = sec }
 // HasAnimated reports whether the world contains any moving objects (so a viewer
 // knows the frame isn't static and progressive refinement should restart).
 func (w *World) HasAnimated() bool {
-	return len(w.animated) > 0 || w.HasCreatures() || w.HasFunnels() || w.flyer != nil || len(w.sprites) > 0 || (w.weather != nil && len(w.weather.parts) > 0)
+	return len(w.animated) > 0 || w.HasCreatures() || w.HasFunnels() || w.flyer != nil || len(w.sprites) > 0 || len(w.robots) > 0 || (w.weather != nil && len(w.weather.parts) > 0)
 }
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
@@ -382,6 +383,9 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	}
 	if w.flyer != nil { // the predator stalking the walker
 		s.Objects = append(s.Objects, w.flyer.Objects()...)
+	}
+	for _, rb := range w.robots { // patrolling machines (the logistics yard)
+		s.Objects = append(s.Objects, rb.Objects()...)
 	}
 	for _, sp := range w.sprites { // dream characters
 		s.Objects = append(s.Objects, sp.Objects()...)

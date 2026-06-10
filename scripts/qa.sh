@@ -51,6 +51,7 @@ step "raywatch" go run ./cmd/raywatch -heat 0.8 -w 96 -h 64 -spp 6 -out "$tmp/wa
 step "rayfx caustics" go run ./cmd/rayfx -mode caustics -w 80 -h 60 -photons 20000 -out "$tmp/fxc"
 step "rayfx adaptive" go run ./cmd/rayfx -mode adaptive -w 80 -h 60 -out "$tmp/fxa"
 step "rayfx temporal" go run ./cmd/rayfx -mode temporal -w 80 -h 60 -frames 3 -out "$tmp/fxt"
+step "rayyard" go run ./cmd/rayyard -w 80 -h 60 -cols 2 -rows 1 -spp 6 -out "$tmp/yard"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
