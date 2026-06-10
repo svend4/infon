@@ -31,6 +31,7 @@
 //	go run ./cmd/rayexplore -sprites                 # dream characters: type "?question" to ask one
 //	go run ./cmd/rayexplore -intention               # type "!a theme" and hold it: the world bends to your will
 //	go run ./cmd/rayexplore -hexagram 101010         # cast a world from an I-Ching hexagram
+//	go run ./cmd/rayexplore -hexagram 000000 -q6walk # grand tour of all 64 hexagram worlds (Q6 Gray code)
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -147,6 +148,7 @@ func main() {
 	sprites := flag.Bool("sprites", false, "dream characters you can question: type '?your question' to ask the nearest")
 	intention := flag.Bool("intention", false, "the art of intention: type '!a theme' and hold it — the world grown ahead bends to your will")
 	hexagram := flag.String("hexagram", "", "cast a world from an I-Ching hexagram: six lines like 101010 or yynnyn")
+	q6walk := flag.Bool("q6walk", false, "with -hexagram: walk the Q6 hypercube of all 64 hexagram worlds (one line changes per region)")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -171,6 +173,14 @@ func main() {
 		if h, ok := raydir.ParseHexagram(*hexagram); ok {
 			prompts = []string{h.Prompt()}
 			hexName = h.Name()
+			if *q6walk { // a grand tour of the Q6 hypercube: each region a one-line neighbour
+				walk := h.GrayWalk()
+				prompts = prompts[:0]
+				for _, g := range walk {
+					prompts = append(prompts, g.Prompt())
+				}
+				hexName = "Q6 walk from " + h.Name()
+			}
 		} else {
 			fmt.Fprintln(os.Stderr, "hexagram: need six lines like 101010 or yynnyn")
 		}

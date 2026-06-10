@@ -95,6 +95,16 @@ existing region/portal/map/director architecture.
   "yynnyn"); `rayexplore -hexagram 101010`. (Kin to the I-Ching-style positional id
   in `pkg/tangram`.) Tested: the number is a bijection over all 64, name/prompt come
   from the trigrams, casting and the seed are deterministic, and parsing validates.
+- **Q6 navigation of the 64 worlds** (`pkg/raydir/hexagram.go`, inspired by the
+  `hexcore` library of `svend4/meta`): the 64 hexagrams are the vertices of the
+  6-dimensional hypercube Q6 (edge = one line flipped), so a `Hexagram` now knows
+  its `Neighbors` (the six worlds one line away), its `Antipode` (the far corner),
+  `Hamming` distance, and `GrayWalk` — a Hamiltonian path (reflected Gray code)
+  visiting all 64 worlds, each differing from the last by exactly one line.
+  `rayexplore -hexagram 000000 -q6walk` makes a "grand tour": every region grown is
+  a one-line neighbour, so the world morphs one trait at a time across all 64.
+  Tested: flip/neighbours/antipode/Hamming, and the Gray walk is a true Hamiltonian
+  path (64 distinct, consecutive Hamming 1).
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two

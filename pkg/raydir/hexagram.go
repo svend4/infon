@@ -80,6 +80,66 @@ func CastHexagram(seed int64) Hexagram {
 	return h
 }
 
+// HexagramFromNumber builds a hexagram from its six-bit number (0..63).
+func HexagramFromNumber(n int) Hexagram {
+	var h Hexagram
+	for i := 0; i < 6; i++ {
+		h.Lines[i] = n&(1<<i) != 0
+	}
+	return h
+}
+
+// Flip toggles line `line` (0 = bottom .. 5 = top) — a single step along the Q6
+// hypercube to an adjacent hexagram.
+func (h Hexagram) Flip(line int) Hexagram {
+	if line >= 0 && line < 6 {
+		h.Lines[line] = !h.Lines[line]
+	}
+	return h
+}
+
+// Neighbors are the six hexagrams that differ from h by exactly one line (its
+// edges in the Q6 graph). Stepping to a neighbour changes the world by one trait.
+func (h Hexagram) Neighbors() []Hexagram {
+	out := make([]Hexagram, 6)
+	for i := 0; i < 6; i++ {
+		out[i] = h.Flip(i)
+	}
+	return out
+}
+
+// Antipode is the opposite hexagram (all six lines flipped) — the far corner of
+// the hypercube, Hamming distance 6 away.
+func (h Hexagram) Antipode() Hexagram { return HexagramFromNumber(h.Number() ^ 63) }
+
+// Hamming is the number of lines in which two hexagrams differ (their distance in
+// the Q6 graph).
+func (h Hexagram) Hamming(o Hexagram) int {
+	x := h.Number() ^ o.Number()
+	c := 0
+	for x > 0 {
+		c += x & 1
+		x >>= 1
+	}
+	return c
+}
+
+// GrayWalk is a Hamiltonian path through all 64 hexagrams starting at h: a reflected
+// binary (Gray) code, so each hexagram differs from the previous by exactly one
+// line. It is the "grand tour" of every hexagram world, morphing one trait at a
+// time.
+func (h Hexagram) GrayWalk() []Hexagram {
+	s := h.Number()
+	out := make([]Hexagram, 64)
+	for i := 0; i < 64; i++ {
+		out[i] = HexagramFromNumber((i ^ (i >> 1)) ^ s)
+	}
+	return out
+}
+
+// GrayCode is the Gray-code Hamiltonian path over all 64 hexagrams from 0.
+func GrayCode() []Hexagram { return Hexagram{}.GrayWalk() }
+
 // ParseHexagram reads six lines from a string of 1/0 or y/n (bottom-to-top), e.g.
 // "101010" or "yynnyn"; ok=false if it isn't six valid characters.
 func ParseHexagram(s string) (Hexagram, bool) {
