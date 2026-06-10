@@ -21,6 +21,7 @@
 //	go run ./cmd/rayexplore -stereo                  # red-cyan anaglyph (3-D with glasses)
 //	go run ./cmd/rayexplore -story                   # the world unfolds as a story, in chapters
 //	go run ./cmd/rayexplore -branch                  # branching paths: walk left/right at a crossroads
+//	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
@@ -124,6 +125,7 @@ func main() {
 	portals := flag.Bool("portals", false, "drop an Escher portal ahead — a non-Euclidean window (best with -path)")
 	dream := flag.Bool("dream", false, "lens & film post: chromatic aberration, barrel warp, grain, vignette")
 	stereo := flag.Bool("stereo", false, "render in depth: a red-cyan anaglyph (view with red/cyan glasses)")
+	ris := flag.Int("ris", 0, "ReSTIR/RIS candidate lights per pixel (path mode): cleaner many-light worlds (e.g. 16)")
 	story := flag.Bool("story", false, "follow a story: the world unfolds in chapters, a beacon marks each threshold")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
@@ -213,6 +215,9 @@ func main() {
 	world.SetTime(dayT)
 	world.SetClouds(*clouds)
 	world.SetWeather(*weather) // rain/snow/fog that follows the walker (before the scene is built so fog bakes in)
+	if *ris > 1 {              // ReSTIR many-lights: cleaner fireflies/lanterns (NEE without MIS)
+		world.SetRIS(*ris)
+	}
 	if *portals {              // a non-Euclidean window ahead, linking to the place behind you
 		world.AddPortal(raytrace.NewPortal(
 			raytrace.Vec3{X: 0, Y: 2.2, Z: 20}, raytrace.Vec3{X: 2.5}, raytrace.Vec3{Y: 2.2},
@@ -220,6 +225,9 @@ func main() {
 	}
 	scene := world.Scene()
 	pathOpt := raytrace.PathOptions{Samples: 4, MaxDepth: 5, Seed: 1, NEE: true, MIS: true, Sobol: true}
+	if *ris > 1 { // RIS engages on NEE-only paths (mode 1): turn MIS off
+		pathOpt.MIS = false
+	}
 	// progressive refinement: stand still (press Enter) and the path-traced view
 	// keeps sharpening toward a clean render; moving or growing restarts it.
 	refiner := raydir.NewRefiner(pxW, pxH, 4, 256, pathOpt)

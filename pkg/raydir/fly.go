@@ -82,7 +82,14 @@ type World struct {
 	mood              *Mood                // optional: reads how you move and biases the director
 	portals           []raytrace.Object    // optional Escher portals (non-Euclidean windows)
 	decor             []raytrace.Object    // persistent placed objects (e.g. story beacons)
+	ris               int                  // ReSTIR/RIS candidate lights (0 = plain NEE)
 }
+
+// SetRIS enables ReSTIR-style direct lighting with n candidate lights per
+// shading point (0/1 = plain next-event estimation). It cuts noise in worlds with
+// many small lights (fireflies, lanterns, lit windows); the path tracer must run
+// NEE without MIS for it to engage.
+func (w *World) SetRIS(n int) { w.ris = n }
 
 // AddPortal places a portal (a non-Euclidean window; see raytrace.NewPortal) into
 // the world. Portals are seen through only by the path tracer.
@@ -254,7 +261,7 @@ func (w *World) Scene() *raytrace.Scene { return w.SceneWith(nil) }
 // SceneWith is Scene plus extra transient objects (e.g. a remote player's avatar)
 // that change every frame and so can't live in the persistent prop list.
 func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
-	s := &raytrace.Scene{SkyTop: w.SkyTop, SkyBottom: w.SkyBottom}
+	s := &raytrace.Scene{SkyTop: w.SkyTop, SkyBottom: w.SkyBottom, RISCandidates: w.ris}
 	var sun []raytrace.Object
 	if w.timeSet { // day/night: sky and a sun (a distant emitter) follow the time
 		top, bottom, sunDir, sunColor, up := SkyForTime(w.Time)

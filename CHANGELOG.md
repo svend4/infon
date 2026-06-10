@@ -40,6 +40,16 @@ adopting, and it was reimplemented better).
   (`reservoir.go`, `restir.go`): RIS reservoirs with unbiased spatial reuse,
   ~7–12× lower direct-lighting variance in many-light scenes.
 
+#### Added — engine wiring into the walk
+- **ReSTIR many-lights in the walk** (`World.SetRIS`, `rayexplore -ris N`): the
+  renderer's ReSTIR/RIS direct-lighting estimator (resampled importance sampling
+  over candidate lights, already unbiased and validated in `pkg/raytrace`) is now
+  wired into the explorable world, so a night full of fireflies, lanterns or lit
+  windows renders clean instead of speckled at the same sample count. `World.SetRIS`
+  threads the candidate count onto the scene; the path tracer runs NEE-without-MIS
+  so RIS engages. A world-level oracle confirms it stays unbiased — at equal samples
+  the RIS mean image matches plain NEE's — and the count propagates to the scene.
+
 #### Added — non-Euclidean space (Escher portals)
 - **Portals** (`pkg/raytrace/portal.go`, `Material.Link`): a finite rectangular
   doorway that teleports any ray that crosses it by an affine transform and lets it
