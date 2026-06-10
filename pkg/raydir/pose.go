@@ -101,3 +101,28 @@ func AvatarSpheres(p Pose, colour raytrace.Vec3) []raytrace.Object {
 		raytrace.Sphere{Center: p.Pos.Add(fwd.Scale(0.55)), Radius: 0.15, Mat: raytrace.Material{Color: colour, Emit: colour}},
 	}
 }
+
+// AvatarFace draws a participant's face from normalized keypoints (the landmarks of
+// internal/avatar, sent ~35 kbps over the wire) as a billboard at the pose: a
+// coloured head with the feature points dotted on its front, oriented by the pose's
+// yaw so the face shows when they turn toward you. This is the missing entity for a
+// meeting *inside* the world — the call rendered into the dream, not beside it.
+// Points are [x,y] in 0..1 (y down).
+func AvatarFace(p Pose, points [][2]float32, colour raytrace.Vec3) []raytrace.Object {
+	const faceW, faceH = 0.9, 1.05
+	fwd := raytrace.Vec3{X: math.Sin(p.Yaw), Z: math.Cos(p.Yaw)}
+	right := raytrace.Vec3{X: math.Cos(p.Yaw), Z: -math.Sin(p.Yaw)}
+	up := raytrace.Vec3{Y: 1}
+	head := p.Pos
+	out := []raytrace.Object{ // the head, a soft glowing disc in the avatar's colour
+		raytrace.Sphere{Center: head, Radius: 0.5, Mat: raytrace.Material{Color: colour, Emit: colour.Scale(0.5), Rough: 0.6}},
+	}
+	feat := raytrace.Material{Color: raytrace.Vec3{X: 0.05, Y: 0.05, Z: 0.06}, Rough: 0.85}
+	for _, kp := range points {
+		u := (float64(kp[0]) - 0.5) * faceW
+		v := (0.5 - float64(kp[1])) * faceH
+		pos := head.Add(right.Scale(u)).Add(up.Scale(v)).Add(fwd.Scale(0.46)) // on the front of the head
+		out = append(out, raytrace.Sphere{Center: pos, Radius: 0.045, Mat: feat})
+	}
+	return out
+}
