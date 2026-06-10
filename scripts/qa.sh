@@ -61,6 +61,7 @@ step "rayterrain" go run ./cmd/rayterrain -n 200 -w 80 -h 60 -spp 6 -out "$tmp/t
 step "rayscore" go run ./cmd/rayscore -seconds 1 -out "$tmp/score.wav"
 step "raymandala" go run ./cmd/raymandala -fold 6 -w 80 -h 80 -spp 6 -out "$tmp/mandala"
 step "rayask" go run ./cmd/rayask -w 80 -h 60 -spp 6 -out "$tmp/ask" "a test world"
+step "raydebate" go run ./cmd/raydebate -w 80 -h 60 -spp 6 -out "$tmp/debate" "a test place"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
