@@ -70,6 +70,14 @@ adopting, and it was reimplemented better).
   `rayexplore -path -dream` (grain shimmers from a per-frame seed). Tested: grain
   adds variance to a flat image and is deterministic in its seed, the vignette
   darkens corners, and chroma separates the R and B channels at an edge.
+- **Stereo depth — anaglyph** (`pkg/raytrace/stereo.go`): render the world in 3-D.
+  `StereoCameras` makes a left/right eye pair offset along the camera's own
+  horizontal axis (a parallel rig, midpoint = the original camera), and `Anaglyph`
+  fuses them red-cyan (red from the left eye, green/blue from the right). View with
+  red/cyan glasses for depth — near things shift more between the eyes than far ones.
+  `rayexplore -stereo`. Tested: the eyes straddle the camera horizontally at the
+  right separation, the anaglyph routes channels correctly, and a near object shows
+  more parallax than a far one through an actual render.
 
 #### Added — sampling, materials, effects
 - **Sampling**: Owen-scrambled Sobol (0,2) low-discrepancy sampling (`sobol.go`,

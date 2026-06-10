@@ -18,6 +18,7 @@
 //	go run ./cmd/rayexplore -path -style oil         # a painted (oil/ink/poster) look
 //	go run ./cmd/rayexplore -path -portals           # an Escher portal: a non-Euclidean window
 //	go run ./cmd/rayexplore -path -dream             # a lens-and-film dream pass
+//	go run ./cmd/rayexplore -stereo                  # red-cyan anaglyph (3-D with glasses)
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -101,6 +102,7 @@ func main() {
 	style := flag.String("style", "", "non-photoreal look: oil | ink | poster")
 	portals := flag.Bool("portals", false, "drop an Escher portal ahead — a non-Euclidean window (best with -path)")
 	dream := flag.Bool("dream", false, "lens & film post: chromatic aberration, barrel warp, grain, vignette")
+	stereo := flag.Bool("stereo", false, "render in depth: a red-cyan anaglyph (view with red/cyan glasses)")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -226,7 +228,23 @@ func main() {
 		}
 		var im image.Image
 		spp := 1
+		eye := func(ec raytrace.Camera) image.Image { // one eye, for stereo
+			if *pathT {
+				o := pathOpt
+				o.Samples = 16
+				return raytrace.PathRender(fscene, ec, pxW, pxH, o)
+			}
+			return raytrace.Render(fscene, ec, pxW, pxH, raytrace.Options{Samples: 1})
+		}
 		switch {
+		case *stereo:
+			// a red-cyan anaglyph: render both eyes and fuse them (bypasses the
+			// progressive refiner, which holds a single accumulator).
+			l, r := raytrace.StereoCameras(c, 0.32)
+			im = raytrace.Anaglyph(eye(l), eye(r))
+			if *pathT {
+				spp = 16
+			}
 		case *pathT && *denoise:
 			// fast clean frame: a few samples + an edge-aware (guided) à-trous denoise,
 			// so a moving path-traced walk stays clean without waiting to converge.
