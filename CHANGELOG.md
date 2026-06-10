@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 🔗 Cross-project interop (the Q6 house style)
+
+- **One 6-bit coordinate, documented** (`docs/Q6_INTEROP.md`, `Hexagram.String`):
+  the sibling repos (`meta`/`pro2`/`info150`) all ride the Q6 hypercube; this records
+  how `infon` connects to them **by data and protocol, not code** — a hexagram as a
+  canonical six-character `1`/`0` string (round-trips with `ParseHexagram` for all 64,
+  tested), plus the `tvcp-ai/1` director protocol and the rayscene schema. The only
+  things crossing a project boundary are six bits and a small JSON message.
+
 ### 🌉 Loose coordination (adapted from info150's portal)
 
 - **Hexagram bridges** (`pkg/raydir/hexbridge.go`, realising info150's `portal`

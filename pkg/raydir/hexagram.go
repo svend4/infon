@@ -140,6 +140,21 @@ func (h Hexagram) GrayWalk() []Hexagram {
 // GrayCode is the Gray-code Hamiltonian path over all 64 hexagrams from 0.
 func GrayCode() []Hexagram { return Hexagram{}.GrayWalk() }
 
+// String is the canonical six-bit interchange form: six '1'/'0' characters,
+// bottom line first — the shared coordinate that round-trips with ParseHexagram and
+// carries a hexagram between the Q6 projects (see docs/Q6_INTEROP.md).
+func (h Hexagram) String() string {
+	var b [6]byte
+	for i := 0; i < 6; i++ {
+		if h.Lines[i] {
+			b[i] = '1'
+		} else {
+			b[i] = '0'
+		}
+	}
+	return string(b[:])
+}
+
 // ParseHexagram reads six lines from a string of 1/0 or y/n (bottom-to-top), e.g.
 // "101010" or "yynnyn"; ok=false if it isn't six valid characters.
 func ParseHexagram(s string) (Hexagram, bool) {

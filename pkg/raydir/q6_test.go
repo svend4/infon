@@ -68,3 +68,19 @@ func TestGrayWalkHamiltonian(t *testing.T) {
 		t.Errorf("the walk should visit every hexagram once, got %d distinct", len(seen))
 	}
 }
+
+// The 6-bit interchange format round-trips for all 64 hexagrams (the lingua franca
+// shared with meta/pro2/info150 — see docs/Q6_INTEROP.md).
+func TestHexInteropRoundTrip(t *testing.T) {
+	for n := 0; n < 64; n++ {
+		h := HexagramFromNumber(n)
+		s := h.String()
+		if len(s) != 6 {
+			t.Fatalf("interchange string for %d should be 6 chars, got %q", n, s)
+		}
+		back, ok := ParseHexagram(s)
+		if !ok || back.Number() != n {
+			t.Fatalf("round trip failed: %d -> %q -> %d (ok=%v)", n, s, back.Number(), ok)
+		}
+	}
+}
