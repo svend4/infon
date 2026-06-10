@@ -76,7 +76,29 @@ type World struct {
 	envAt             float64              // time the env sampler was built for
 	applied           []Region             // applied regions (kept so far-behind ones can be pruned)
 	flock             *Flock               // optional living inhabitants (boids)
+	weather           *Weather             // optional precipitation/fog
 }
+
+// SetWeather gives the world weather of the given kind ("rain", "snow", "fog");
+// an empty kind clears it.
+func (w *World) SetWeather(kind string) {
+	if kind == "" {
+		w.weather = nil
+		return
+	}
+	w.weather = NewWeather(kind, 7)
+}
+
+// StepWeather advances the weather by dt seconds, keeping the band around the
+// walker (centre).
+func (w *World) StepWeather(dt float64, centre raytrace.Vec3) {
+	if w.weather != nil {
+		w.weather.Step(dt, centre)
+	}
+}
+
+// HasWeather reports whether the world currently has weather.
+func (w *World) HasWeather() bool { return w.weather != nil }
 
 // SpawnFlock gives the world a flock of n inhabitants near `at` (seeded, so it
 // animates identically everywhere).
@@ -128,7 +150,9 @@ func (w *World) SetAnimTime(sec float64) { w.animTime = sec }
 
 // HasAnimated reports whether the world contains any moving objects (so a viewer
 // knows the frame isn't static and progressive refinement should restart).
-func (w *World) HasAnimated() bool { return len(w.animated) > 0 || w.HasCreatures() }
+func (w *World) HasAnimated() bool {
+	return len(w.animated) > 0 || w.HasCreatures() || (w.weather != nil && len(w.weather.parts) > 0)
+}
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
 func NewWorld() *World {
@@ -215,6 +239,14 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	}
 	if w.flock != nil { // living inhabitants, re-placed each frame
 		s.Objects = append(s.Objects, w.flock.Objects()...)
+	}
+	if w.weather != nil { // rain/snow particles, and fog that hazes the distance
+		s.Objects = append(s.Objects, w.weather.Objects()...)
+		if d, c, on := w.weather.Fog(); on {
+			s.FogDensity, s.FogColor = d, c
+			s.SkyTop = s.SkyTop.Scale(0.45).Add(c.Scale(0.55)) // haze the sky to match
+			s.SkyBottom = s.SkyBottom.Scale(0.35).Add(c.Scale(0.65))
+		}
 	}
 	s.Objects = append(s.Objects, extra...)
 	s.BuildBVH()

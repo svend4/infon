@@ -12,6 +12,7 @@
 //	go run ./cmd/rayexplore -sound                  # hear the world (procedural ambient)
 //	go run ./cmd/rayexplore -guide                  # an AI companion leads you on a tour
 //	go run ./cmd/rayexplore -creatures              # a flock lives in the world and reacts to you
+//	go run ./cmd/rayexplore -weather rain           # rain (or snow/fog) that follows you
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -89,6 +90,7 @@ func main() {
 	sound := flag.Bool("sound", false, "play a procedural soundscape of the world (needs an audio device)")
 	guide := flag.Bool("guide", false, "an AI companion that walks with you and leads a tour of the world")
 	creatures := flag.Bool("creatures", false, "a flock of inhabitants that lives in the world, gathers at places, and scatters from you")
+	weather := flag.String("weather", "", "weather that follows you: rain | snow | fog")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -134,6 +136,7 @@ func main() {
 	showMap := false // overlay the minimap of named places (toggle with 'm')
 	world.SetTime(dayT)
 	world.SetClouds(*clouds)
+	world.SetWeather(*weather) // rain/snow/fog that follows the walker (before the scene is built so fog bakes in)
 	scene := world.Scene()
 	pathOpt := raytrace.PathOptions{Samples: 4, MaxDepth: 5, Seed: 1, NEE: true, MIS: true, Sobol: true}
 	// progressive refinement: stand still (press Enter) and the path-traced view
@@ -182,6 +185,7 @@ func main() {
 		world.SetAnimTime(time.Since(start).Seconds()) // keep the world alive
 		world.Tread(cam.Pos)                           // wear a path where you walk
 		world.StepCreatures(dt, cam.Pos)               // the inhabitants live and react
+		world.StepWeather(dt, cam.Pos)                 // rain/snow drifts around you
 		featMu.Lock()
 		feat = world.Ambient()
 		featMu.Unlock()

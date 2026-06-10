@@ -210,6 +210,14 @@ adopting, and it was reimplemented better).
   finite and airborne). `rayexplore -creatures` gives the world a flock; the render
   loop now rebuilds the scene each frame whenever the world is alive (movers, flock,
   or a companion), so motion actually shows.
+- **Weather that follows you** (`pkg/raydir/weather.go`): a sky that does something —
+  `rayexplore -weather rain|snow|fog`. Rain streaks down on the wind (thin ribbon
+  geometry tilted along the fall direction), snow drifts with a lateral sway, and a
+  band of particles is recycled around the walker as it falls or leaves view, so the
+  count — and the cost — stays flat however far you walk. Fog is aerial perspective
+  (Beer-Lambert distance fade) plus a hazed sky, so the world recedes into the
+  distance. Seeded and deterministic; tested for flat particle count, the band
+  tracking the walker, descent, wind tilt, and the fog scene wiring.
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"
