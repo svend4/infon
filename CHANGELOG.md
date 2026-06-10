@@ -41,6 +41,17 @@ existing region/portal/map/director architecture.
   not). `rayexplore -maze` drops one across the path. Tested: the grid is sized and
   deterministic, roads/open squares are walkable while block interiors are blocked,
   and the geometry is flat, repeatable and within the grid.
+- **Mirror & layered worlds** (`pkg/raydir/mirror.go`, `pkg/raydir/layers.go`): two
+  more structures from the dream maps. *Mirror* — the hackers' finding that the
+  sleeping world is a north-south reflection of the waking one ("the top of the map
+  is south"): `MirrorSpecZ` flips a spec's Z, `mirrorObjectsZ` reflects built
+  geometry (triangles re-wound so faces still point out), and `rayexplore -mirror`
+  doubles the world into an eerie symmetry. *Layers* — a vertical stack (upper /
+  middle / lower): `LayerSky` repaints the mood (the lower world dark and cold), and
+  `DescentTunnel` builds the dark, ribbed shaft you fall down into it
+  (`rayexplore -layer upper|lower`). Tested: the N/S flip and reflection (incl.
+  winding), the world gains a true reflection, upper is brighter than lower, the
+  layer repaints the sky, and the tunnel descends within its radius.
 
 ### 🎨 CPU ray-tracing & rendering engine (branch `claude/epic-sagan-EWTTr`)
 

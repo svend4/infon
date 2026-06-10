@@ -84,6 +84,9 @@ type World struct {
 	decor             []raytrace.Object    // persistent placed objects (e.g. story beacons)
 	ris               int                  // ReSTIR/RIS candidate lights (0 = plain NEE)
 	fog               *Cartograph          // fog-of-war exploration record (bird's-eye map)
+	mirror            bool                 // dream N/S symmetry: content doubled by reflection
+	mirrorZ           float64              // the plane the world is mirrored across
+	layer             Layer                // which vertical layer (middle/upper/lower)
 }
 
 // Reveal marks the area around p as explored on the bird's-eye map (fog-of-war).
@@ -335,6 +338,10 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 			s.SkyTop = s.SkyTop.Scale(0.45).Add(c.Scale(0.55)) // haze the sky to match
 			s.SkyBottom = s.SkyBottom.Scale(0.35).Add(c.Scale(0.65))
 		}
+	}
+	if w.mirror { // dream symmetry: a north-south reflection of the authored world
+		s.Objects = append(s.Objects, mirrorObjectsZ(w.props, w.mirrorZ)...)
+		s.Objects = append(s.Objects, mirrorObjectsZ(w.decor, w.mirrorZ)...)
 	}
 	s.Objects = append(s.Objects, extra...)
 	s.BuildBVH()

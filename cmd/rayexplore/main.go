@@ -22,6 +22,8 @@
 //	go run ./cmd/rayexplore -story                   # the world unfolds as a story, in chapters
 //	go run ./cmd/rayexplore -branch                  # branching paths: walk left/right at a crossroads
 //	go run ./cmd/rayexplore -maze -path              # a "square forest" labyrinth of blocks and roads
+//	go run ./cmd/rayexplore -mirror                  # dream symmetry: a north-south mirror world
+//	go run ./cmd/rayexplore -layer lower -path       # descend to the dark lower world
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -129,6 +131,8 @@ func main() {
 	ris := flag.Int("ris", 0, "ReSTIR/RIS candidate lights per pixel (path mode): cleaner many-light worlds (e.g. 16)")
 	story := flag.Bool("story", false, "follow a story: the world unfolds in chapters, a beacon marks each threshold")
 	maze := flag.Bool("maze", false, "a 'square forest': a flat grid of jungle/building blocks split by roads — a labyrinth to walk")
+	mirror := flag.Bool("mirror", false, "dream symmetry: the world is doubled by a north-south reflection (turn around to see it)")
+	layer := flag.String("layer", "", "vertical layer: upper (airy) | lower (dark, a descent tunnel)")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -214,7 +218,18 @@ func main() {
 	dr := terminal.NewDiffRenderer()
 	dayT := 0.32     // time of day; the 't' key steps it through dawn/noon/dusk/night
 	showMap := false // overlay the minimap of named places (toggle with 'm')
-	world.SetTime(dayT)
+	switch *layer { // a vertical layer paints its own sky (instead of a time of day)
+	case "upper":
+		world.SetLayer(raydir.LayerUpper)
+	case "lower":
+		world.SetLayer(raydir.LayerLower)
+		world.AddDecor(raydir.DescentTunnel(raytrace.Vec3{X: 0, Y: 0, Z: 6}, 10)...) // the way down
+	default:
+		world.SetTime(dayT)
+	}
+	if *mirror {
+		world.SetMirror(true, 0) // reflect the world north-south across the start
+	}
 	world.SetClouds(*clouds)
 	world.SetWeather(*weather) // rain/snow/fog that follows the walker (before the scene is built so fog bakes in)
 	if *ris > 1 {              // ReSTIR many-lights: cleaner fireflies/lanterns (NEE without MIS)
