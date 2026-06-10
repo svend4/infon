@@ -147,6 +147,7 @@ func main() {
 	materialize := flag.Bool("materialize", false, "each new region 'renders in' from coarse voxel blocks to sharp, the way a dream forms")
 	flyer := flag.Bool("flyer", false, "a predator (the 'flyer') stalks you and drains your luminosity — keep ahead of it")
 	robots := flag.Int("robots", 0, "spawn N patrolling robots — the logistics yard shares your world (status beacons green->red)")
+	temporal := flag.Bool("temporal", false, "temporal reprojection: reuse samples across camera motion for cleaner path-traced frames while walking (path mode, static world)")
 	sprites := flag.Bool("sprites", false, "dream characters you can question: type '?your question' to ask the nearest")
 	intention := flag.Bool("intention", false, "the art of intention: type '!a theme' and hold it — the world grown ahead bends to your will")
 	hexagram := flag.String("hexagram", "", "cast a world from an I-Ching hexagram: six lines like 101010 or yynnyn")
@@ -291,6 +292,14 @@ func main() {
 	// progressive refinement: stand still (press Enter) and the path-traced view
 	// keeps sharpening toward a clean render; moving or growing restarts it.
 	refiner := raydir.NewRefiner(pxW, pxH, 4, 256, pathOpt)
+	// optional temporal reprojection: carries samples across camera motion so a
+	// walk through a STATIC world stays clean; recreated (reset) on any scene change.
+	var tr *raytrace.TemporalReprojector
+	resetTR := func() {}
+	if *temporal {
+		tr = raytrace.NewTemporalReprojector(pxW, pxH, 0.15)
+		resetTR = func() { tr = raytrace.NewTemporalReprojector(pxW, pxH, 0.15) }
+	}
 
 	formStart := time.Now() // when the current region began "rendering in" (materialize)
 	// grow authors a new region ahead and rebuilds the scene.
@@ -312,6 +321,7 @@ func main() {
 		}
 		scene = world.Scene()
 		refiner.Reset()        // the scene changed
+		resetTR()              // history is stale after the world changes
 		capturePending = true  // a new place worth a postcard
 		regionsSinceFork++     // toward the next crossroads
 		formStart = time.Now() // the new region renders in from blocks
@@ -429,6 +439,11 @@ func main() {
 			alb, nrm := raytrace.GBuffer(fscene, c, pxW, pxH)
 			im = raytrace.DenoiseGuided(raw, alb, nrm, 4, 0.5, 0.2, 0.3)
 			spp = 5
+		case *pathT && *temporal && !world.HasAnimated() && comp == nil:
+			// temporal reprojection reuses samples across motion (clean while walking);
+			// skipped for animated worlds, which would ghost (history is static-only).
+			im = tr.Frame(fscene, c, pathOpt)
+			spp = pathOpt.Samples
 		case *pathT:
 			if world.HasAnimated() || comp != nil {
 				refiner.Reset() // a moving world can't accumulate; render fresh
@@ -578,9 +593,11 @@ func main() {
 				world.SetTime(dayT)
 				scene = world.Scene()
 				refiner.Reset()
+				resetTR()
 			case 'p':
 				*pathT = !*pathT
 				refiner.Reset()
+				resetTR()
 			case 'm':
 				showMap = !showMap
 			case 'k': // save the bird's-eye fog-of-war map
@@ -610,6 +627,7 @@ func main() {
 		if world.Prune(cam.Pos.Z-55) > 0 {
 			scene = world.Scene()
 			refiner.Reset()
+			resetTR()
 		}
 		// after walking a stretch since the last choice, the next crossroads appears.
 		if fork != nil && !forkActive && !fork.Done() && regionsSinceFork >= 3 {
