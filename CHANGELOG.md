@@ -72,6 +72,15 @@ existing region/portal/map/director architecture.
   Tested: strength builds and resets on change, the prompt is unchanged while weak,
   coloured as it builds and taken over when sustained, and a held intention actually
   manifests (the director grows the theme into the world).
+- **I-Ching hexagram worlds** (`pkg/raydir/hexagram.go`): reading the world from a
+  hexagram, the hackers' "DNA of the tonal" — six lines, two trigrams, sixty-four
+  readings. A `Hexagram`'s two trigrams (heaven, lake, fire, thunder, wind, water,
+  mountain, earth) name an upper and a lower theme that compose a director prompt,
+  and its six-bit number gives a deterministic seed, so casting a hexagram conjures
+  one specific, reproducible world. `CastHexagram`, `ParseHexagram` ("101010" /
+  "yynnyn"); `rayexplore -hexagram 101010`. (Kin to the I-Ching-style positional id
+  in `pkg/tangram`.) Tested: the number is a bijection over all 64, name/prompt come
+  from the trigrams, casting and the seed are deterministic, and parsing validates.
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two
