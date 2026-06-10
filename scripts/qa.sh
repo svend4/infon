@@ -57,6 +57,7 @@ step "rayagent" go run ./cmd/rayagent -w 80 -h 60 -cols 2 -rows 1 -spp 6 -out "$
 step "rayhard" go run ./cmd/rayhard -w 64 -h 48 -spp 6 -out "$tmp/hard"
 step "raydetect" go run ./cmd/raydetect -w 96 -h 64 -spp 8 -out "$tmp/detect"
 step "rayclimate" go run ./cmd/rayclimate -seed 42 -px 8 -out "$tmp/climate"
+step "rayterrain" go run ./cmd/rayterrain -n 200 -w 80 -h 60 -spp 6 -out "$tmp/terrain"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
