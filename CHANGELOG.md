@@ -226,6 +226,16 @@ adopting, and it was reimplemented better).
   under winter snow and the sky tints to match, following the frontier as the world
   grows. Pure functions of position, so deterministic and tested (cycle order,
   periodicity, palette character, smooth cross-fade, tree tinting, snowy floor).
+- **A world with a mood** (`pkg/raydir/mood.go`): `rayexplore -mood` lets the director
+  read how you move and shift the tone of what it builds. A `Mood` keeps smoothed
+  (EMA) estimates of your speed and turn rate and classifies them — *calm* (you
+  linger), *restless* (you press on), *curious* (you look around) — then biases the
+  grow prompt toward a matching tone ("quiet, still and intimate" / "vast, grand and
+  open" / "strange, varied and surprising"). The reference author now understands
+  those tones, so even offline the world it builds changes with your mood: a calm
+  walk grows still ponds and warm lanterns, a restless one a grand distant monument,
+  a curious one strange floating oddities. Tested end to end (each gait reads the
+  right mood, the prompts differ, and the three tones author three different scenes).
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"

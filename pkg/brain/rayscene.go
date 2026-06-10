@@ -142,6 +142,25 @@ func refRayScene(req Request) Response {
 			ObjSpec{Kind: "fractal", Name: "mandala", X: 3, Y: 1.6, Z: 3, R: 1.6, Color: [3]float64{0.4, 0.85, 0.85}, Emit: [3]float64{0.3, 0.8, 0.8}},
 		)
 	}
+	// mood: the director shifts tone to how the walker has been moving (see
+	// raydir's Mood). "restless" wants the grand and open; "calm" the quiet and
+	// intimate; "curious" the strange and varied.
+	if hasAny(p.Prompt, "vast", "grand", "open") {
+		spec.Objects = append(spec.Objects, ObjSpec{
+			Kind: "pyramid", X: 0, Y: 4, Z: 12, S: [3]float64{5, 4, 5},
+			Color: [3]float64{0.5, 0.5, 0.56}, Rough: 0.5,
+		})
+	}
+	if hasAny(p.Prompt, "quiet", "still", "intimate") {
+		spec.Objects = append(spec.Objects,
+			ObjSpec{Kind: "water", Y: 0.05, Color: [3]float64{0.1, 0.28, 0.4}, Reflect: 0.6},
+			ObjSpec{X: 2, Y: 0.6, Z: 1.5, R: 0.35, Color: [3]float64{1, 0.85, 0.6}, Emit: [3]float64{3, 2.2, 1}})
+	}
+	if hasAny(p.Prompt, "strange", "varied", "surprising") {
+		spec.Objects = append(spec.Objects,
+			ObjSpec{Kind: "fractal", Name: "melt", X: 2.6, Y: 1.6, Z: 2, R: 1.2, Color: [3]float64{0.8, 0.5, 0.9}, Reflect: 0.2},
+			ObjSpec{X: -2.6, Y: 2.4, Z: 2, R: 0.5, Color: [3]float64{0.3, 0.9, 0.7}, Anim: "bob", AAmp: 0.5, ASpeed: 0.4})
+	}
 	// moving things: the world comes alive on a keyword (motion is a formula
 	// evaluated locally from the shared clock — meaning, not frames).
 	if hasAny(p.Prompt, "bird", "flock") {

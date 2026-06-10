@@ -14,6 +14,7 @@
 //	go run ./cmd/rayexplore -creatures              # a flock lives in the world and reacts to you
 //	go run ./cmd/rayexplore -weather rain           # rain (or snow/fog) that follows you
 //	go run ./cmd/rayexplore -seasons                 # walk forward through spring→summer→autumn→winter
+//	go run ./cmd/rayexplore -mood                    # the world's tone follows how you move
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -93,6 +94,7 @@ func main() {
 	creatures := flag.Bool("creatures", false, "a flock of inhabitants that lives in the world, gathers at places, and scatters from you")
 	weather := flag.String("weather", "", "weather that follows you: rain | snow | fog")
 	seasons := flag.Bool("seasons", false, "walk through the year: foliage, ground and sky shift spring→summer→autumn→winter")
+	mood := flag.Bool("mood", false, "the director reads how you move (linger/press on/wander) and shifts the tone of what it builds")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -112,7 +114,8 @@ func main() {
 	nextPrompt := func() string { p := prompts[pi%len(prompts)]; pi++; return p }
 
 	world := raydir.NewWorld()
-	world.SetSeasonal(*seasons) // before any region grows, so foliage is tinted as it's built
+	world.SetSeasonal(*seasons)   // before any region grows, so foliage is tinted as it's built
+	world.SetMoodSensing(*mood)   // read how the walker moves and bias what's grown
 	frontZ := 10.0
 	if *imageSeed != "" { // walk into a world derived from a picture
 		if img, err := loadImage(*imageSeed); err == nil {
@@ -123,7 +126,7 @@ func main() {
 		}
 	}
 	if world.Chunks() == 0 {
-		if _, err := world.Grow(b, nextPrompt(), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
+		if _, err := world.Grow(b, world.BiasPrompt(nextPrompt()), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
 			fmt.Fprintln(os.Stderr, "director failed to author the first region:", err)
 		}
 	}
@@ -150,7 +153,7 @@ func main() {
 	grow := func() {
 		jitter := math.Sin(float64(world.Chunks())*1.7) * 2.5
 		frontZ += 14
-		n, err := world.Grow(b, nextPrompt(), raytrace.Vec3{X: jitter, Y: 0, Z: frontZ})
+		n, err := world.Grow(b, world.BiasPrompt(nextPrompt()), raytrace.Vec3{X: jitter, Y: 0, Z: frontZ})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "grow failed:", err)
 			return
@@ -189,6 +192,7 @@ func main() {
 		world.Tread(cam.Pos)                           // wear a path where you walk
 		world.StepCreatures(dt, cam.Pos)               // the inhabitants live and react
 		world.StepWeather(dt, cam.Pos)                 // rain/snow drifts around you
+		world.ObserveWalker(raydir.PoseOf(cam), dt)    // read how you move (for mood)
 		featMu.Lock()
 		feat = world.Ambient()
 		featMu.Unlock()
@@ -242,6 +246,9 @@ func main() {
 		season := ""
 		if world.Seasonal() {
 			season = " | 🍂" + raydir.SeasonAt(cam.Pos.Z).Name
+		}
+		if m := world.MoodName(); m != "" {
+			season += " | 🎭" + m
 		}
 		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d%s | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f g=grow t=time p=path m=map Enter=refine x=quit] ",
 			who, world.Chunks(), world.Props(), mins/60, mins%60, spp, season, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)

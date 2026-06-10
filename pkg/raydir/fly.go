@@ -79,6 +79,42 @@ type World struct {
 	weather           *Weather             // optional precipitation/fog
 	seasonal          bool                 // foliage/ground/sky follow the season along the walk
 	frontierZ         float64              // furthest applied region depth (the seasonal frontier)
+	mood              *Mood                // optional: reads how you move and biases the director
+}
+
+// SetMoodSensing turns mood reading on or off. When on, the world watches how the
+// walker moves and biases the prompts it grows toward a matching tone.
+func (w *World) SetMoodSensing(on bool) {
+	if on {
+		w.mood = NewMood()
+	} else {
+		w.mood = nil
+	}
+}
+
+// ObserveWalker feeds the walker's pose to the mood reader (dt seconds since the
+// last observation). A no-op when mood sensing is off.
+func (w *World) ObserveWalker(p Pose, dt float64) {
+	if w.mood != nil {
+		w.mood.Observe(p, dt)
+	}
+}
+
+// MoodName is the current read of the walker's behaviour ("" when sensing is off).
+func (w *World) MoodName() string {
+	if w.mood == nil {
+		return ""
+	}
+	return w.mood.Name()
+}
+
+// BiasPrompt appends the current mood's tone to a director prompt, so the world
+// it grows matches how you've been moving. Unchanged when sensing is off.
+func (w *World) BiasPrompt(prompt string) string {
+	if w.mood == nil || prompt == "" {
+		return prompt
+	}
+	return prompt + ", " + w.mood.Prompt()
 }
 
 // SetSeasonal turns the seasonal cycle on or off. Set it before growing the world
