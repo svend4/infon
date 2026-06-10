@@ -55,6 +55,7 @@ step "rayyard (live)" go run ./cmd/rayyard -live -w 80 -h 60 -cols 2 -rows 1 -sp
 step "rayspectate" go run ./cmd/rayspectate -w 80 -h 60 -spp 6 -players 3 -robots 2 -out "$tmp/spectate"
 step "rayagent" go run ./cmd/rayagent -w 80 -h 60 -cols 2 -rows 1 -spp 6 -out "$tmp/agent"
 step "rayhard" go run ./cmd/rayhard -w 64 -h 48 -spp 6 -out "$tmp/hard"
+step "raydetect" go run ./cmd/raydetect -w 96 -h 64 -spp 8 -out "$tmp/detect"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
