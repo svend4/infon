@@ -74,11 +74,11 @@ func (r *Robot) Objects() []raytrace.Object {
 	c := robotStatusColor(r.Status)
 	body := raytrace.Material{Color: raytrace.Vec3{X: 0.55, Y: 0.57, Z: 0.6}, Metal: 0.5, Rough: 0.3}
 	head := raytrace.Material{Color: raytrace.Vec3{X: 0.5, Y: 0.52, Z: 0.56}, Metal: 0.4, Rough: 0.35}
-	beacon := raytrace.Material{Color: c, Emit: c.Scale(1.5 + 3.0*r.Status), Rough: 0.4}
+	beacon := raytrace.Material{Color: c, Emit: c.Scale(0.8 + 2.2*r.Status), Rough: 0.4}
 	return []raytrace.Object{
 		raytrace.Sphere{Center: r.Pos, Radius: 0.45, Mat: body},
 		raytrace.Sphere{Center: r.Pos.Add(raytrace.Vec3{Y: 0.6}), Radius: 0.28, Mat: head},
-		raytrace.Sphere{Center: r.Pos.Add(raytrace.Vec3{Y: 0.98}), Radius: 0.15, Mat: beacon},
+		raytrace.Sphere{Center: r.Pos.Add(raytrace.Vec3{Y: 1.02}), Radius: 0.2, Mat: beacon},
 	}
 }
 

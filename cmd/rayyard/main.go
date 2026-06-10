@@ -18,6 +18,7 @@ import (
 	"math"
 	"os"
 
+	"github.com/svend4/infon/pkg/fleet"
 	"github.com/svend4/infon/pkg/microfont"
 	"github.com/svend4/infon/pkg/raydir"
 	"github.com/svend4/infon/pkg/raytrace"
@@ -31,19 +32,40 @@ func main() {
 		cols = flag.Int("cols", 3, "contact-sheet columns")
 		rows = flag.Int("rows", 2, "contact-sheet rows")
 		spp  = flag.Int("spp", 48, "samples per pixel")
+		live = flag.Bool("live", false, "drive each beacon from the monitoring engine — one robot overheats and reddens on its own")
 	)
 	flag.Parse()
 
 	world := raydir.NewWorld()
 	world.SetTime(0.4) // a morning sun: shadows and warm light on the metal bodies
-	// A yard of robots, each on a square patrol loop, status spread green -> red.
+	// A yard of robots, each on a square patrol loop.
 	centers := []raytrace.Vec3{
 		{X: -4, Z: 6}, {X: 0, Z: 7}, {X: 4, Z: 6}, {X: -2, Z: 10}, {X: 3, Z: 11},
 	}
+	var mon *fleet.RobotMonitor
+	if *live {
+		mon = fleet.NewRobotMonitor()
+	}
 	for i, c := range centers {
 		loop := []raytrace.Vec3{c, c.Add(raytrace.Vec3{X: 3.5}), c.Add(raytrace.Vec3{X: 3.5, Z: 3.5}), c.Add(raytrace.Vec3{Z: 3.5})}
+		// Fixed status spread green->red when not live; the monitor overwrites it live.
 		status := float64(i) / float64(len(centers)-1)
-		world.SpawnRobot(raydir.NewRobot(c, loop, status))
+		rb := raydir.NewRobot(c, loop, status)
+		world.SpawnRobot(rb)
+		if *live {
+			idx := i
+			mon.Add(rb, fmt.Sprintf("amr-%d", i+1), func(t float64) []fleet.Signal {
+				thermal := 0.12 + 0.03*float64(idx) // a steady, slightly-warm baseline
+				if idx == 3 {                       // one robot's motor overheats over time
+					thermal = 0.13 + 0.16*t
+				}
+				return []fleet.Signal{
+					{Name: "thermal", Value: thermal, Weight: 1},
+					{Name: "vibration", Value: 0.15, Weight: 1},
+					{Name: "battery", Value: 0.3, Weight: 0.6},
+				}
+			})
+		}
 	}
 
 	cam := raytrace.Camera{Pos: raytrace.Vec3{X: 0, Y: 4.2, Z: -1.5}, Pitch: -0.4, FOV: math.Pi / 3}
@@ -59,14 +81,26 @@ func main() {
 	tsec := 0.0
 	for f := 0; f < frames; f++ {
 		for k := 0; k < 8; k++ { // ~0.8 s of motion between frames
-			world.StepRobots(0.1)
+			if *live {
+				mon.Step(0.1) // steps robots AND drives beacons from the engine
+			} else {
+				world.StepRobots(0.1)
+			}
 			tsec += 0.1
 		}
 		img := raytrace.PathRender(world.Scene(), cam, *w, *h, opt)
+		img = raytrace.PostProcess(img, 1.0, 0.75, 0.6) // bloom the status beacons into a glow
 		cx := (f % *cols) * (*w + gap)
 		cy := (f / *cols) * (*h + labelH + gap)
 		microfont.Draw(sheet, cx+3, cy+2, 1, fmt.Sprintf("t=%.1fs", tsec), color.RGBA{R: 220, G: 220, B: 230, A: 255})
 		draw.Draw(sheet, image.Rect(cx, cy+labelH, cx+*w, cy+labelH+*h), img, img.Bounds().Min, draw.Src)
+		if *live {
+			for _, a := range mon.Assessments() {
+				if a.Level != fleet.LevelOK {
+					fmt.Printf("  t=%.1fs %s\n", tsec, a.Cue)
+				}
+			}
+		}
 	}
 
 	writePNG(*out+".png", sheet)
