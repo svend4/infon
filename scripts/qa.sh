@@ -47,6 +47,7 @@ step "conform (reference brain)" go run ./cmd/conform
 step "rayfleet" go run ./cmd/rayfleet -w 96 -h 64 -spp 8 -vfx=false -out "$tmp/fleet"
 step "raycamp" go run ./cmd/raycamp -gx 6 -gz 6 -w 96 -h 64 -spp 6 -out "$tmp/camp"
 step "raygates" go run ./cmd/raygates -out "$tmp/gates"
+step "raywatch" go run ./cmd/raywatch -heat 0.8 -w 96 -h 64 -spp 6 -out "$tmp/watch"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
