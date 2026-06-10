@@ -65,6 +65,7 @@ step "raydebate" go run ./cmd/raydebate -w 80 -h 60 -spp 6 -out "$tmp/debate" "a
 step "rayreading" go run ./cmd/rayreading -seed 7 -w 80 -h 60 -cols 2 -rows 1 -spp 6 -out "$tmp/reading"
 step "rayvoice" go run ./cmd/rayvoice -w 80 -h 60 -spp 6 -out "$tmp/voice"
 step "rayface" go run ./cmd/rayface -w 80 -h 60 -spp 6 -n 2 -out "$tmp/face"
+step "raystream" go run ./cmd/raystream -frames 8 -w 80 -h 60 -spp 6 -out "$tmp/stream"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
