@@ -294,6 +294,13 @@ adopting, and it was reimplemented better).
   procedural ambient. Tested: day is major / night is minor and slower, a livelier
   world plays faster, calm is pentatonic, every note lands in the chosen scale, the
   render is deterministic and audible, and `World.Score` tracks day vs night.
+- **A travelogue** (`pkg/raydir/travelogue.go`): the walk becomes a keepsake.
+  `rayexplore -travelogue` captures a moment at each new place — the place's name,
+  the time of day, and a thumbnail of the view — and on quit assembles them into one
+  illustrated page: a postcard montage, each thumbnail captioned with its place and
+  a little clock (drawn with the microfont), saved to `travelogue.png`. Tested:
+  capture caps at the most recent moments, the thumbnailer scales and keeps colour,
+  the clock formats, and the rendered page contains each captured thumbnail.
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"

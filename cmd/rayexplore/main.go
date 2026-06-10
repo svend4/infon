@@ -21,6 +21,7 @@
 //	go run ./cmd/rayexplore -stereo                  # red-cyan anaglyph (3-D with glasses)
 //	go run ./cmd/rayexplore -story                   # the world unfolds as a story, in chapters
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
+//	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -37,7 +38,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"math"
 	"os"
 	"strings"
@@ -124,6 +125,7 @@ func main() {
 	stereo := flag.Bool("stereo", false, "render in depth: a red-cyan anaglyph (view with red/cyan glasses)")
 	story := flag.Bool("story", false, "follow a story: the world unfolds in chapters, a beacon marks each threshold")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
+	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -162,6 +164,11 @@ func main() {
 		n, tot := tale.Progress()
 		storyBanner = fmt.Sprintf("📖 %d/%d %s — %s", n, tot, c.Title, c.Line)
 	}
+	var tlog *raydir.Travelogue
+	if *travel {
+		tlog = raydir.NewTravelogue("A Walk Through Worlds")
+	}
+	capturePending := *travel // capture the opening view, then each new place
 	frontZ := 10.0
 	if *imageSeed != "" { // walk into a world derived from a picture
 		if img, err := loadImage(*imageSeed); err == nil {
@@ -221,7 +228,8 @@ func main() {
 			}
 		}
 		scene = world.Scene()
-		refiner.Reset() // the scene changed
+		refiner.Reset()       // the scene changed
+		capturePending = true // a new place worth a postcard
 	}
 
 	// optional procedural soundscape: synthesise the world's ambient locally and
@@ -324,6 +332,14 @@ func main() {
 			dreamFrame++
 			im = raytrace.Dream(im, raytrace.DreamOptions{Chroma: 0.012, Grain: 0.04, Vignette: 0.25, Distort: 0.12, Seed: uint32(dreamFrame)})
 		}
+		if tlog != nil && capturePending { // a postcard of this place
+			place := "the world"
+			if marks := world.Landmarks(); len(marks) > 0 {
+				place = marks[len(marks)-1].Name
+			}
+			tlog.Capture(place, dayT, raydir.Thumbnail(im, 200, 130))
+			capturePending = false
+		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
 		if showMap {
 			fmt.Print("\n" + raydir.Minimap(world.Landmarks(), nil, cam.Pos, *cols, *rows/2))
@@ -382,6 +398,13 @@ func main() {
 			case 'm':
 				showMap = !showMap
 			case 'x':
+				if tlog != nil && tlog.Len() > 0 { // save the journey's postcards
+					if f, err := os.Create("travelogue.png"); err == nil {
+						_ = png.Encode(f, tlog.Render(3))
+						_ = f.Close()
+						fmt.Fprintf(os.Stderr, "\nsaved travelogue.png (%d moments)\n", tlog.Len())
+					}
+				}
 				return
 			}
 		}
