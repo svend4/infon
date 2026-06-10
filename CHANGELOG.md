@@ -153,6 +153,14 @@ adopting, and it was reimplemented better).
   derives the levels from the world. The sound is reconstructed from meaning, never
   streamed — another sense for "meaning, not pixels". `rayexplore -sound` plays it
   (graceful fallback without a device); a `.wav` of a dusk forest is in the showcase.
+- **Gallery & director bench** (`cmd/raygallery`, `cmd/raybench`,
+  `pkg/raydir/gallery.go`, `bench.go`): `raygallery` browses a directory of saved
+  worlds (`.rwld`) and recordings (`.rrec`), printing each one's regions/named
+  places or events/duration and how to open it — a little gallery of shareable
+  worlds and walks, each a few KB of meaning. `raybench` evaluates a director (the
+  reference brain, or a live model via `-url`): it asks for many scenes and reports
+  how renderable, rich and varied they are (`BenchDirector`) — a quick objective
+  read before a live session.
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"
