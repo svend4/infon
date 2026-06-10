@@ -83,7 +83,19 @@ type World struct {
 	portals           []raytrace.Object    // optional Escher portals (non-Euclidean windows)
 	decor             []raytrace.Object    // persistent placed objects (e.g. story beacons)
 	ris               int                  // ReSTIR/RIS candidate lights (0 = plain NEE)
+	fog               *Cartograph          // fog-of-war exploration record (bird's-eye map)
 }
+
+// Reveal marks the area around p as explored on the bird's-eye map (fog-of-war).
+func (w *World) Reveal(p raytrace.Vec3, radius float64) {
+	if w.fog == nil {
+		w.fog = NewCartograph(4)
+	}
+	w.fog.Reveal(p, radius)
+}
+
+// Cartograph returns the world's exploration map (nil until something is revealed).
+func (w *World) Cartograph() *Cartograph { return w.fog }
 
 // SetRIS enables ReSTIR-style direct lighting with n candidate lights per
 // shading point (0/1 = plain next-event estimation). It cuts noise in worlds with

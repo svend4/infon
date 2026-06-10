@@ -287,6 +287,7 @@ func main() {
 		lastTick = now
 		world.SetAnimTime(time.Since(start).Seconds()) // keep the world alive
 		world.Tread(cam.Pos)                           // wear a path where you walk
+		world.Reveal(cam.Pos, 14)                      // lift the fog where you've been (bird's-eye map)
 		world.StepCreatures(dt, cam.Pos)               // the inhabitants live and react
 		world.StepWeather(dt, cam.Pos)                 // rain/snow drifts around you
 		world.ObserveWalker(raydir.PoseOf(cam), dt)    // read how you move (for mood)
@@ -443,6 +444,14 @@ func main() {
 				refiner.Reset()
 			case 'm':
 				showMap = !showMap
+			case 'k': // save the bird's-eye fog-of-war map
+				if cg := world.Cartograph(); cg != nil {
+					if f, err := os.Create("map.png"); err == nil {
+						_ = png.Encode(f, cg.Render(world.Landmarks(), cam.Pos, 600, 600))
+						_ = f.Close()
+						fmt.Fprintln(os.Stderr, "\nsaved map.png")
+					}
+				}
 			case 'x':
 				if tlog != nil && tlog.Len() > 0 { // save the journey's postcards
 					if f, err := os.Create("travelogue.png"); err == nil {

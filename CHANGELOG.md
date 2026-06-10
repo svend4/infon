@@ -23,6 +23,15 @@ existing region/portal/map/director architecture.
   bubbles as discs — home gold, current cyan, dead-ends dim — numbered/named, with
   a route highlighted). Pure data, fully tested (add/link undirected, routing incl.
   self and unreachable, the diagram draws nodes and edges).
+- **Bird's-eye fog-of-war map** (`pkg/raydir/cartograph.go`): the world drawn from
+  above the way the hackers' maps look. A coarse `Cartograph` grid is revealed as
+  you walk (`World.Reveal`), and `Render` fills the explored ground while the rest
+  stays as "white spots" (terra incognita), rings the known world with a boundary,
+  marks the named places — calling out the archetypal **reserve** (gold, where
+  things accumulate) and **prison** (red, where things are lost) — and a compass.
+  `rayexplore` lifts the fog as you move and saves `map.png` on the `k` key. Tested:
+  reveal records cells, far points stay white spots, specials are recognised, and
+  the render draws ground, white spots and the special markers.
 
 ### 🎨 CPU ray-tracing & rendering engine (branch `claude/epic-sagan-EWTTr`)
 
