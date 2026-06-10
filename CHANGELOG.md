@@ -301,6 +301,13 @@ adopting, and it was reimplemented better).
   a little clock (drawn with the microfont), saved to `travelogue.png`. Tested:
   capture caps at the most recent moments, the thumbnailer scales and keeps colour,
   the clock formats, and the rendered page contains each captured thumbnail.
+- **Branching paths** (`pkg/raydir/branch.go`): the walk can fork. At a crossroads
+  the world offers two ways — a high road or a low one, press on into the night or
+  make camp — and which you take steers what the director builds next. The choice is
+  the most direct kind: with `rayexplore -branch` you simply walk left (`a`) or right
+  (`d`). `Branching` is a pure state machine (the forks, where you are, the path
+  taken, the prompt in effect), fully tested: choosing walks the forks in order and
+  applies the chosen prompt, the two arms diverge, and it stops cleanly at the end.
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"

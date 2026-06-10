@@ -20,6 +20,7 @@
 //	go run ./cmd/rayexplore -path -dream             # a lens-and-film dream pass
 //	go run ./cmd/rayexplore -stereo                  # red-cyan anaglyph (3-D with glasses)
 //	go run ./cmd/rayexplore -story                   # the world unfolds as a story, in chapters
+//	go run ./cmd/rayexplore -branch                  # branching paths: walk left/right at a crossroads
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
@@ -124,6 +125,7 @@ func main() {
 	dream := flag.Bool("dream", false, "lens & film post: chromatic aberration, barrel warp, grain, vignette")
 	stereo := flag.Bool("stereo", false, "render in depth: a red-cyan anaglyph (view with red/cyan glasses)")
 	story := flag.Bool("story", false, "follow a story: the world unfolds in chapters, a beacon marks each threshold")
+	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
 	cols := flag.Int("w", 80, "width in terminal cells")
@@ -152,11 +154,23 @@ func main() {
 	if *story {
 		tale = raydir.DefaultStory()
 	}
-	seed := func() string { // the next region's prompt: the story's, or the rotation
-		if tale != nil {
+	var fork *raydir.Branching
+	forkActive := false
+	if *branch {
+		fork = raydir.DefaultBranching()
+		forkActive = true // present the first crossroads at once
+	}
+	regionsSinceFork := 0
+	var forkBanner string
+	seed := func() string { // the next region's prompt: a chosen branch, the story, or the rotation
+		switch {
+		case fork != nil:
+			return fork.Prompt()
+		case tale != nil:
 			return tale.Prompt()
+		default:
+			return nextPrompt()
 		}
-		return nextPrompt()
 	}
 	var storyBanner string
 	if tale != nil { // open on the first chapter's narration
@@ -230,6 +244,7 @@ func main() {
 		scene = world.Scene()
 		refiner.Reset()       // the scene changed
 		capturePending = true // a new place worth a postcard
+		regionsSinceFork++    // toward the next crossroads
 	}
 
 	// optional procedural soundscape: synthesise the world's ambient locally and
@@ -350,6 +365,15 @@ func main() {
 		if storyBanner != "" {
 			fmt.Printf("\n  %s", storyBanner)
 		}
+		if fork != nil { // a crossroads to choose, or the branch last taken
+			if forkActive {
+				if f, ok := fork.PendingFork(); ok {
+					fmt.Printf("\n  ⑂ %s   [a] %s   [d] %s", f.Question, f.Left.Label, f.Right.Label)
+				}
+			} else if forkBanner != "" {
+				fmt.Printf("\n  %s", forkBanner)
+			}
+		}
 		mins := int((dayT - math.Floor(dayT)) * 24 * 60)
 		season := ""
 		if world.Seasonal() {
@@ -360,6 +384,18 @@ func main() {
 		}
 		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d%s | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f g=grow t=time p=path m=map Enter=refine x=quit] ",
 			who, world.Chunks(), world.Props(), mins/60, mins%60, spp, season, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
+	}
+
+	// chooseFork takes a branch when a crossroads is active (you walk left/right).
+	chooseFork := func(goRight bool) {
+		if fork == nil || !forkActive {
+			return
+		}
+		if ch, ok := fork.Choose(goRight); ok {
+			forkBanner = "⑂ you took the " + ch.Label + " (" + strings.Join(fork.Path(), " → ") + ")"
+			forkActive = false
+			regionsSinceFork = 0
+		}
 	}
 
 	fmt.Printf("rayexplore — walking a world authored by %s. Each region is shipped as a tiny scene description and ray-traced locally.\n", who)
@@ -375,8 +411,10 @@ func main() {
 				cam.Walk(-1.2, 0)
 			case 'a':
 				cam.Walk(0, -1.2)
+				chooseFork(false) // at a crossroads, stepping left chooses the left branch
 			case 'd':
 				cam.Walk(0, 1.2)
+				chooseFork(true) // stepping right chooses the right branch
 			case 'q':
 				cam.Turn(-0.2, 0)
 			case 'e':
@@ -416,6 +454,10 @@ func main() {
 		if world.Prune(cam.Pos.Z-55) > 0 {
 			scene = world.Scene()
 			refiner.Reset()
+		}
+		// after walking a stretch since the last choice, the next crossroads appears.
+		if fork != nil && !forkActive && !fork.Done() && regionsSinceFork >= 3 {
+			forkActive = true
 		}
 		render()
 	}
