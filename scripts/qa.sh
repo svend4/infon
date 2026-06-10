@@ -30,12 +30,12 @@ step "go test ./..." go test ./... -count=1
 step "golangci-lint" golangci-lint run --max-issues-per-linter=0 --max-same-issues=0 ./...
 # gofmt only the packages this stack actively develops (pre-existing drift elsewhere
 # is not gated).
-if [ -z "$(gofmt -l pkg/raydir pkg/raytrace pkg/brain 2>/dev/null)" ]; then
-	printf '  ok    gofmt (raydir/raytrace/brain)\n'
+if [ -z "$(gofmt -l pkg/raydir pkg/raytrace pkg/brain pkg/fleet 2>/dev/null)" ]; then
+	printf '  ok    gofmt (raydir/raytrace/brain/fleet)\n'
 	ok=$((ok + 1))
 else
 	printf '  FAIL  gofmt:\n'
-	gofmt -l pkg/raydir pkg/raytrace pkg/brain | sed 's/^/        /'
+	gofmt -l pkg/raydir pkg/raytrace pkg/brain pkg/fleet | sed 's/^/        /'
 	fail=$((fail + 1))
 fi
 
@@ -44,7 +44,9 @@ tmp=$(mktemp -d)
 step "rayvoxel" go run ./cmd/rayvoxel -w 96 -h 64 -out "$tmp/voxel.png"
 step "rayfilm" go run ./cmd/rayfilm -frames 2 -cols 2 -fw 96 -fh 64 -regions 2 -out "$tmp/film.png"
 step "conform (reference brain)" go run ./cmd/conform
+step "rayfleet" go run ./cmd/rayfleet -w 96 -h 64 -spp 8 -vfx=false -out "$tmp/fleet"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
+step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
 echo "== $ok ok, $fail fail =="
 rm -f "$log"
