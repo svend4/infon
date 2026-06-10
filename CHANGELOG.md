@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 📜 A formal brain contract (adapted from robot/ETD)
+
+- **JSON Schema for rayscene** (`ai/schema/rayscene.schema.json`, after the
+  schema-validated skill manifests of `svend4/robot`): the scene graph a director
+  authors now has a machine-readable contract — object kinds, the animation set,
+  material fields and their ranges. A test keeps it honest in both directions: the
+  schema's `kind`/`anim` enums must equal what the renderer accepts (no drift), and
+  the reference author's output must conform (valid kinds/anims, colours in range).
+  Linked from the protocol doc; confirms the existing `validObj`/`clampObj`/
+  conformance posture with an explicit, published contract.
+
 ### 🧱 Engineering discipline (adapted from info150)
 
 - **One-command quality gate** (`scripts/qa.sh`, after the `make qa` + smoke

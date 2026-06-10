@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/svend4/infon/ai/schema/rayscene.schema.json",
+  "title": "tvcp-ai/1 rayscene",
+  "description": "The scene graph a brain authors for game:rayscene (the value of Response.ray). A renderer (pkg/raydir) sanitises and clamps it, but this is the contract a director should target. The kind and anim enums are kept in lockstep with the renderer by a test.",
+  "type": "object",
+  "required": ["objects"],
+  "properties": {
+    "objects": { "type": "array", "items": { "$ref": "#/definitions/obj" } },
+    "light": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "skyTop": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "skyBottom": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "name": { "type": "string" }
+  },
+  "definitions": {
+    "obj": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "primitive type; empty = sphere",
+          "enum": ["", "sphere", "box", "pyramid", "cylinder", "tree", "house", "plane", "mesh", "fractal", "sdf", "water"]
+        },
+        "name": { "type": "string", "description": "named model (mesh) or form (fractal/sdf)" },
+        "tex": { "type": "string" },
+        "bump": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "r": { "type": "number", "minimum": 0, "maximum": 100 },
+        "s": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+        "color": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 3, "maxItems": 3 },
+        "emit": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 300 }, "minItems": 3, "maxItems": 3 },
+        "glass": { "type": "number", "minimum": 0, "maximum": 5 },
+        "metal": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reflect": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rough": { "type": "number", "minimum": 0, "maximum": 1 },
+        "anim": {
+          "description": "a local motion evaluated from the shared clock",
+          "enum": ["", "bob", "orbit", "drift", "pulse", "wander", "grow", "figure8", "rosette"]
+        },
+        "aamp": { "type": "number" },
+        "aspd": { "type": "number" },
+        "sss": { "type": "number", "minimum": 0, "maximum": 3, "description": "subsurface boundary IOR" },
+        "sssRad": { "type": "number", "minimum": 0, "maximum": 20 },
+        "film": { "type": "number", "minimum": 0, "maximum": 2000, "description": "thin-film thickness (nm)" },
+        "filmIor": { "type": "number", "minimum": 0, "maximum": 3 }
+      },
+      "additionalProperties": false
+    }
+  }
+}
