@@ -75,11 +75,17 @@ func (w *World) applySpec(index int, at raytrace.Vec3, spec brain.SceneSpec) int
 	}
 	w.seen[index] = true
 	w.chunks = len(w.seen)
+	if at.Z > w.frontierZ { // track the furthest region (the seasonal frontier)
+		w.frontierZ = at.Z
+	}
 	w.landmarks = append(w.landmarks, Landmark{Index: index, At: at, Name: regionName(spec, index)})
 	n := 0
 	for i, o := range spec.Objects {
 		if i >= maxRegionObjects { // cap so a runaway model can't flood the world
 			break
+		}
+		if w.seasonal { // tint this region's foliage for the season where it sits
+			o = seasonTintSpec(o, at.Z)
 		}
 		switch { // remember features for the soundscape (see World.Ambient)
 		case o.Kind == "water":
@@ -129,6 +135,7 @@ func (w *World) Prune(minZ float64) int {
 	w.landmarks = w.landmarks[:0]
 	w.seen = map[int]bool{}
 	w.chunks = 0
+	w.frontierZ = 0
 	w.sndWater, w.sndForest, w.sndBirds, w.sndHum = false, 0, false, false
 	w.applied = keep
 	for _, r := range keep {

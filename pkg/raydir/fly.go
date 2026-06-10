@@ -77,7 +77,20 @@ type World struct {
 	applied           []Region             // applied regions (kept so far-behind ones can be pruned)
 	flock             *Flock               // optional living inhabitants (boids)
 	weather           *Weather             // optional precipitation/fog
+	seasonal          bool                 // foliage/ground/sky follow the season along the walk
+	frontierZ         float64              // furthest applied region depth (the seasonal frontier)
 }
+
+// SetSeasonal turns the seasonal cycle on or off. Set it before growing the world
+// so each region's foliage is tinted for the season where it sits.
+func (w *World) SetSeasonal(on bool) { w.seasonal = on }
+
+// Seasonal reports whether the seasonal cycle is on.
+func (w *World) Seasonal() bool { return w.seasonal }
+
+// Season returns the season at the world's frontier (the furthest applied
+// region), for a heads-up display.
+func (w *World) Season() Season { return SeasonAt(w.frontierZ) }
 
 // SetWeather gives the world weather of the given kind ("rain", "snow", "fog");
 // an empty kind clears it.
@@ -217,7 +230,16 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 			sun = []raytrace.Object{raytrace.Sphere{Center: sunDir.Scale(90).Add(ahead), Radius: 6, Mat: raytrace.Material{Emit: sunColor}}}
 		}
 	}
-	s.Objects = append(s.Objects, w.floor)
+	floor := w.floor
+	if w.seasonal { // ground and sky follow the season at the frontier
+		se := SeasonAt(w.frontierZ)
+		if pl, ok := floor.(raytrace.Plane); ok {
+			floor = seasonFloor(pl, se)
+		}
+		s.SkyTop = mixVec(s.SkyTop, se.Sky, 0.4)
+		s.SkyBottom = mixVec(s.SkyBottom, se.Sky, 0.3)
+	}
+	s.Objects = append(s.Objects, floor)
 	s.Objects = append(s.Objects, w.props...)
 	s.Objects = append(s.Objects, sun...)
 	// moving (and growing) objects: re-place each from the shared animation clock.

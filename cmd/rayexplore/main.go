@@ -13,6 +13,7 @@
 //	go run ./cmd/rayexplore -guide                  # an AI companion leads you on a tour
 //	go run ./cmd/rayexplore -creatures              # a flock lives in the world and reacts to you
 //	go run ./cmd/rayexplore -weather rain           # rain (or snow/fog) that follows you
+//	go run ./cmd/rayexplore -seasons                 # walk forward through spring→summer→autumn→winter
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -91,6 +92,7 @@ func main() {
 	guide := flag.Bool("guide", false, "an AI companion that walks with you and leads a tour of the world")
 	creatures := flag.Bool("creatures", false, "a flock of inhabitants that lives in the world, gathers at places, and scatters from you")
 	weather := flag.String("weather", "", "weather that follows you: rain | snow | fog")
+	seasons := flag.Bool("seasons", false, "walk through the year: foliage, ground and sky shift spring→summer→autumn→winter")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -110,6 +112,7 @@ func main() {
 	nextPrompt := func() string { p := prompts[pi%len(prompts)]; pi++; return p }
 
 	world := raydir.NewWorld()
+	world.SetSeasonal(*seasons) // before any region grows, so foliage is tinted as it's built
 	frontZ := 10.0
 	if *imageSeed != "" { // walk into a world derived from a picture
 		if img, err := loadImage(*imageSeed); err == nil {
@@ -236,8 +239,12 @@ func main() {
 			fmt.Printf("\n  🧭 %s", guideMsg)
 		}
 		mins := int((dayT - math.Floor(dayT)) * 24 * 60)
-		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f g=grow t=time p=path m=map Enter=refine x=quit] ",
-			who, world.Chunks(), world.Props(), mins/60, mins%60, spp, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
+		season := ""
+		if world.Seasonal() {
+			season = " | 🍂" + raydir.SeasonAt(cam.Pos.Z).Name
+		}
+		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d%s | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f g=grow t=time p=path m=map Enter=refine x=quit] ",
+			who, world.Chunks(), world.Props(), mins/60, mins%60, spp, season, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
 	}
 
 	fmt.Printf("rayexplore — walking a world authored by %s. Each region is shipped as a tiny scene description and ray-traced locally.\n", who)

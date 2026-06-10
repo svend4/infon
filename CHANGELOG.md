@@ -218,6 +218,14 @@ adopting, and it was reimplemented better).
   (Beer-Lambert distance fade) plus a hazed sky, so the world recedes into the
   distance. Seeded and deterministic; tested for flat particle count, the band
   tracking the walker, descent, wind tilt, and the fog scene wiring.
+- **A walk through the year — seasons** (`pkg/raydir/season.go`): `rayexplore -seasons`
+  turns distance forward into a journey through the year. Foliage, ground and sky
+  cross-fade spring → summer → autumn → winter and back (`SeasonAt(z)`, a smooth-
+  stepped blend of four palettes). A region's trees are tinted for the season where
+  they sit, baked once at build time (no per-frame cost); the shared floor whitens
+  under winter snow and the sky tints to match, following the frontier as the world
+  grows. Pure functions of position, so deterministic and tested (cycle order,
+  periodicity, palette character, smooth cross-fade, tree tinting, snowy floor).
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"
