@@ -581,6 +581,7 @@ func main() {
 		}
 		stateMu.Unlock()
 		worldMu.Lock()
+		world.SetAnimTime(time.Since(sessionStart).Seconds()) // advance the living world
 		scene := world.SceneWith(extra)
 		chunks := world.Chunks()
 		tod := world.Time

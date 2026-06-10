@@ -63,7 +63,25 @@ type World struct {
 	lastAt            raytrace.Vec3    // where it sat (to derive the heading)
 	Time              float64          // time of day in [0,1) when timeSet
 	timeSet           bool             // sky and sun follow Time (day/night cycle)
+	animated          []animObj        // moving objects, re-placed each frame
+	animTime          float64          // shared animation clock (seconds)
 }
+
+// animObj is one moving object: its spec, its region offset, and a stable seed so
+// siblings desynchronise.
+type animObj struct {
+	spec brain.ObjSpec
+	at   raytrace.Vec3
+	seed int
+}
+
+// SetAnimTime sets the shared animation clock (seconds) used to place moving
+// objects; the app advances it from wall time so peers animate roughly in step.
+func (w *World) SetAnimTime(sec float64) { w.animTime = sec }
+
+// HasAnimated reports whether the world contains any moving objects (so a viewer
+// knows the frame isn't static and progressive refinement should restart).
+func (w *World) HasAnimated() bool { return len(w.animated) > 0 }
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
 func NewWorld() *World {
@@ -124,6 +142,10 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	s.Objects = append(s.Objects, w.floor)
 	s.Objects = append(s.Objects, w.props...)
 	s.Objects = append(s.Objects, sun...)
+	// moving objects: re-place each from the shared animation clock.
+	for _, a := range w.animated {
+		s.Objects = append(s.Objects, objectsFromSpec(animateSpec(a.spec, w.animTime, a.seed), a.at, false)...)
+	}
 	s.Objects = append(s.Objects, extra...)
 	s.BuildBVH()
 	return s

@@ -127,6 +127,14 @@ adopting, and it was reimplemented better).
   sky from the sun direction + turbidity — blue overhead, warming and reddening
   toward the horizon and the sun, with automatic sunset colour as the sun sinks; it
   also acts as an area light in the path tracer.
+- **A living world — motion** (`pkg/raydir/anim.go`): an object can carry a motion
+  formula — `bob`, `orbit`, `drift`, `pulse`, `wander` — that every peer evaluates
+  locally from a shared clock, so a bird flies, a beacon pulses, a moon orbits and a
+  firefly wanders without a single frame crossing the wire; the motion is meaning,
+  reconstructed identically everywhere. Animated objects are kept apart from the
+  static props and re-placed each frame (`World.SetAnimTime`); the reference author
+  spawns them on a keyword (birds, beacon, float, spirit). The world stops being
+  still.
 - **The shared world — two walkers, one space** (`cmd/raymeet`,
   `pkg/raydir/pose.go`, `pkg/raydir/region.go`): two peers "call in" over UDP and
   walk the *same* growing world together, each seeing the other's glowing avatar.

@@ -68,6 +68,12 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 		if i >= maxRegionObjects { // cap so a runaway model can't flood the world
 			break
 		}
+		if isAnimated(o.Anim) && validObj(o) {
+			// a moving object: keep its spec and re-place it each frame (see SceneWith).
+			w.animated = append(w.animated, animObj{spec: o, at: at, seed: len(w.animated)*97 + index})
+			n += len(objectsFromSpec(o, at, false))
+			continue
+		}
 		objs := objectsFromSpec(o, at, false) // one shared floor: planes are skipped
 		w.props = append(w.props, objs...)
 		n += len(objs)

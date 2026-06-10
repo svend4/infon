@@ -25,6 +25,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/pkg/brain"
@@ -91,11 +92,16 @@ func main() {
 		refiner.Reset() // the scene changed
 	}
 
+	start := time.Now()
 	render := func() {
+		world.SetAnimTime(time.Since(start).Seconds()) // keep the world alive
 		c := cam.Camera()
 		var im image.Image
 		spp := 1
 		if *pathT {
+			if world.HasAnimated() {
+				refiner.Reset() // a moving world can't accumulate; render fresh
+			}
 			im = refiner.Frame(scene, c)
 			spp = refiner.Samples()
 		} else {
