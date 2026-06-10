@@ -45,6 +45,7 @@ step "rayvoxel" go run ./cmd/rayvoxel -w 96 -h 64 -out "$tmp/voxel.png"
 step "rayfilm" go run ./cmd/rayfilm -frames 2 -cols 2 -fw 96 -fh 64 -regions 2 -out "$tmp/film.png"
 step "conform (reference brain)" go run ./cmd/conform
 step "rayfleet" go run ./cmd/rayfleet -w 96 -h 64 -spp 8 -vfx=false -out "$tmp/fleet"
+step "raycamp" go run ./cmd/raycamp -gx 6 -gz 6 -w 96 -h 64 -spp 6 -out "$tmp/camp"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
