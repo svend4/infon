@@ -25,6 +25,7 @@
 //	go run ./cmd/rayexplore -optic tunnel            # dream optics: tunnel vision / skew / double
 //	go run ./cmd/rayexplore -mirror                  # dream symmetry: a north-south mirror world
 //	go run ./cmd/rayexplore -layer lower -path       # descend to the dark lower world
+//	go run ./cmd/rayexplore -funnel -path            # a swirling transit funnel (vortex portal)
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -135,6 +136,7 @@ func main() {
 	maze := flag.Bool("maze", false, "a 'square forest': a flat grid of jungle/building blocks split by roads — a labyrinth to walk")
 	mirror := flag.Bool("mirror", false, "dream symmetry: the world is doubled by a north-south reflection (turn around to see it)")
 	layer := flag.String("layer", "", "vertical layer: upper (airy) | lower (dark, a descent tunnel)")
+	funnel := flag.Bool("funnel", false, "a swirling transit funnel (vortex) ahead — a portal at its mouth (best with -path)")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -239,6 +241,9 @@ func main() {
 	}
 	if *maze { // a "square forest" labyrinth spanning the path ahead
 		world.AddDecor(raydir.NewSquareForest(8, 10, 1).Objects(raytrace.Vec3{X: -32, Z: 8})...)
+	}
+	if *funnel { // a swirling transit funnel ahead, linking deeper into the world
+		world.AddFunnel(raytrace.Vec3{X: 0, Z: 16}, raytrace.Translate(raytrace.Vec3{Z: 40}))
 	}
 	if *portals {              // a non-Euclidean window ahead, linking to the place behind you
 		world.AddPortal(raytrace.NewPortal(

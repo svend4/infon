@@ -87,6 +87,7 @@ type World struct {
 	mirror            bool                 // dream N/S symmetry: content doubled by reflection
 	mirrorZ           float64              // the plane the world is mirrored across
 	layer             Layer                // which vertical layer (middle/upper/lower)
+	funnels           []funnelObj          // swirling transit funnels (animated)
 }
 
 // Reveal marks the area around p as explored on the bird's-eye map (fog-of-war).
@@ -231,7 +232,7 @@ func (w *World) SetAnimTime(sec float64) { w.animTime = sec }
 // HasAnimated reports whether the world contains any moving objects (so a viewer
 // knows the frame isn't static and progressive refinement should restart).
 func (w *World) HasAnimated() bool {
-	return len(w.animated) > 0 || w.HasCreatures() || (w.weather != nil && len(w.weather.parts) > 0)
+	return len(w.animated) > 0 || w.HasCreatures() || w.HasFunnels() || (w.weather != nil && len(w.weather.parts) > 0)
 }
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
@@ -328,6 +329,14 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	}
 	if w.flock != nil { // living inhabitants, re-placed each frame
 		s.Objects = append(s.Objects, w.flock.Objects()...)
+	}
+	for _, fn := range w.funnels { // swirling transit funnels, spun by the clock
+		s.Objects = append(s.Objects, FunnelObjects(fn.at, w.animTime)...)
+		if fn.link != nil { // a portal at the mouth: looking/stepping in transits you
+			s.Objects = append(s.Objects, raytrace.NewPortal(
+				raytrace.Vec3{X: fn.at.X, Y: fn.at.Y + 0.2, Z: fn.at.Z},
+				raytrace.Vec3{X: funnelRadius * 0.6}, raytrace.Vec3{Z: funnelRadius * 0.6}, *fn.link))
+		}
 	}
 	s.Objects = append(s.Objects, w.portals...) // non-Euclidean windows
 	s.Objects = append(s.Objects, w.decor...)   // placed decor (story beacons, etc.)

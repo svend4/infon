@@ -32,6 +32,14 @@ existing region/portal/map/director architecture.
   `DoubleVision` (the image splitting into a ghosted double). `rayexplore -optic
   skew|tunnel|double`. Tested: a line is sheared, the corners darken while the
   centre stays, one dot becomes two, and dimensions are preserved.
+- **Transit funnel (the voronka)** (`pkg/raydir/funnel.go`): the swirling funnel /
+  whirlpool the hackers fall through to transit between worlds — a glowing vortex of
+  orbs that spirals inward and downward and spins over time, narrowing from a wide
+  rim to a point. `World.AddFunnel` places one (re-placed each frame from the shared
+  clock); given a link transform it also drops a portal at its mouth, so looking or
+  stepping in transits you elsewhere. `rayexplore -funnel`. Tested: the orbs glow
+  and sit within the radius, the funnel narrows downward, it spins with time, and a
+  linked funnel adds both its orbs and a transit portal.
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two
