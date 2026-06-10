@@ -67,6 +67,10 @@ type World struct {
 	animTime          float64          // shared animation clock (seconds)
 	landmarks         []Landmark       // named region positions (for the map)
 	clouds            bool             // volumetric cloud medium on
+	sndWater          bool             // soundscape features present in the world
+	sndForest         int
+	sndBirds          bool
+	sndHum            bool
 }
 
 // SetClouds toggles a volumetric cloud bank (a participating medium; path tracer

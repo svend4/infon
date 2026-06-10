@@ -144,6 +144,15 @@ adopting, and it was reimplemented better).
   existing photon map (`BuildCaustics` → `Scene.Caustics`) focuses light through
   glass/water onto diffuse surfaces, already added in the path tracer. Tested
   (water ripples in time/space, cloud density is wispy + capped) and shown together.
+- **Hear the world — procedural soundscape** (`pkg/raydir/ambient.go`): the scene's
+  content and time of day become ambient audio, synthesised locally from a handful
+  of 0..1 levels (`AmbientFeatures`) — wind that rises at dusk, water lapping where
+  there's water, a forest rustle, birds by day, crickets at night, a low hum near
+  glowing fractals. `AmbientFrame` is deterministic and seamless (every term is a
+  function of absolute time, so streamed frames join without clicks); `World.Ambient`
+  derives the levels from the world. The sound is reconstructed from meaning, never
+  streamed — another sense for "meaning, not pixels". `rayexplore -sound` plays it
+  (graceful fallback without a device); a `.wav` of a dusk forest is in the showcase.
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"

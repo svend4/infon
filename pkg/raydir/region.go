@@ -69,6 +69,16 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 		if i >= maxRegionObjects { // cap so a runaway model can't flood the world
 			break
 		}
+		switch { // remember features for the soundscape (see World.Ambient)
+		case o.Kind == "water":
+			w.sndWater = true
+		case o.Kind == "tree":
+			w.sndForest++
+		case o.Anim == "orbit":
+			w.sndBirds = true
+		case o.Kind == "fractal":
+			w.sndHum = true
+		}
 		if validObj(o) && (isAnimated(o.Anim) || o.Kind == "water") {
 			// a moving object (or water): keep its spec and rebuild it each frame from
 			// the shared clock (see SceneWith), rather than baking it into static props.

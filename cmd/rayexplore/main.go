@@ -9,6 +9,7 @@
 //
 //	go run ./cmd/rayexplore                         # walk a reference-authored world
 //	go run ./cmd/rayexplore -path -grade            # path-traced, cinematically graded
+//	go run ./cmd/rayexplore -sound                  # hear the world (procedural ambient)
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
 //
 // Controls (type, then Enter; combine letters): w/s walk, a/d strafe, q/e turn,
@@ -25,8 +26,10 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/svend4/infon/internal/audio"
 	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/pkg/brain"
 	"github.com/svend4/infon/pkg/raydir"
@@ -34,12 +37,37 @@ import (
 	"github.com/svend4/infon/pkg/terminal"
 )
 
+// startSoundscape plays the world's procedural ambient (a guarded snapshot of
+// features the render loop keeps fresh), or falls back silently with no device.
+func startSoundscape(mu *sync.Mutex, feat *raydir.AmbientFeatures) {
+	pl, err := audio.NewDefaultPlayback()
+	if err != nil || pl.Open() != nil {
+		fmt.Fprintln(os.Stderr, "sound: no audio device available; continuing silent")
+		return
+	}
+	rate := audio.DefaultFormat().SampleRate
+	frame := rate / 50 // 20ms
+	go func() {
+		t := 0.0
+		tk := time.NewTicker(20 * time.Millisecond)
+		defer tk.Stop()
+		for range tk.C {
+			mu.Lock()
+			f := *feat
+			mu.Unlock()
+			_, _ = pl.Write(raydir.AmbientFrame(f, rate, t, frame))
+			t += float64(frame) / float64(rate)
+		}
+	}()
+}
+
 func main() {
 	prompt := flag.String("prompt", "a calm world of spheres", "seed prompt for the AI director")
 	modeFlag := flag.String("mode", "auto", "terminal render mode (auto|halfblock|sextant|braille|ascii|...)")
 	pathT := flag.Bool("path", false, "use the path tracer (prettier, slower) instead of the raster preview")
 	grade := flag.Bool("grade", false, "post: bloom + vignette + AgX tone map for a cinematic frame")
 	clouds := flag.Bool("clouds", false, "volumetric cloud bank (path tracer; costly)")
+	sound := flag.Bool("sound", false, "play a procedural soundscape of the world (needs an audio device)")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -95,9 +123,20 @@ func main() {
 		refiner.Reset() // the scene changed
 	}
 
+	// optional procedural soundscape: synthesise the world's ambient locally and
+	// play it (graceful fallback when there's no audio device).
+	var featMu sync.Mutex
+	feat := world.Ambient()
+	if *sound {
+		startSoundscape(&featMu, &feat)
+	}
+
 	start := time.Now()
 	render := func() {
 		world.SetAnimTime(time.Since(start).Seconds()) // keep the world alive
+		featMu.Lock()
+		feat = world.Ambient()
+		featMu.Unlock()
 		c := cam.Camera()
 		var im image.Image
 		spp := 1
