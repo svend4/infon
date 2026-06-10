@@ -44,7 +44,7 @@ func main() {
 	)
 	flag.Parse()
 
-	readings := demoReadings()
+	readings := fleet.DemoScenario()
 	if flag.NArg() > 0 {
 		r, err := loadReadings(flag.Arg(0))
 		if err != nil {
@@ -176,41 +176,4 @@ func writePNG(path string, img image.Image) {
 		fmt.Fprintln(os.Stderr, "encode:", err)
 		os.Exit(1)
 	}
-}
-
-// demoReadings is a deterministic six-step scenario for a small Hyundai-style
-// logistics fleet: two units overheat (a shared cause -> a bridge), one starts to
-// vibrate, the rest stay nominal — so the report shows a CRITICAL, two WARNs, and
-// a thermal bridge.
-func demoReadings() []fleet.Reading {
-	type unit struct {
-		name  string
-		base  []fleet.Signal
-		spike string  // a signal name that climbs in the last frames ("" = steady)
-		rate  float64 // how fast it climbs
-	}
-	sig := func(name string, v, w float64) fleet.Signal { return fleet.Signal{Name: name, Value: v, Weight: w} }
-	units := []unit{
-		{"amr-1", []fleet.Signal{sig("vibration", 0.15, 1), sig("thermal", 0.2, 1), sig("poseDrift", 0.1, 0.8), sig("battery", 0.3, 0.6)}, "thermal", 0.3},
-		{"amr-2", []fleet.Signal{sig("vibration", 0.2, 1), sig("thermal", 0.25, 1), sig("poseDrift", 0.12, 0.8), sig("battery", 0.35, 0.6)}, "vibration", 0.3},
-		{"parkbot", []fleet.Signal{sig("vibration", 0.18, 1), sig("thermal", 0.5, 1), sig("poseDrift", 0.15, 0.8), sig("battery", 0.4, 0.6)}, "thermal", 0.3},
-		{"dal-e", []fleet.Signal{sig("vibration", 0.1, 1), sig("thermal", 0.15, 1), sig("poseDrift", 0.08, 0.8), sig("battery", 0.6, 0.6)}, "", 0},
-		{"atlas", []fleet.Signal{sig("vibration", 0.22, 1), sig("thermal", 0.3, 1), sig("poseDrift", 0.2, 0.8), sig("battery", 0.25, 0.6)}, "", 0},
-	}
-	var out []fleet.Reading
-	for t := 0; t < 6; t++ {
-		for _, u := range units {
-			sigs := make([]fleet.Signal, len(u.base))
-			copy(sigs, u.base)
-			if u.spike != "" && t >= 4 {
-				for i := range sigs {
-					if sigs[i].Name == u.spike {
-						sigs[i].Value += u.rate * float64(t-3)
-					}
-				}
-			}
-			out = append(out, fleet.Reading{Unit: u.name, T: float64(t), Signals: sigs})
-		}
-	}
-	return out
 }
