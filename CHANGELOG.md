@@ -16,6 +16,15 @@ labyrinths ("square forest"), mirror-symmetric and layered worlds, and its
 optical oddities (perspective skew, tunnel vision). Each maps cleanly onto the
 existing region/portal/map/director architecture.
 
+- **Voxel-space terrain renderer** (`pkg/raytrace/voxel.go`, `cmd/rayvoxel`): the
+  site literally names "voxel graphics in dreams" (a dreamer sees the world form as
+  "large rectangular pixel-blocks"). So there is now a classic Voxel-Space (Comanche)
+  renderer: a procedural fractal height field with a height-banded palette (water /
+  sand / grass / rock / snow), drawn column-by-column front-to-back with a y-buffer
+  (near ridges occlude far ones) and aerial haze into the distance. `cmd/rayvoxel`
+  writes a PNG; separate, cheap, no path tracing. Tested: terrain is deterministic
+  and bounded, the render fills its size, draws terrain (not only sky), and a hill
+  ahead rises higher on screen than flat ground.
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two
