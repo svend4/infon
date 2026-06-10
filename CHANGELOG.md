@@ -135,6 +135,15 @@ adopting, and it was reimplemented better).
   static props and re-placed each frame (`World.SetAnimTime`); the reference author
   spawns them on a keyword (birds, beacon, float, spirit). The world stops being
   still.
+- **Natural elements** (`pkg/raytrace/water.go`, `medium.go`, `photon.go`):
+  **water** — an animated reflective surface (`Water`) whose normal ripples as a sum
+  of moving directional waves, so the sky and scene shimmer in it; authored as
+  `kind:"water"` and advanced by the shared clock. **Volumetric clouds** — a
+  `CloudMedium` (FBM-density participating medium) for cloud banks/fog and god rays
+  under the lit sky (`World.SetClouds`, `rayexplore -clouds`). **Caustics** — the
+  existing photon map (`BuildCaustics` → `Scene.Caustics`) focuses light through
+  glass/water onto diffuse surfaces, already added in the path tracer. Tested
+  (water ripples in time/space, cloud density is wispy + capped) and shown together.
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"

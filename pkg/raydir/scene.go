@@ -89,11 +89,27 @@ func objectsFromSpec(o brain.ObjSpec, at raytrace.Vec3, includePlane bool) []ray
 			return nil // unknown form
 		}
 		return []raytrace.Object{mr}
+	case "water":
+		return []raytrace.Object{waterObject(o, at, 0)} // time set per-frame in SceneWith
 	default:
 		return []raytrace.Object{raytrace.Sphere{
 			Center: specCenter(o, at), Radius: specScale(o), Mat: objMaterial(o),
 		}}
 	}
+}
+
+// waterObject builds an animated water surface from a spec, at wave time t. The
+// water level is the region's base plus the spec's y.
+func waterObject(o brain.ObjSpec, at raytrace.Vec3, t float64) raytrace.Object {
+	col := vec3(o.Color)
+	if col.LenSq() == 0 {
+		col = raytrace.Vec3{X: 0.1, Y: 0.3, Z: 0.45}
+	}
+	refl := o.Reflect
+	if refl == 0 {
+		refl = 0.5
+	}
+	return raytrace.Water{Y: at.Y + o.Y, Color: col, Reflect: refl, Time: t, Amp: 0.3, Scale: 2}
 }
 
 // specCenter is the object's world position (its declared point plus the region
@@ -136,7 +152,7 @@ const maxRegionObjects = 256
 
 var knownKinds = map[string]bool{
 	"": true, "sphere": true, "box": true, "pyramid": true, "cylinder": true,
-	"tree": true, "house": true, "plane": true, "mesh": true, "fractal": true, "sdf": true,
+	"tree": true, "house": true, "plane": true, "mesh": true, "fractal": true, "sdf": true, "water": true,
 }
 
 func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) && math.Abs(f) < 1e6 }

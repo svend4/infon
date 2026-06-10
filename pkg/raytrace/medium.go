@@ -25,6 +25,25 @@ type Medium struct {
 	Density  func(p Vec3) float64
 }
 
+// CloudMedium builds a participating medium shaped like a cloud bank: FBM noise
+// density inside the sphere (centre, radius), scaled to sigma, with a bright,
+// forward-scattering albedo. Assign it to Scene.Medium for volumetric clouds/fog
+// and god rays under a lit sky (path tracer, NEE).
+func CloudMedium(center Vec3, radius, sigma float64) *Medium {
+	return &Medium{
+		Center: center, Radius: radius, SigmaMax: sigma,
+		Albedo: Vec3{X: 0.92, Y: 0.93, Z: 0.97}, G: 0.35,
+		Density: func(p Vec3) float64 {
+			n := 0.5 * (FBM(p.Scale(0.12), 5, 2, 0.5) + 1) // ~0..1 cloud shape
+			n -= 0.45                                      // carve holes (wispy)
+			if n <= 0 {
+				return 0
+			}
+			return n * sigma
+		},
+	}
+}
+
 // sigma evaluates the extinction at p, clamped to [0, SigmaMax].
 func (m *Medium) sigma(p Vec3) float64 {
 	if m.Density == nil {

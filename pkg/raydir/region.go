@@ -69,8 +69,9 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 		if i >= maxRegionObjects { // cap so a runaway model can't flood the world
 			break
 		}
-		if isAnimated(o.Anim) && validObj(o) {
-			// a moving object: keep its spec and re-place it each frame (see SceneWith).
+		if validObj(o) && (isAnimated(o.Anim) || o.Kind == "water") {
+			// a moving object (or water): keep its spec and rebuild it each frame from
+			// the shared clock (see SceneWith), rather than baking it into static props.
 			w.animated = append(w.animated, animObj{spec: o, at: at, seed: len(w.animated)*97 + index})
 			n += len(objectsFromSpec(o, at, false))
 			continue

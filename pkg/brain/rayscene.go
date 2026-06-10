@@ -119,6 +119,9 @@ func refRayScene(req Request) Response {
 	if hasAny(p.Prompt, "rock", "stone", "boulder") {
 		spec.Objects = append(spec.Objects, ObjSpec{Kind: "mesh", Name: "rock", X: 3, Y: 0.5, Z: 1, R: 1})
 	}
+	if hasAny(p.Prompt, "water", "lake", "ocean", "sea", "pond", "shore", "river") {
+		spec.Objects = append(spec.Objects, ObjSpec{Kind: "water", Y: 0.1, Color: [3]float64{0.1, 0.3, 0.45}, Reflect: 0.55})
+	}
 	for _, tx := range []string{"marble", "wood", "checker", "stone", "clouds"} {
 		if strings.Contains(p.Prompt, tx) { // texture the diffuse sphere on request
 			spec.Objects[1].Tex = tx

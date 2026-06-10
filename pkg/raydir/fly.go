@@ -66,7 +66,12 @@ type World struct {
 	animated          []animObj        // moving objects, re-placed each frame
 	animTime          float64          // shared animation clock (seconds)
 	landmarks         []Landmark       // named region positions (for the map)
+	clouds            bool             // volumetric cloud medium on
 }
+
+// SetClouds toggles a volumetric cloud bank (a participating medium; path tracer
+// only, and costly — opt in).
+func (w *World) SetClouds(on bool) { w.clouds = on }
 
 // animObj is one moving object: its spec, its region offset, and a stable seed so
 // siblings desynchronise.
@@ -145,7 +150,14 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	s.Objects = append(s.Objects, sun...)
 	// moving objects: re-place each from the shared animation clock.
 	for _, a := range w.animated {
+		if a.spec.Kind == "water" {
+			s.Objects = append(s.Objects, waterObject(a.spec, a.at, w.animTime))
+			continue
+		}
 		s.Objects = append(s.Objects, objectsFromSpec(animateSpec(a.spec, w.animTime, a.seed), a.at, false)...)
+	}
+	if w.clouds { // volumetric cloud bank that drifts with the world frontier
+		s.Medium = raytrace.CloudMedium(raytrace.Vec3{X: 0, Y: 11, Z: w.lastAt.Z}, 26, 0.5)
 	}
 	s.Objects = append(s.Objects, extra...)
 	s.BuildBVH()

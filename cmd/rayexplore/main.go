@@ -39,6 +39,7 @@ func main() {
 	modeFlag := flag.String("mode", "auto", "terminal render mode (auto|halfblock|sextant|braille|ascii|...)")
 	pathT := flag.Bool("path", false, "use the path tracer (prettier, slower) instead of the raster preview")
 	grade := flag.Bool("grade", false, "post: bloom + vignette + AgX tone map for a cinematic frame")
+	clouds := flag.Bool("clouds", false, "volumetric cloud bank (path tracer; costly)")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -73,6 +74,7 @@ func main() {
 	dayT := 0.32     // time of day; the 't' key steps it through dawn/noon/dusk/night
 	showMap := false // overlay the minimap of named places (toggle with 'm')
 	world.SetTime(dayT)
+	world.SetClouds(*clouds)
 	scene := world.Scene()
 	pathOpt := raytrace.PathOptions{Samples: 4, MaxDepth: 5, Seed: 1, NEE: true, MIS: true, Sobol: true}
 	// progressive refinement: stand still (press Enter) and the path-traced view
