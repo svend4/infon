@@ -6,6 +6,7 @@
 // fly-through.
 //
 //	go run ./cmd/rayfilm -frames 9 -cols 3 -path -grade -out film.png
+//	go run ./cmd/rayfilm -frames 6 -cols 3 -path -blur 0.06   # cinematic motion blur
 //	BRAIN_URL=... go run ./cmd/rayfilm -prompt "a glass city"
 package main
 
@@ -30,6 +31,7 @@ func main() {
 	fh := flag.Int("fh", 200, "frame height in pixels")
 	regions := flag.Int("regions", 5, "how many regions to grow (the tour waypoints)")
 	pathT := flag.Bool("path", false, "path-trace each frame (prettier, slower)")
+	blur := flag.Float64("blur", 0, "camera motion blur: shutter span as a fraction of the tour per shot (e.g. 0.06); needs -path")
 	grade := flag.Bool("grade", false, "bloom + vignette + AgX tone map")
 	out := flag.String("out", "film.png", "output PNG path")
 	flag.Parse()
@@ -63,9 +65,16 @@ func main() {
 		}
 		cam := tour.CameraAt(u)
 		var im image.Image
-		if *pathT {
+		switch {
+		case *pathT && *blur > 0: // cinematic camera motion blur over the shutter
+			uc := u + *blur
+			if uc > 1 {
+				uc = 1
+			}
+			im = raytrace.PathRenderMotion(scene, cam, tour.CameraAt(uc), *fw, *fh, opt)
+		case *pathT:
 			im = raytrace.PathRender(scene, cam, *fw, *fh, opt)
-		} else {
+		default:
 			im = raytrace.Render(scene, cam, *fw, *fh, raytrace.Options{Samples: 2})
 		}
 		if *grade {

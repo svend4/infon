@@ -1,6 +1,7 @@
 package raydir
 
 import (
+	"image"
 	"math"
 	"testing"
 
@@ -90,5 +91,41 @@ func TestTourFromLandmarks(t *testing.T) {
 	}
 	if tr.Points[0].Y != 2.0 {
 		t.Errorf("waypoints should sit at the given height, got Y=%.1f", tr.Points[0].Y)
+	}
+}
+
+// Camera motion along the tour engages motion blur: the frame changes when the
+// shutter spans a stretch of the path (vs a zero-span, static shot).
+func TestTourMotionBlurEngages(t *testing.T) {
+	var objs []raytrace.Object
+	for i := 0; i < 6; i++ {
+		objs = append(objs, raytrace.Sphere{
+			Center: raytrace.Vec3{X: float64(i-3) * 1.5, Y: 1 + float64(i%3), Z: 5 + float64(i)},
+			Radius: 0.5, Mat: raytrace.Material{Emit: raytrace.Vec3{X: 6, Y: 6, Z: 6}},
+		})
+	}
+	scene := &raytrace.Scene{Objects: objs}
+	scene.BuildBVH()
+	tr := NewTour([]raytrace.Vec3{{Y: 2, Z: 0}, {Y: 2, Z: 8}, {Y: 2, Z: 16}}, 1) // dolly forward
+	opt := raytrace.PathOptions{Samples: 24, MaxDepth: 2, Seed: 1, Sobol: true}
+
+	static := raytrace.PathRenderMotion(scene, tr.CameraAt(0.4), tr.CameraAt(0.4), 80, 60, opt)
+	moving := raytrace.PathRenderMotion(scene, tr.CameraAt(0.4), tr.CameraAt(0.55), 80, 60, opt)
+
+	lum := func(im image.Image, x, y int) float64 {
+		r, g, b, _ := im.At(x, y).RGBA()
+		return (float64(r) + float64(g) + float64(b)) / 3 / 65535
+	}
+	diff := 0
+	bb := static.Bounds()
+	for y := bb.Min.Y; y < bb.Max.Y; y++ {
+		for x := bb.Min.X; x < bb.Max.X; x++ {
+			if math.Abs(lum(static, x, y)-lum(moving, x, y)) > 0.05 {
+				diff++
+			}
+		}
+	}
+	if diff < 50 {
+		t.Errorf("camera motion over the tour should blur (change) the frame, only %d px differ", diff)
 	}
 }

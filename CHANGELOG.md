@@ -51,6 +51,12 @@ adopting, and it was reimplemented better).
   passes through its control points, the tour starts/ends on its waypoints and
   passes near each, arc-length pacing keeps steps even, the camera faces its motion,
   and a landmark tour is ordered by index at the chosen height.
+- **Camera motion blur in the fly-through** (`cmd/rayfilm -blur`): each shot of the
+  cinematic tour can be exposed over a stretch of the path, so a fast dolly streaks
+  the frame the way a real shutter does. It wires the renderer's existing camera
+  motion blur (`PathRenderMotion`, already validated) to the tour: the shutter opens
+  at `CameraAt(u)` and closes at `CameraAt(u+blur)`. Tested at the tour level: motion
+  along the path actually changes (blurs) the frame versus a zero-span static shot.
 
 #### Added — richer materials for the director
 - **Subsurface & thin-film, authorable** (`brain.ObjSpec` `sss`/`sssRad`/`film`/`filmIor`):
