@@ -89,6 +89,7 @@ type World struct {
 	layer             Layer                // which vertical layer (middle/upper/lower)
 	funnels           []funnelObj          // swirling transit funnels (animated)
 	flyer             *Flyer               // optional predator that stalks the walker
+	sprites           []*Sprite            // dream characters you can question
 }
 
 // Reveal marks the area around p as explored on the bird's-eye map (fog-of-war).
@@ -233,7 +234,7 @@ func (w *World) SetAnimTime(sec float64) { w.animTime = sec }
 // HasAnimated reports whether the world contains any moving objects (so a viewer
 // knows the frame isn't static and progressive refinement should restart).
 func (w *World) HasAnimated() bool {
-	return len(w.animated) > 0 || w.HasCreatures() || w.HasFunnels() || w.flyer != nil || (w.weather != nil && len(w.weather.parts) > 0)
+	return len(w.animated) > 0 || w.HasCreatures() || w.HasFunnels() || w.flyer != nil || len(w.sprites) > 0 || (w.weather != nil && len(w.weather.parts) > 0)
 }
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
@@ -333,6 +334,9 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	}
 	if w.flyer != nil { // the predator stalking the walker
 		s.Objects = append(s.Objects, w.flyer.Objects()...)
+	}
+	for _, sp := range w.sprites { // dream characters
+		s.Objects = append(s.Objects, sp.Objects()...)
 	}
 	for _, fn := range w.funnels { // swirling transit funnels, spun by the clock
 		s.Objects = append(s.Objects, FunnelObjects(fn.at, w.animTime)...)

@@ -54,6 +54,15 @@ existing region/portal/map/director architecture.
   meter that falls when it's on you (with a warning) and recovers when you escape.
   Local and deterministic; tested: it pursues and closes in, faces you, drains only
   within reach, is a dark several-lobed shape, and the world steps it to a catch.
+- **Dream sprites you can question** (`pkg/raydir/sprite.go`): the dream characters
+  the hackers debate — can you talk to them, can you tell a sprite from a real
+  dreamer? A `Sprite` drifts about its spot and `Answer`s questions from a small
+  dream-logic table; the classic tell is built in (`LucidTell`): ask a sprite if
+  this is a dream and it deflects/denies, where a lucid dreamer would say yes.
+  `rayexplore -sprites` spawns a couple; type `?your question` to ask the nearest.
+  Tested: answers are deterministic and thematic, the dream question is deflected,
+  `LucidTell` separates deflection from admission, sprites drift near home, and the
+  world finds the nearest and renders them.
 - **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
   map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
   connected by transits, anchored at home. Shortest-transit routing between any two

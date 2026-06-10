@@ -28,6 +28,7 @@
 //	go run ./cmd/rayexplore -funnel -path            # a swirling transit funnel (vortex portal)
 //	go run ./cmd/rayexplore -materialize             # each region renders in from voxel blocks
 //	go run ./cmd/rayexplore -flyer                   # a predator stalks you (drains luminosity)
+//	go run ./cmd/rayexplore -sprites                 # dream characters: type "?question" to ask one
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -141,6 +142,7 @@ func main() {
 	funnel := flag.Bool("funnel", false, "a swirling transit funnel (vortex) ahead — a portal at its mouth (best with -path)")
 	materialize := flag.Bool("materialize", false, "each new region 'renders in' from coarse voxel blocks to sharp, the way a dream forms")
 	flyer := flag.Bool("flyer", false, "a predator (the 'flyer') stalks you and drains your luminosity — keep ahead of it")
+	sprites := flag.Bool("sprites", false, "dream characters you can question: type '?your question' to ask the nearest")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -310,8 +312,13 @@ func main() {
 	if *flyer { // a predator that hunts the walker
 		world.SpawnFlyer(cam.Pos.Add(raytrace.Vec3{X: 6, Z: 12}))
 	}
+	if *sprites { // a few dream characters to meet and question
+		world.AddSprite(raydir.NewSprite("Mira", cam.Pos.Add(raytrace.Vec3{X: -3, Z: 9}), 1))
+		world.AddSprite(raydir.NewSprite("Ko", cam.Pos.Add(raytrace.Vec3{X: 4, Z: 13}), 3))
+	}
 	luminosity := 1.0
 	var guideMsg string
+	var spriteMsg string
 
 	start, lastTick := time.Now(), time.Now()
 	dreamFrame := 0
@@ -328,6 +335,7 @@ func main() {
 		world.StepCreatures(dt, cam.Pos)               // the inhabitants live and react
 		world.StepWeather(dt, cam.Pos)                 // rain/snow drifts around you
 		world.ObserveWalker(raydir.PoseOf(cam), dt)    // read how you move (for mood)
+		world.StepSprites(dt)                          // dream characters drift
 		if *flyer {                                    // the predator hunts; it drains you when close
 			if world.StepFlyer(dt, cam.Pos) {
 				luminosity = math.Max(0, luminosity-dt*0.3)
@@ -428,6 +436,9 @@ func main() {
 		if guideMsg != "" {
 			fmt.Printf("\n  🧭 %s", guideMsg)
 		}
+		if spriteMsg != "" {
+			fmt.Printf("\n  💬 %s", spriteMsg)
+		}
 		if storyBanner != "" {
 			fmt.Printf("\n  %s", storyBanner)
 		}
@@ -475,7 +486,17 @@ func main() {
 
 	sc := bufio.NewScanner(os.Stdin)
 	for sc.Scan() {
-		for _, ch := range strings.ToLower(strings.TrimSpace(sc.Text())) {
+		line := strings.TrimSpace(sc.Text())
+		if *sprites && strings.HasPrefix(line, "?") { // question the nearest dream character
+			if sp := world.NearestSprite(cam.Pos, 10); sp != nil {
+				spriteMsg = sp.Name + ": " + sp.Answer(strings.TrimPrefix(line, "?"))
+			} else {
+				spriteMsg = "(no one near to ask)"
+			}
+			render()
+			continue
+		}
+		for _, ch := range strings.ToLower(line) {
 			switch ch {
 			case 'w':
 				cam.Walk(1.2, 0)
