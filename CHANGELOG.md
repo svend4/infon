@@ -22,6 +22,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   yang and yin self-organise from noise into drifting regions, a living Q6 pattern,
   rendered shaded by yang-count. Seeded/deterministic; tested for in-range states,
   determinism, that a random grid evolves, and render size.
+- **Group-built mandalas** (`pkg/raydir/symmetry.go`, the principle behind meta's
+  hexsym): generate structure by acting with a symmetry group. `Mandala` replicates
+  any motif under the dihedral group D_n about a vertical axis (n rotations, plus
+  their mirror images), so arbitrary geometry becomes a perfectly symmetric
+  mandala — complementing the SDF mandala and the N/S mirror. Tested: the copy count
+  (n and 2n), rotational closure (rotating every copy by 2π/n lands on another copy,
+  all on the motif's ring), and reflected-triangle winding.
 
 ### 🔌 Interop — a hexagram-thinking brain directs the world
 
