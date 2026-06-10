@@ -32,6 +32,15 @@ existing region/portal/map/director architecture.
   `rayexplore` lifts the fog as you move and saves `map.png` on the `k` key. Tested:
   reveal records cells, far points stay white spots, specials are recognised, and
   the render draws ground, white spots and the special markers.
+- **The "square forest" labyrinth** (`pkg/raydir/squareforest.go`): the recurring
+  dream structure where a forest is always divided into square sections by roads —
+  some squares impenetrable jungle, some block-filling buildings, the rest open —
+  dead flat, navigated along the roads between blocks. `NewSquareForest` seeds a
+  grid; `Objects` builds it (tree clumps for jungle, houses for buildings) and
+  `Walkable` reports the maze (roads and open squares walkable, block interiors
+  not). `rayexplore -maze` drops one across the path. Tested: the grid is sized and
+  deterministic, roads/open squares are walkable while block interiors are blocked,
+  and the geometry is flat, repeatable and within the grid.
 
 ### 🎨 CPU ray-tracing & rendering engine (branch `claude/epic-sagan-EWTTr`)
 

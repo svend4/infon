@@ -21,6 +21,7 @@
 //	go run ./cmd/rayexplore -stereo                  # red-cyan anaglyph (3-D with glasses)
 //	go run ./cmd/rayexplore -story                   # the world unfolds as a story, in chapters
 //	go run ./cmd/rayexplore -branch                  # branching paths: walk left/right at a crossroads
+//	go run ./cmd/rayexplore -maze -path              # a "square forest" labyrinth of blocks and roads
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -127,6 +128,7 @@ func main() {
 	stereo := flag.Bool("stereo", false, "render in depth: a red-cyan anaglyph (view with red/cyan glasses)")
 	ris := flag.Int("ris", 0, "ReSTIR/RIS candidate lights per pixel (path mode): cleaner many-light worlds (e.g. 16)")
 	story := flag.Bool("story", false, "follow a story: the world unfolds in chapters, a beacon marks each threshold")
+	maze := flag.Bool("maze", false, "a 'square forest': a flat grid of jungle/building blocks split by roads — a labyrinth to walk")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -217,6 +219,9 @@ func main() {
 	world.SetWeather(*weather) // rain/snow/fog that follows the walker (before the scene is built so fog bakes in)
 	if *ris > 1 {              // ReSTIR many-lights: cleaner fireflies/lanterns (NEE without MIS)
 		world.SetRIS(*ris)
+	}
+	if *maze { // a "square forest" labyrinth spanning the path ahead
+		world.AddDecor(raydir.NewSquareForest(8, 10, 1).Objects(raytrace.Vec3{X: -32, Z: 8})...)
 	}
 	if *portals {              // a non-Euclidean window ahead, linking to the place behind you
 		world.AddPortal(raytrace.NewPortal(
