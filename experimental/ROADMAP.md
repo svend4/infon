@@ -1,5 +1,13 @@
 # 🗺️ TVCP Experimental Features Roadmap
 
+> ⚠️ **ASPIRATIONAL — not the source of truth.** This roadmap records *intended*
+> and historical aims. Several rows marked "✅ Done" here are aspirational or
+> skeletal — for example the mobile clients are stubs (`mobile/ios`, `mobile/android`
+> hold a few skeleton files, no build), not shipping apps. For the **actual**
+> implementation status of any feature, see
+> [`../FEATURE_STATUS.md`](../FEATURE_STATUS.md), which is the single source of
+> truth and overrides the statuses below.
+
 ## 📋 Общий план развития (2024-2025)
 
 ### ✅ Уже реализовано (Q4 2024)
