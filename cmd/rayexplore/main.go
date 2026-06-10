@@ -10,6 +10,7 @@
 //	go run ./cmd/rayexplore                         # walk a reference-authored world
 //	go run ./cmd/rayexplore -path -grade            # path-traced, cinematically graded
 //	go run ./cmd/rayexplore -sound                  # hear the world (procedural ambient)
+//	go run ./cmd/rayexplore -guide                  # an AI companion leads you on a tour
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
 //
 // Controls (type, then Enter; combine letters): w/s walk, a/d strafe, q/e turn,
@@ -68,6 +69,7 @@ func main() {
 	grade := flag.Bool("grade", false, "post: bloom + vignette + AgX tone map for a cinematic frame")
 	clouds := flag.Bool("clouds", false, "volumetric cloud bank (path tracer; costly)")
 	sound := flag.Bool("sound", false, "play a procedural soundscape of the world (needs an audio device)")
+	guide := flag.Bool("guide", false, "an AI companion that walks with you and leads a tour of the world")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -131,23 +133,42 @@ func main() {
 		startSoundscape(&featMu, &feat)
 	}
 
-	start := time.Now()
+	var comp *raydir.Guide
+	if *guide {
+		comp = raydir.NewGuide("Guide", cam.Pos.Add(raytrace.Vec3{X: 3, Z: 3}))
+	}
+	var guideMsg string
+
+	start, lastGuide := time.Now(), time.Now()
 	render := func() {
 		world.SetAnimTime(time.Since(start).Seconds()) // keep the world alive
 		featMu.Lock()
 		feat = world.Ambient()
 		featMu.Unlock()
 		c := cam.Camera()
+		fscene := scene
+		if comp != nil { // a moving companion: step it and inject its avatar this frame
+			dt := time.Since(lastGuide).Seconds()
+			if dt > 0.5 {
+				dt = 0.5
+			}
+			lastGuide = time.Now()
+			comp.Step(dt, cam.Pos, world.Landmarks())
+			if r, ok := comp.Remark(time.Since(start).Seconds(), world.Landmarks()); ok {
+				guideMsg = comp.Name + ": " + r
+			}
+			fscene = world.SceneWith(raydir.AvatarSpheres(comp.Pose(), raydir.GuideColor))
+		}
 		var im image.Image
 		spp := 1
 		if *pathT {
-			if world.HasAnimated() {
+			if world.HasAnimated() || comp != nil {
 				refiner.Reset() // a moving world can't accumulate; render fresh
 			}
-			im = refiner.Frame(scene, c)
+			im = refiner.Frame(fscene, c)
 			spp = refiner.Samples()
 		} else {
-			im = raytrace.Render(scene, c, pxW, pxH, raytrace.Options{Samples: 1})
+			im = raytrace.Render(fscene, c, pxW, pxH, raytrace.Options{Samples: 1})
 		}
 		if *grade {
 			im = raytrace.Grade(im, raytrace.GradeOptions{BloomThresh: 1.0, BloomStrength: 0.4, Vignette: 0.35, AgX: true})
@@ -155,6 +176,9 @@ func main() {
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
 		if showMap {
 			fmt.Print("\n" + raydir.Minimap(world.Landmarks(), nil, cam.Pos, *cols, *rows/2))
+		}
+		if guideMsg != "" {
+			fmt.Printf("\n  🧭 %s", guideMsg)
 		}
 		mins := int((dayT - math.Floor(dayT)) * 24 * 60)
 		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f g=grow t=time p=path m=map Enter=refine x=quit] ",

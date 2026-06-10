@@ -62,6 +62,7 @@ func main() {
 	rows := flag.Int("h", 36, "height in cells")
 	worldFile := flag.String("world", "", "host: persist the authored world to this file (load on start, save as it grows)")
 	recordFile := flag.String("record", "", "host: record the session (regions, poses, chat, time) to a file for rayplay")
+	guideFlag := flag.Bool("guide", false, "host: spawn an AI guide that walks the group from place to place")
 	flag.Parse()
 	args := flag.Args()
 	pxW, pxH := *cols*2, *rows*4
@@ -95,7 +96,9 @@ func main() {
 	}
 	chat := raydir.NewChatLog(6)
 	var lastSaid string // the latest thing anyone said; steers the director
-	showMap := false    // overlay the minimap (toggle with 'm')
+	var aiGuide *raydir.Guide
+	const guideID = uint32(0x6711de) // synthetic walker id for the AI guide
+	showMap := false                 // overlay the minimap (toggle with 'm')
 	var chatMu sync.Mutex
 	csync := raydir.NewChatSync(selfID, *host) // reliable chat: ids + dedup + re-broadcast
 
@@ -140,6 +143,9 @@ func main() {
 	}
 
 	self := raydir.FlyCam{Pos: raytrace.Vec3{X: 0, Y: 2.2, Z: 0}, Pitch: -0.08, FOV: math.Pi / 3}
+	if *host && *guideFlag {
+		aiGuide = raydir.NewGuide("Guide", raytrace.Vec3{X: 3, Y: 2.2, Z: 3})
+	}
 
 	var stateMu sync.Mutex
 	poses := raydir.PoseSet{}          // host: everyone; guest: the hub's relayed table
@@ -528,8 +534,25 @@ func main() {
 		myPose := raydir.PoseOf(self)
 
 		if *host {
+			if aiGuide != nil { // the AI guide walks the group from place to place
+				worldMu.Lock()
+				marks := world.Landmarks()
+				worldMu.Unlock()
+				aiGuide.Step(0.12, self.Pos, marks)
+				if r, ok := aiGuide.Remark(time.Since(sessionStart).Seconds(), marks); ok {
+					gm := csync.Compose(aiGuide.Name, r)
+					sendGroup(network.PacketTypeTextChat, raydir.EncodeChatMsgs([]raydir.ChatMsg{gm}))
+					chatMu.Lock()
+					chat.Add(aiGuide.Name, r)
+					chatMu.Unlock()
+				}
+			}
 			stateMu.Lock()
 			poses[selfID] = myPose
+			if aiGuide != nil {
+				poses[guideID] = aiGuide.Pose()
+				lastSeen[guideID] = time.Now() // keep the guide from being pruned
+			}
 			lastSeen[selfID] = time.Now()
 			for id, ts := range lastSeen { // prune walkers we haven't heard from
 				if id != selfID && time.Since(ts) > 5*time.Second {

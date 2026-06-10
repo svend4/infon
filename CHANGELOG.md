@@ -161,6 +161,14 @@ adopting, and it was reimplemented better).
   reference brain, or a live model via `-url`): it asks for many scenes and reports
   how renderable, rich and varied they are (`BenchDirector`) — a quick objective
   read before a live session.
+- **An AI inside the world — a guide companion** (`pkg/raydir/guide.go`): not an
+  off-stage director but a participant. A `Guide` walks with you, leads a tour of the
+  world's named landmarks (nearest-first), faces its motion, and comments on where
+  it's taking you — rendered as an avatar, talking in the chat. `rayexplore -guide`
+  gives a solo companion; `raymeet -host -guide` spawns it as a synthetic walker the
+  whole group sees and hears. Behaviour is local and deterministic (so it works
+  offline and is tested); a live brain can enrich what it says. Verified live: the
+  guide appears as a second walker and announces "let me show you the …".
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"
