@@ -13,6 +13,7 @@
 //	go run ./cmd/rayexplore -guide                  # an AI companion leads you on a tour
 //	go run ./cmd/rayexplore -creatures              # a flock lives in the world and reacts to you
 //	go run ./cmd/rayexplore -weather rain           # rain (or snow/fog) that follows you
+//	go run ./cmd/rayexplore -climate 42              # weather as deterministic regional zones (a Q6 automaton)
 //	go run ./cmd/rayexplore -seasons                 # walk forward through spring→summer→autumn→winter
 //	go run ./cmd/rayexplore -mood                    # the world's tone follows how you move
 //	go run ./cmd/rayexplore -path -style oil         # a painted (oil/ink/poster) look
@@ -131,6 +132,7 @@ func main() {
 	guide := flag.Bool("guide", false, "an AI companion that walks with you and leads a tour of the world")
 	creatures := flag.Bool("creatures", false, "a flock of inhabitants that lives in the world, gathers at places, and scatters from you")
 	weather := flag.String("weather", "", "weather that follows you: rain | snow | fog")
+	climate := flag.Int64("climate", 0, "weather as a hexagram-CA regional map (deterministic zones change as you walk); value = seed, 0 = off; overrides -weather")
 	seasons := flag.Bool("seasons", false, "walk through the year: foliage, ground and sky shift spring→summer→autumn→winter")
 	mood := flag.Bool("mood", false, "the director reads how you move (linger/press on/wander) and shifts the tone of what it builds")
 	style := flag.String("style", "", "non-photoreal look: oil | ink | poster")
@@ -269,8 +271,12 @@ func main() {
 		world.SetMirror(true, 0) // reflect the world north-south across the start
 	}
 	world.SetClouds(*clouds)
-	world.SetWeather(*weather) // rain/snow/fog that follows the walker (before the scene is built so fog bakes in)
-	if *ris > 1 {              // ReSTIR many-lights: cleaner fireflies/lanterns (NEE without MIS)
+	if *climate != 0 {
+		world.SetClimate(*climate) // deterministic regional weather zones from a hexagram cellular automaton
+	} else {
+		world.SetWeather(*weather) // rain/snow/fog that follows the walker (before the scene is built so fog bakes in)
+	}
+	if *ris > 1 { // ReSTIR many-lights: cleaner fireflies/lanterns (NEE without MIS)
 		world.SetRIS(*ris)
 	}
 	if *maze { // a "square forest" labyrinth spanning the path ahead
@@ -381,6 +387,7 @@ func main() {
 		world.Tread(cam.Pos)                           // wear a path where you walk
 		world.Reveal(cam.Pos, 14)                      // lift the fog where you've been (bird's-eye map)
 		world.StepCreatures(dt, cam.Pos)               // the inhabitants live and react
+		world.UpdateClimate(cam.Pos)                   // CA climate: the weather zone changes as you cross regions
 		world.StepWeather(dt, cam.Pos)                 // rain/snow drifts around you
 		world.ObserveWalker(raydir.PoseOf(cam), dt)    // read how you move (for mood)
 		world.StepSprites(dt)                          // dream characters drift

@@ -94,6 +94,7 @@ type World struct {
 	intentStr         float64              // intention strength (0..1), builds while held
 	memory            *Memory              // the director's memory of past regions (RAG-style recall)
 	robots            []*Robot             // patrolling machines (the logistics yard in the world)
+	climate           *Climate             // optional HexCA-driven weather (deterministic, peer-syncable)
 }
 
 // SetMemory turns the director's region memory on or off. When on, every grown
