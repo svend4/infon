@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 🌉 Loose coordination (adapted from info150's portal)
+
+- **Hexagram bridges** (`pkg/raydir/hexbridge.go`, realising info150's `portal`
+  principle — "not merger, compatibility"): info150 places each domain on a 6-bit
+  coordinate and bridges domains by Hamming distance; here each world carries a
+  hexagram (its Q6 coordinate), and `HexBridges` links worlds whose hexagrams differ
+  by at most N lines — a read-only view that discovers Q6 proximity between worlds
+  without coupling or modifying them. Tested: only Hamming-near worlds bridge at low
+  N, everything bridges at N=6, and the antipode is isolated at N=1.
+
 ### 📜 A formal brain contract (adapted from robot/ETD)
 
 - **JSON Schema for rayscene** (`ai/schema/rayscene.schema.json`, after the
