@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   to the regular voxel height field. Tested with the empty-circumcircle oracle (no
   input point lies inside any triangle's circumcircle), plus square/coverage/height
   bounds.
+- **Hexagram cellular automaton** (`pkg/raydir/hexca.go`, after svend4/meta's hexca):
+  a toroidal grid where every cell is one of the 64 hexagram states (a 6-bit Q6
+  vertex). Each of the six lines evolves as a coupled majority automaton — a cell
+  takes the majority of its four neighbours' lines, keeping its own on a tie — so
+  yang and yin self-organise from noise into drifting regions, a living Q6 pattern,
+  rendered shaded by yang-count. Seeded/deterministic; tested for in-range states,
+  determinism, that a random grid evolves, and render size.
 
 ### 🔌 Interop — a hexagram-thinking brain directs the world
 
