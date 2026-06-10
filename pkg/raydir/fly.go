@@ -65,6 +65,7 @@ type World struct {
 	timeSet           bool             // sky and sun follow Time (day/night cycle)
 	animated          []animObj        // moving objects, re-placed each frame
 	animTime          float64          // shared animation clock (seconds)
+	landmarks         []Landmark       // named region positions (for the map)
 }
 
 // animObj is one moving object: its spec, its region offset, and a stable seed so

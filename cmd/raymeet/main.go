@@ -17,10 +17,11 @@
 //	go run ./cmd/raymeet localhost:5000 5002   # ...and a third, fourth, ...
 //
 // Controls (type then Enter): w/s walk, a/d strafe, q/e turn, r/f look,
-// /message to chat, /place <kind> to build an object in front of you (crystal,
-// rock, box, sphere, tree, mandelbulb, mandala, melt, escher, ...) into the shared
-// world for everyone, x quit. Add -voice to also carry audio — positional (quieter
-// with distance, softer from behind); falls back to text-only without a device.
+// /message to chat — the world listens, and what you say becomes the director's
+// next prompt — /place <kind> to build an object in front of you (crystal, rock,
+// box, tree, mandelbulb, mandala, melt, ...), /go <place> to fast-travel to a named
+// region, m to toggle the minimap, x quit. Add -voice to also carry audio —
+// positional (quieter with distance, softer from behind); falls back to text-only.
 package main
 
 import (
@@ -93,6 +94,8 @@ func main() {
 		name = fmt.Sprintf("walker-%04x", selfID&0xffff)
 	}
 	chat := raydir.NewChatLog(6)
+	var lastSaid string // the latest thing anyone said; steers the director
+	showMap := false    // overlay the minimap (toggle with 'm')
 	var chatMu sync.Mutex
 	csync := raydir.NewChatSync(selfID, *host) // reliable chat: ids + dedup + re-broadcast
 
@@ -190,6 +193,7 @@ func main() {
 		sendGroup(network.PacketTypeTextChat, raydir.EncodeChatMsgs([]raydir.ChatMsg{m}))
 		chatMu.Lock()
 		chat.Add(name, msg)
+		lastSaid = msg
 		chatMu.Unlock()
 		if rec != nil {
 			rec.Chat(ms(), []raydir.ChatMsg{m})
@@ -256,7 +260,11 @@ func main() {
 		before := len(regions)
 		for len(regions) < count {
 			i := len(regions)
-			reg, _, e := world.AuthorRegion(b, prompts[i%len(prompts)], i, regionAt(i))
+			chatMu.Lock()
+			said := lastSaid
+			chatMu.Unlock()
+			prompt := raydir.DirectorPrompt(said, prompts[i%len(prompts)]) // the world listens
+			reg, _, e := world.AuthorRegion(b, prompt, i, regionAt(i))
 			if e != nil {
 				break
 			}
@@ -374,6 +382,7 @@ func main() {
 						if csync.Observe(m) {
 							chatMu.Lock()
 							chat.Add(m.Sender, m.Text)
+							lastSaid = m.Text
 							chatMu.Unlock()
 							fresh = append(fresh, m)
 						}
@@ -455,6 +464,8 @@ func main() {
 			self.Turn(0, -0.08)
 		case 'p':
 			*pathT = !*pathT
+		case 'm':
+			showMap = !showMap
 		case 'x':
 			return false
 		}
@@ -491,6 +502,13 @@ func main() {
 				switch {
 				case strings.HasPrefix(t, "/place ") || strings.HasPrefix(t, "/build "):
 					place(strings.TrimSpace(t[7:])) // drop an object in front of you
+				case strings.HasPrefix(t, "/go "): // fast-travel to a named place
+					worldMu.Lock()
+					l, ok := world.FindLandmark(t[4:])
+					worldMu.Unlock()
+					if ok {
+						self.Pos.X, self.Pos.Z = l.At.X, l.At.Z-4
+					}
 				case strings.HasPrefix(t, "/"): // "/message" -> chat
 					if msg := strings.TrimSpace(t[1:]); msg != "" {
 						sendChat(msg)
@@ -569,10 +587,12 @@ func main() {
 		selfFwd := raytrace.Vec3{X: math.Sin(self.Yaw), Z: math.Cos(self.Yaw)}
 		stateMu.Lock()
 		var extra []raytrace.Object
+		var otherPos []raytrace.Vec3
 		others := 0
 		for id, p := range poses {
 			if id != selfID {
 				extra = append(extra, raydir.AvatarSpheres(p, raydir.AvatarColor(id))...)
+				otherPos = append(otherPos, p.Pos)
 				others++
 				if voiceOn && mixer != nil {
 					mixer.SetGain(id, raydir.VoiceGain(self.Pos, selfFwd, p.Pos))
@@ -585,6 +605,10 @@ func main() {
 		scene := world.SceneWith(extra)
 		chunks := world.Chunks()
 		tod := world.Time
+		var marks []raydir.Landmark
+		if showMap {
+			marks = world.Landmarks()
+		}
 		worldMu.Unlock()
 
 		var im image.Image
@@ -594,8 +618,11 @@ func main() {
 			im = raytrace.Render(scene, self.Camera(), pxW, pxH, raytrace.Options{Samples: 1})
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
-		fmt.Printf("\n[%s as %s%s | chunks:%d | walkers:%d | %s | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f, /msg, x=quit]",
+		fmt.Printf("\n[%s as %s%s | chunks:%d | walkers:%d | %s | you (%.1f,%.1f,%.1f) | w/s a/d q/e r/f, /msg, /go, m=map, x=quit]",
 			role, name, vtag, chunks, others+1, clockOf(tod), self.Pos.X, self.Pos.Y, self.Pos.Z)
+		if showMap {
+			fmt.Print("\n" + raydir.Minimap(marks, otherPos, self.Pos, *cols, *rows/2))
+		}
 		chatMu.Lock()
 		for _, l := range chat.Lines() {
 			fmt.Printf("\n  💬 %s", l)

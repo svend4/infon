@@ -15,6 +15,7 @@ type SceneSpec struct {
 	Light   [3]float64 `json:"light"`
 	SkyTop  [3]float64 `json:"skyTop"`
 	SkyBot  [3]float64 `json:"skyBottom"`
+	Name    string     `json:"name,omitempty"` // optional place name (for the map / landmarks)
 }
 
 // ObjSpec is one object in a SceneSpec: a sphere (default), a box, or an infinite
@@ -158,14 +159,39 @@ func refRayScene(req Request) Response {
 			Anim: "pulse", AAmp: 0.7, ASpeed: 0.8,
 		})
 	}
-	if hasAny(p.Prompt, "spirit", "creature", "wander", "firefly") {
+	if hasAny(p.Prompt, "spirit", "creature", "wander", "firefl") {
 		spec.Objects = append(spec.Objects, ObjSpec{
 			Kind: "sphere", X: 0, Y: 1, Z: 3, R: 0.3, Color: [3]float64{1, 0.9, 0.5}, Emit: [3]float64{2, 1.6, 0.6},
 			Anim: "wander", AAmp: 3, ASpeed: 0.25,
 		})
 	}
+	spec.Name = sceneName(p.Prompt) // a place name for the map / landmarks
 	data, _ := json.Marshal(spec)
 	return Response{Protocol: Protocol, Kind: "move", Ray: data, Reasoning: "reference scene author"}
+}
+
+// sceneName gives a region a place name from its dominant keyword (empty = let the
+// world assign a default).
+func sceneName(prompt string) string {
+	switch {
+	case hasAny(prompt, "forest", "wood", "tree", "park"):
+		return "Forest"
+	case hasAny(prompt, "crystal", "gem", "cave"):
+		return "Crystal Cave"
+	case hasAny(prompt, "village", "town", "house", "home", "cabin"):
+		return "Village"
+	case hasAny(prompt, "surreal", "dream", "dali", "dalí"):
+		return "Dreamscape"
+	case hasAny(prompt, "mandelbulb", "fractal", "menger", "sierpinski", "mandala"):
+		return "Fractal Field"
+	case hasAny(prompt, "water", "ocean", "sea", "lake", "shore"):
+		return "Shore"
+	case hasAny(prompt, "gold"):
+		return "Gilded Hall"
+	case hasAny(prompt, "night"):
+		return "Nightfall"
+	}
+	return ""
 }
 
 // fractalFor maps a prompt keyword to a ray-marched form name (see raydir's SDF

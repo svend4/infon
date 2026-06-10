@@ -63,6 +63,7 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 	}
 	w.seen[index] = true
 	w.chunks = len(w.seen)
+	w.landmarks = append(w.landmarks, Landmark{Index: index, At: at, Name: regionName(spec, index)})
 	n := 0
 	for i, o := range spec.Objects {
 		if i >= maxRegionObjects { // cap so a runaway model can't flood the world

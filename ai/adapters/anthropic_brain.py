@@ -45,7 +45,7 @@ SYS = ("You are a game and art partner speaking the tvcp-ai/1 format. Reply with
        "moving each sphere in state.spheres (by id); dx,dy,dz each -1,0,1. "
        "kind=move with game=rayscene -> reply a JSON object with key ray = a scene graph "
        "{objects:[{kind,name,tex,bump,x,y,z,r,s:[hx,hy,hz],color:[r,g,b],emit:[r,g,b],glass,metal,reflect,rough,anim,aamp,aspd}],light:[x,y,z],"
-       "skyTop:[r,g,b],skyBottom:[r,g,b]}; kind is sphere, box/pyramid/cylinder (s=half-extents), tree, house, mesh, fractal, or plane; "
+       "skyTop:[r,g,b],skyBottom:[r,g,b],name}; name is an optional place name; kind is sphere, box/pyramid/cylinder (s=half-extents), tree, house, mesh, fractal, or plane; "
        "for kind=mesh set name to a model (crystal, rock); for kind=fractal set name to a ray-marched form (mandelbulb, menger, sierpinski, mandala, melt, escher); "
        "tex names a surface texture (checker/marble/wood/stone/clouds/mandala/tiles); bump names a normal map (ripple/waves/bumps); anim makes it move (bob/orbit/drift/pulse/wander, with aamp/aspd); author the world that "
        "state.prompt describes (use emit for lights, glass~1.5, metal/reflect for shiny). "

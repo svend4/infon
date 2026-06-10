@@ -135,6 +135,14 @@ adopting, and it was reimplemented better).
   static props and re-placed each frame (`World.SetAnimTime`); the reference author
   spawns them on a keyword (birds, beacon, float, spirit). The world stops being
   still.
+- **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
+  people say steers what the director builds — the most recent chat line becomes the
+  next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"
+  makes the regions ahead exactly that (offline via keywords, or a live model). Each
+  region is named (`SceneSpec.name`, or a default) and remembered as a landmark; a
+  top-down ASCII `Minimap` shows the named places and the walkers (toggle `m`), and
+  `/go <place>` fast-travels to one. A growing world becomes navigable and
+  conversational.
 - **The shared world — two walkers, one space** (`cmd/raymeet`,
   `pkg/raydir/pose.go`, `pkg/raydir/region.go`): two peers "call in" over UDP and
   walk the *same* growing world together, each seeing the other's glowing avatar.

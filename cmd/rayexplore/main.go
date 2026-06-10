@@ -70,7 +70,8 @@ func main() {
 	}
 	rm, _ := babe.ParseRenderMode(mode)
 	dr := terminal.NewDiffRenderer()
-	dayT := 0.32 // time of day; the 't' key steps it through dawn/noon/dusk/night
+	dayT := 0.32     // time of day; the 't' key steps it through dawn/noon/dusk/night
+	showMap := false // overlay the minimap of named places (toggle with 'm')
 	world.SetTime(dayT)
 	scene := world.Scene()
 	pathOpt := raytrace.PathOptions{Samples: 4, MaxDepth: 5, Seed: 1, NEE: true, MIS: true, Sobol: true}
@@ -111,8 +112,11 @@ func main() {
 			im = raytrace.Grade(im, raytrace.GradeOptions{BloomThresh: 1.0, BloomStrength: 0.4, Vignette: 0.35, AgX: true})
 		}
 		fmt.Print(dr.Render(babe.ImageToFrameMode(im, *cols, *rows, rm)))
+		if showMap {
+			fmt.Print("\n" + raydir.Minimap(world.Landmarks(), nil, cam.Pos, *cols, *rows/2))
+		}
 		mins := int((dayT - math.Floor(dayT)) * 24 * 60)
-		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f  g=grow t=time p=path Enter=refine x=quit] ",
+		fmt.Printf("\n[director: %s | chunks:%d props:%d | 🕓%02d:%02d spp:%d | pos (%.1f,%.1f,%.1f) | w/s a/d q/e r/f g=grow t=time p=path m=map Enter=refine x=quit] ",
 			who, world.Chunks(), world.Props(), mins/60, mins%60, spp, cam.Pos.X, cam.Pos.Y, cam.Pos.Z)
 	}
 
@@ -149,6 +153,8 @@ func main() {
 			case 'p':
 				*pathT = !*pathT
 				refiner.Reset()
+			case 'm':
+				showMap = !showMap
 			case 'x':
 				return
 			}
