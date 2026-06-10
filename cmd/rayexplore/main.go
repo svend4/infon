@@ -19,6 +19,7 @@
 //	go run ./cmd/rayexplore -path -portals           # an Escher portal: a non-Euclidean window
 //	go run ./cmd/rayexplore -path -dream             # a lens-and-film dream pass
 //	go run ./cmd/rayexplore -stereo                  # red-cyan anaglyph (3-D with glasses)
+//	go run ./cmd/rayexplore -story                   # the world unfolds as a story, in chapters
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -103,6 +104,7 @@ func main() {
 	portals := flag.Bool("portals", false, "drop an Escher portal ahead — a non-Euclidean window (best with -path)")
 	dream := flag.Bool("dream", false, "lens & film post: chromatic aberration, barrel warp, grain, vignette")
 	stereo := flag.Bool("stereo", false, "render in depth: a red-cyan anaglyph (view with red/cyan glasses)")
+	story := flag.Bool("story", false, "follow a story: the world unfolds in chapters, a beacon marks each threshold")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -123,8 +125,24 @@ func main() {
 	nextPrompt := func() string { p := prompts[pi%len(prompts)]; pi++; return p }
 
 	world := raydir.NewWorld()
-	world.SetSeasonal(*seasons)   // before any region grows, so foliage is tinted as it's built
-	world.SetMoodSensing(*mood)   // read how the walker moves and bias what's grown
+	world.SetSeasonal(*seasons) // before any region grows, so foliage is tinted as it's built
+	world.SetMoodSensing(*mood) // read how the walker moves and bias what's grown
+	var tale *raydir.Story
+	if *story {
+		tale = raydir.DefaultStory()
+	}
+	seed := func() string { // the next region's prompt: the story's, or the rotation
+		if tale != nil {
+			return tale.Prompt()
+		}
+		return nextPrompt()
+	}
+	var storyBanner string
+	if tale != nil { // open on the first chapter's narration
+		c := tale.Chapter()
+		n, tot := tale.Progress()
+		storyBanner = fmt.Sprintf("📖 %d/%d %s — %s", n, tot, c.Title, c.Line)
+	}
 	frontZ := 10.0
 	if *imageSeed != "" { // walk into a world derived from a picture
 		if img, err := loadImage(*imageSeed); err == nil {
@@ -135,8 +153,11 @@ func main() {
 		}
 	}
 	if world.Chunks() == 0 {
-		if _, err := world.Grow(b, world.BiasPrompt(nextPrompt()), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
+		if _, err := world.Grow(b, world.BiasPrompt(seed()), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
 			fmt.Fprintln(os.Stderr, "director failed to author the first region:", err)
+		}
+		if tale != nil {
+			tale.Advance() // account the opening region against the first chapter
 		}
 	}
 	cam := raydir.FlyCam{Pos: raytrace.Vec3{X: 0, Y: 2.2, Z: 0}, Yaw: 0, Pitch: -0.08, FOV: math.Pi / 3}
@@ -167,12 +188,19 @@ func main() {
 	grow := func() {
 		jitter := math.Sin(float64(world.Chunks())*1.7) * 2.5
 		frontZ += 14
-		n, err := world.Grow(b, world.BiasPrompt(nextPrompt()), raytrace.Vec3{X: jitter, Y: 0, Z: frontZ})
+		n, err := world.Grow(b, world.BiasPrompt(seed()), raytrace.Vec3{X: jitter, Y: 0, Z: frontZ})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "grow failed:", err)
 			return
 		}
 		_ = n
+		if tale != nil { // turn the page when the chapter has had its regions
+			if entered, ch := tale.Advance(); entered {
+				idx, tot := tale.Progress()
+				world.AddDecor(raydir.BeaconObjects(raytrace.Vec3{X: jitter, Z: frontZ}, raydir.ChapterColor(idx-1))...)
+				storyBanner = fmt.Sprintf("📖 %d/%d %s — %s", idx, tot, ch.Title, ch.Line)
+			}
+		}
 		scene = world.Scene()
 		refiner.Reset() // the scene changed
 	}
@@ -279,6 +307,9 @@ func main() {
 		}
 		if guideMsg != "" {
 			fmt.Printf("\n  🧭 %s", guideMsg)
+		}
+		if storyBanner != "" {
+			fmt.Printf("\n  %s", storyBanner)
 		}
 		mins := int((dayT - math.Floor(dayT)) * 24 * 60)
 		season := ""

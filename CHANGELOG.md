@@ -275,6 +275,15 @@ adopting, and it was reimplemented better).
   walk grows still ponds and warm lanterns, a restless one a grand distant monument,
   a curious one strange floating oddities. Tested end to end (each gait reads the
   right mood, the prompts differ, and the three tones author three different scenes).
+- **A world as a story** (`pkg/raydir/story.go`): `rayexplore -story` makes the walk
+  an arc instead of unrelated regions. A `Story` is an ordered set of `Chapter`s,
+  each with its own director prompt (the seed the world grows from) and a line the
+  guide speaks on entering it; a chapter spans a few regions, and when you walk far
+  enough the page turns — a coloured **beacon** (a stack of glowing orbs) marks the
+  threshold and the narration moves on. The built-in five-act arc runs from a dawn
+  meadow through a night forest, a drowned city and a crystal cave to a golden
+  summit. A pure state machine (tested: it turns the page every N regions in order,
+  stops on the last chapter, reports progress; beacons glow and stand in place).
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"
