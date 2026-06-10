@@ -53,6 +53,7 @@ step "rayfx adaptive" go run ./cmd/rayfx -mode adaptive -w 80 -h 60 -out "$tmp/f
 step "rayfx temporal" go run ./cmd/rayfx -mode temporal -w 80 -h 60 -frames 3 -out "$tmp/fxt"
 step "rayyard (live)" go run ./cmd/rayyard -live -w 80 -h 60 -cols 2 -rows 1 -spp 6 -out "$tmp/yard"
 step "rayspectate" go run ./cmd/rayspectate -w 80 -h 60 -spp 6 -players 3 -robots 2 -out "$tmp/spectate"
+step "rayagent" go run ./cmd/rayagent -w 80 -h 60 -cols 2 -rows 1 -spp 6 -out "$tmp/agent"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 

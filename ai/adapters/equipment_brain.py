@@ -65,7 +65,7 @@ def scene_from_fleet(units):
     }
 
 
-def _fleet_from_state(state):
+def _state_dict(state):
     if isinstance(state, (bytes, bytearray)):
         state = state.decode("utf-8", "ignore")
     if isinstance(state, str):
@@ -73,11 +73,29 @@ def _fleet_from_state(state):
             state = json.loads(state)
         except Exception:
             state = {}
-    if isinstance(state, dict):
-        f = state.get("fleet")
-        if isinstance(f, list):
-            return f
-    return []
+    return state if isinstance(state, dict) else {}
+
+
+def _fleet_from_state(state):
+    f = _state_dict(state).get("fleet")
+    return f if isinstance(f, list) else []
+
+
+def dispatch_robot(state):
+    """Pick a station for a robot: a hot one goes to base (0) to cool down; a
+    healthy one heads to the farthest station, so it keeps traversing the yard."""
+    status = float(state.get("status", 0) or 0)
+    stations = state.get("stations") or []
+    if not stations:
+        return 0, "no stations"
+    if status >= 0.55:
+        return 0, f"status {status:.2f} hot -> base"
+    # healthy: head to the farthest WORK station (skip base at index 0), so base is
+    # reserved for the machines that need to cool down.
+    work = list(range(1, len(stations))) or [0]
+    px, pz = float(state.get("x", 0) or 0), float(state.get("z", 0) or 0)
+    idx = max(work, key=lambda i: (stations[i].get("x", 0) - px) ** 2 + (stations[i].get("z", 0) - pz) ** 2)
+    return idx, f"status {status:.2f} ok -> station {idx}"
 
 
 def _cue(units):
@@ -93,6 +111,11 @@ def decide(req):
         units = _fleet_from_state(req.get("state"))
         resp["ray"] = scene_from_fleet(units)
         resp["reasoning"] = _cue(units)
+        return resp
+    if kind == "move" and req.get("game") == "robot":
+        idx, why = dispatch_robot(_state_dict(req.get("state")))
+        resp["move"] = {"card_index": idx}
+        resp["reasoning"] = "robot: " + why
         return resp
     if kind == "move":
         resp["move"] = {"row": 0, "col": 0}
@@ -142,6 +165,14 @@ def _selftest():
     assert r["protocol"] == "tvcp-ai/1" and isinstance(r["ray"]["objects"], list) and r["ray"]["objects"]
     # empty fleet still authors a valid (ground + sun) scene
     assert len(scene_from_fleet([])["objects"]) >= 2
+    # robot dispatch: a hot robot is sent to base (0); a cool one to the farthest
+    stns = [{"name": "base", "x": 0, "z": 0}, {"name": "dock", "x": 10, "z": 0}]
+    hot = decide({"protocol": "tvcp-ai/1", "kind": "move", "game": "robot",
+                  "state": json.dumps({"unit": "a", "x": 5, "z": 0, "status": 0.8, "stations": stns})})
+    assert hot["move"]["card_index"] == 0, hot
+    cool = decide({"protocol": "tvcp-ai/1", "kind": "move", "game": "robot",
+                   "state": json.dumps({"unit": "a", "x": 0, "z": 0, "status": 0.1, "stations": stns})})
+    assert cool["move"]["card_index"] == 1, cool
     print("equipment_brain selftest OK")
 
 

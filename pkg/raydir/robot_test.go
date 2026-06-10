@@ -46,6 +46,27 @@ func TestRobotBeaconReddensWithStatus(t *testing.T) {
 	}
 }
 
+func TestRobotGoToOverridesPatrol(t *testing.T) {
+	r := NewRobot(raytrace.Vec3{}, nil, 0.2) // no patrol; goal-driven
+	if !r.AtGoal() {
+		t.Fatal("a robot with no command should report AtGoal")
+	}
+	dest := raytrace.Vec3{X: 6, Z: 0}
+	r.GoTo(dest)
+	if r.AtGoal() {
+		t.Fatal("after GoTo the robot should have an active goal")
+	}
+	for i := 0; i < 200 && !r.AtGoal(); i++ {
+		r.Step(0.05)
+	}
+	if !r.AtGoal() {
+		t.Fatal("robot should reach and clear its commanded goal")
+	}
+	if dx, dz := r.Pos.X-dest.X, r.Pos.Z-dest.Z; dx*dx+dz*dz > 0.5*0.5 {
+		t.Errorf("robot should stop near its goal, ended at %v", r.Pos)
+	}
+}
+
 func TestRobotObjectsCount(t *testing.T) {
 	objs := NewRobot(raytrace.Vec3{}, nil, 0.5).Objects()
 	if len(objs) != 3 {

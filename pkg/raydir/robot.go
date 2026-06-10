@@ -22,6 +22,7 @@ type Robot struct {
 	speed  float64
 	wps    []raytrace.Vec3
 	wp     int
+	goal   *raytrace.Vec3 // a commanded destination (overrides the patrol until reached)
 	t      float64
 }
 
@@ -38,19 +39,29 @@ func NewRobot(at raytrace.Vec3, waypoints []raytrace.Vec3, status float64) *Robo
 	return &Robot{Pos: at, Status: s, speed: 2.2, wps: waypoints}
 }
 
-// Step advances the robot toward its current waypoint by dt seconds, looping to
-// the next when it arrives; it stays on the ground.
+// Step advances the robot by dt seconds toward its commanded goal if it has one,
+// else along its patrol loop; it stays on the ground. On reaching a commanded goal
+// the goal clears (AtGoal becomes true), so a driver can issue the next one.
 func (r *Robot) Step(dt float64) {
 	if r.speed <= 0 {
 		r.speed = 2.2
 	}
 	r.t += dt
-	if len(r.wps) > 0 {
-		target := r.wps[r.wp%len(r.wps)]
+	target, has := r.Pos, false
+	if r.goal != nil {
+		target, has = *r.goal, true
+	} else if len(r.wps) > 0 {
+		target, has = r.wps[r.wp%len(r.wps)], true
+	}
+	if has {
 		flat := raytrace.Vec3{X: target.X - r.Pos.X, Z: target.Z - r.Pos.Z}
 		dist := flat.Len()
 		if dist < 0.4 {
-			r.wp = (r.wp + 1) % len(r.wps)
+			if r.goal != nil {
+				r.goal = nil // reached the commanded destination
+			} else {
+				r.wp = (r.wp + 1) % len(r.wps)
+			}
 		} else {
 			dir := flat.Scale(1 / dist)
 			step := r.speed * dt
@@ -64,6 +75,13 @@ func (r *Robot) Step(dt float64) {
 	}
 	r.Pos.Y = 0.5 // body centre rides on the ground
 }
+
+// GoTo commands the robot toward p, overriding its patrol until it arrives.
+func (r *Robot) GoTo(p raytrace.Vec3) { r.goal = &p }
+
+// AtGoal reports whether the robot has no active commanded goal (so it is ready
+// for the next one). A patrolling robot with no command is always "at goal".
+func (r *Robot) AtGoal() bool { return r.goal == nil }
 
 // Pose is the robot's pose, for rendering.
 func (r *Robot) Pose() Pose { return Pose{Pos: r.Pos, Yaw: r.Yaw} }
