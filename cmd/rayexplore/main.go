@@ -20,6 +20,7 @@
 //	go run ./cmd/rayexplore -path -dream             # a lens-and-film dream pass
 //	go run ./cmd/rayexplore -stereo                  # red-cyan anaglyph (3-D with glasses)
 //	go run ./cmd/rayexplore -story                   # the world unfolds as a story, in chapters
+//	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -64,7 +65,9 @@ func loadImage(path string) (image.Image, error) {
 
 // startSoundscape plays the world's procedural ambient (a guarded snapshot of
 // features the render loop keeps fresh), or falls back silently with no device.
-func startSoundscape(mu *sync.Mutex, feat *raydir.AmbientFeatures) {
+// If melody is non-nil it is mixed in (looped) under the ambient — a generative
+// score for the world.
+func startSoundscape(mu *sync.Mutex, feat *raydir.AmbientFeatures, melody []int16) {
 	pl, err := audio.NewDefaultPlayback()
 	if err != nil || pl.Open() != nil {
 		fmt.Fprintln(os.Stderr, "sound: no audio device available; continuing silent")
@@ -74,13 +77,28 @@ func startSoundscape(mu *sync.Mutex, feat *raydir.AmbientFeatures) {
 	frame := rate / 50 // 20ms
 	go func() {
 		t := 0.0
+		pos := 0 // playhead into the looping melody
 		tk := time.NewTicker(20 * time.Millisecond)
 		defer tk.Stop()
 		for range tk.C {
 			mu.Lock()
 			f := *feat
 			mu.Unlock()
-			_, _ = pl.Write(raydir.AmbientFrame(f, rate, t, frame))
+			buf := raydir.AmbientFrame(f, rate, t, frame)
+			if len(melody) > 0 { // mix the score in under the ambient
+				for i := range buf {
+					m := int(melody[pos%len(melody)]) / 2 // half gain
+					pos++
+					s := int(buf[i]) + m
+					if s > 32767 {
+						s = 32767
+					} else if s < -32768 {
+						s = -32768
+					}
+					buf[i] = int16(s)
+				}
+			}
+			_, _ = pl.Write(buf)
 			t += float64(frame) / float64(rate)
 		}
 	}()
@@ -105,6 +123,7 @@ func main() {
 	dream := flag.Bool("dream", false, "lens & film post: chromatic aberration, barrel warp, grain, vignette")
 	stereo := flag.Bool("stereo", false, "render in depth: a red-cyan anaglyph (view with red/cyan glasses)")
 	story := flag.Bool("story", false, "follow a story: the world unfolds in chapters, a beacon marks each threshold")
+	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -210,7 +229,11 @@ func main() {
 	var featMu sync.Mutex
 	feat := world.Ambient()
 	if *sound {
-		startSoundscape(&featMu, &feat)
+		var melody []int16
+		if *music { // a generative score tuned to the world (day/night, mood, liveliness)
+			melody = raydir.MelodyPCM(world.Score(), audio.DefaultFormat().SampleRate, 24, 1)
+		}
+		startSoundscape(&featMu, &feat, melody)
 	}
 
 	var comp *raydir.Guide

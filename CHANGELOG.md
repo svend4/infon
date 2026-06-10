@@ -284,6 +284,16 @@ adopting, and it was reimplemented better).
   meadow through a night forest, a drowned city and a crystal cave to a golden
   summit. A pure state machine (tested: it turns the page every N regions in order,
   stops on the last chapter, reports progress; beacons glow and stand in place).
+- **A generative score** (`pkg/raydir/score.go`): the world gets a melody, not just
+  an ambient drone. A small composer reads the world — day or night, how lively it
+  is, your mood — and picks a key and tempo: major and quick by day, minor and slow
+  at night, pentatonic and unhurried when you're calm. Over a soft bass drone it
+  walks a melody through the scale (a biased random walk over scale degrees), each
+  note a plucked tone with harmonics and an envelope; deterministic from a seed and
+  rendered to PCM/WAV. `rayexplore -sound -music` mixes it (looped) under the
+  procedural ambient. Tested: day is major / night is minor and slower, a livelier
+  world plays faster, calm is pentatonic, every note lands in the chosen scale, the
+  render is deterministic and audible, and `World.Score` tracks day vs night.
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"
