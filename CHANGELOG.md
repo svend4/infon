@@ -40,6 +40,18 @@ adopting, and it was reimplemented better).
   (`reservoir.go`, `restir.go`): RIS reservoirs with unbiased spatial reuse,
   ~7–12× lower direct-lighting variance in many-light scenes.
 
+#### Added — cinematography
+- **Cinematic fly-through camera** (`pkg/raydir/tour.go`, `cmd/rayfilm`): the camera
+  can fly on rails. `Tour` threads a smooth Catmull-Rom spline through a set of
+  waypoints (the world's landmarks, via `TourFromLandmarks`) and walks the camera
+  along it at a steady pace — reparameterised by arc length, so equal steps cover
+  equal distance — always looking the way it travels. `cmd/rayfilm` grows a world
+  and renders evenly-spaced shots along the tour into a contact sheet, a storyboard
+  of the fly-through (`-frames`, `-cols`, `-path`, `-grade`). Tested: Catmull-Rom
+  passes through its control points, the tour starts/ends on its waypoints and
+  passes near each, arc-length pacing keeps steps even, the camera faces its motion,
+  and a landmark tour is ordered by index at the chosen height.
+
 #### Added — richer materials for the director
 - **Subsurface & thin-film, authorable** (`brain.ObjSpec` `sss`/`sssRad`/`film`/`filmIor`):
   the renderer's subsurface scattering (translucent wax, jade, skin) and thin-film
