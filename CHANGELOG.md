@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 🌀 "Dream hackers" — cartography, voxels & dream optics (branch `claude/epic-sagan-EWTTr`)
+
+A round inspired by reading the lucid-dreaming site *Хакеры сновидений* as if it
+described a computer game: its "dream cartography" (a world that is a molecular
+structure of bubbles connected by transits, mapped with boundaries and unexplored
+"white spots"), its literal mention of *voxel graphics in dreams*, its grid
+labyrinths ("square forest"), mirror-symmetric and layered worlds, and its
+optical oddities (perspective skew, tunnel vision). Each maps cleanly onto the
+existing region/portal/map/director architecture.
+
+- **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
+  map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
+  connected by transits, anchored at home. Shortest-transit routing between any two
+  bubbles (BFS), and `BubbleMap` draws the structure diagram (transits as lines,
+  bubbles as discs — home gold, current cyan, dead-ends dim — numbered/named, with
+  a route highlighted). Pure data, fully tested (add/link undirected, routing incl.
+  self and unreachable, the diagram draws nodes and edges).
+
 ### 🎨 CPU ray-tracing & rendering engine (branch `claude/epic-sagan-EWTTr`)
 
 A full, clean-room CPU renderer in `pkg/raytrace`, grown into a small research
