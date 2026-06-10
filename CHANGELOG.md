@@ -117,7 +117,13 @@ existing region/portal/map/director architecture.
   home pinned at the origin, from a deterministic ring — so the structure
   auto-arranges into an organic diagram instead of hand-placed coordinates. Tested:
   deterministic, home pinned, no overlaps, and graph-near bubbles land spatially
-  nearer than graph-far ones.
+  nearer than graph-far ones. **Vector & hypercube views** (also after hexvis of
+  `svend4/meta`): `BubbleGraph.DOT` exports the structure as Graphviz and
+  `BubbleGraph.SVG` as a standalone scalable diagram (route edges green); and
+  `Q6Map` draws the whole hypercube as an 8×8 grid of all 64 hexagrams shaded by
+  yang-count (dark→gold), the current hexagram outlined and its six neighbours
+  dotted — a navigator over the 64 worlds. Tested: DOT/SVG are well-formed with the
+  right node/edge counts, and the Q6 map renders the outline and the shading.
 - **Bird's-eye fog-of-war map** (`pkg/raydir/cartograph.go`): the world drawn from
   above the way the hackers' maps look. A coarse `Cartograph` grid is revealed as
   you walk (`World.Reveal`), and `Render` fills the explored ground while the rest

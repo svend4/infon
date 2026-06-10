@@ -1,11 +1,13 @@
 package raydir
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/svend4/infon/pkg/brain"
 	"github.com/svend4/infon/pkg/microfont"
@@ -97,6 +99,100 @@ func (g *BubbleGraph) Bubbles() []Bubble {
 
 // Len is the number of bubbles.
 func (g *BubbleGraph) Len() int { return len(g.order) }
+
+// DOT exports the structure as a Graphviz `graph` (home filled gold, dead-ends
+// grey) — the way svend4/meta's hexvis exports subgraphs, for `dot -Tsvg` etc.
+func (g *BubbleGraph) DOT() string {
+	var b strings.Builder
+	b.WriteString("graph bubbles {\n  node [style=filled,fontname=mono];\n")
+	for _, id := range g.order {
+		fill := "lightsteelblue"
+		if len(g.links[id]) <= 1 {
+			fill = "gray70"
+		}
+		if id == g.Home() {
+			fill = "gold"
+		}
+		fmt.Fprintf(&b, "  n%d [label=%q,fillcolor=%s];\n", id, g.bubbles[id].Name, fill)
+	}
+	for _, a := range g.order {
+		for _, c := range g.Neighbors(a) {
+			if a < c {
+				fmt.Fprintf(&b, "  n%d -- n%d;\n", a, c)
+			}
+		}
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+// SVG exports the structure as a standalone scalable diagram (transits as lines,
+// route edges green, bubbles as discs with labels) using the laid-out positions —
+// a vector companion to BubbleMap (cf. hexvis SVG export).
+func (g *BubbleGraph) SVG(current int, route []int, w, h int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`, w, h, w, h)
+	b.WriteString(`<rect width="100%" height="100%" fill="#101016"/>`)
+	if len(g.order) == 0 {
+		b.WriteString("</svg>")
+		return b.String()
+	}
+	minX, maxX, minZ, maxZ := math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
+	for _, bb := range g.bubbles {
+		minX, maxX = math.Min(minX, bb.At.X), math.Max(maxX, bb.At.X)
+		minZ, maxZ = math.Min(minZ, bb.At.Z), math.Max(maxZ, bb.At.Z)
+	}
+	pad := 30.0
+	sx := func(x float64) float64 {
+		if maxX == minX {
+			return float64(w) / 2
+		}
+		return pad + (x-minX)/(maxX-minX)*(float64(w)-2*pad)
+	}
+	sy := func(z float64) float64 {
+		if maxZ == minZ {
+			return float64(h) / 2
+		}
+		return pad + (z-minZ)/(maxZ-minZ)*(float64(h)-2*pad)
+	}
+	routeEdge := map[[2]int]bool{}
+	for i := 0; i+1 < len(route); i++ {
+		routeEdge[[2]int{route[i], route[i+1]}] = true
+		routeEdge[[2]int{route[i+1], route[i]}] = true
+	}
+	for _, a := range g.order {
+		for _, c := range g.Neighbors(a) {
+			if a >= c {
+				continue
+			}
+			col := "#46465a"
+			if routeEdge[[2]int{a, c}] {
+				col = "#5adc8c"
+			}
+			fmt.Fprintf(&b, `<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="1.5"/>`,
+				sx(g.bubbles[a].At.X), sy(g.bubbles[a].At.Z), sx(g.bubbles[c].At.X), sy(g.bubbles[c].At.Z), col)
+		}
+	}
+	for _, id := range g.order {
+		bb := g.bubbles[id]
+		fill := "#8296c8"
+		if len(g.links[id]) <= 1 {
+			fill = "#50505f"
+		}
+		if id == g.Home() {
+			fill = "#f0c850"
+		}
+		if id == current {
+			fill = "#5adcf0"
+		}
+		x, y := sx(bb.At.X), sy(bb.At.Z)
+		fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="7" fill="%s"/>`, x, y, fill)
+		fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" fill="#dcdce6" font-family="monospace" font-size="11">%s</text>`,
+			x+10, y+4, bb.Name)
+	}
+	b.WriteString("</svg>")
+	return b.String()
+}
 
 // Layout arranges the bubbles on the X/Z plane by a force-directed simulation
 // (Coulomb repulsion between every pair, Hooke springs along transits, mild
@@ -220,6 +316,15 @@ func drawLine(img *image.RGBA, x0, y0, x1, y1 int, c color.RGBA) {
 	for i := 0; i <= steps; i++ {
 		t := float64(i) / float64(steps)
 		img.SetRGBA(x0+int(float64(dx)*t+0.5), y0+int(float64(dy)*t+0.5), c)
+	}
+}
+
+// fillRect fills an axis-aligned rectangle.
+func fillRect(img *image.RGBA, x0, y0, w, h int, c color.RGBA) {
+	for y := y0; y < y0+h; y++ {
+		for x := x0; x < x0+w; x++ {
+			img.SetRGBA(x, y, c)
+		}
 	}
 }
 
