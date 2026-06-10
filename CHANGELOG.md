@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 🔌 Interop — a hexagram-thinking brain directs the world
+
+- **YiJing-Transformer brain adapter** (`ai/adapters/yijing_brain.py`): a `tvcp-ai/1`
+  bridge to the YiJing-Transformer (github.com/svend4/pro2), so a transformer that
+  "thinks in hexagrams" can be the live director. It reads the prompt, decides one
+  I-Ching hexagram for the region (six lines = two trigrams) — via the model's Q6
+  embedding when pro2 + a checkpoint (`YIJING_CKPT`) are present, else a
+  deterministic hash so the sidecar runs dependency-free — and authors a rayscene
+  scene graph from the two trigrams' themes (mirroring `pkg/raydir`'s Hexagram). Set
+  `BRAIN_URL=http://127.0.0.1:8095/v1/decide` and the hexagram worlds of `rayexplore`
+  are directed by it. Verified live end-to-end (Go `HTTPBrain` → this sidecar →
+  rendered scenes) and offline (`--selftest`: determinism, variety, every hexagram
+  authors a valid scene, the tvcp-ai/1 envelope).
+
 ### 🌀 "Dream hackers" — cartography, voxels & dream optics (branch `claude/epic-sagan-EWTTr`)
 
 A round inspired by reading the lucid-dreaming site *Хакеры сновидений* as if it
