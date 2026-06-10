@@ -53,13 +53,25 @@ func DecodeRegion(b []byte) (Region, error) {
 }
 
 // applyRegion adds a region's props exactly once (idempotent by index), so a
-// guest can re-apply re-broadcast regions safely.
+// guest can re-apply re-broadcast regions safely. The region is also remembered
+// (w.applied) so far-behind ones can later be pruned (see Prune).
 func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) int {
 	if w.seen == nil {
 		w.seen = map[int]bool{}
 	}
 	if w.seen[index] {
 		return 0
+	}
+	w.applied = append(w.applied, Region{Index: index, At: at, Spec: spec})
+	return w.applySpec(index, at, spec)
+}
+
+// applySpec adds a region's derived state (props, movers, landmark, sound flags).
+// Assumes the region is not already applied; used by applyRegion and by Prune's
+// rebuild.
+func (w *World) applySpec(index int, at raytrace.Vec3, spec brain.SceneSpec) int {
+	if w.seen == nil {
+		w.seen = map[int]bool{}
 	}
 	w.seen[index] = true
 	w.chunks = len(w.seen)
@@ -91,6 +103,38 @@ func (w *World) applyRegion(index int, at raytrace.Vec3, spec brain.SceneSpec) i
 		n += len(objs)
 	}
 	return n
+}
+
+// Prune drops regions sitting behind minZ (far back as you walk forward) and
+// rebuilds the derived state from the survivors, so a long exploration keeps flat
+// memory and render cost. Worn paths (the trace) are kept — the world still
+// remembers. Returns how many regions were dropped. (A guest re-fetches a pruned
+// region via ack gap-fill if it walks back; a host re-grows.)
+func (w *World) Prune(minZ float64) int {
+	keep := make([]Region, 0, len(w.applied))
+	dropped := 0
+	for _, r := range w.applied {
+		if r.At.Z >= minZ {
+			keep = append(keep, r)
+		} else {
+			dropped++
+		}
+	}
+	if dropped == 0 {
+		return 0
+	}
+	// reset derived state and rebuild from the survivors.
+	w.props = w.props[:0]
+	w.animated = w.animated[:0]
+	w.landmarks = w.landmarks[:0]
+	w.seen = map[int]bool{}
+	w.chunks = 0
+	w.sndWater, w.sndForest, w.sndBirds, w.sndHum = false, 0, false, false
+	w.applied = keep
+	for _, r := range keep {
+		w.applySpec(r.Index, r.At, r.Spec)
+	}
+	return dropped
 }
 
 // Has reports whether a region index has already been applied.

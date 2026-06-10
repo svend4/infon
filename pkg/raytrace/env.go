@@ -42,6 +42,30 @@ func BuildEnvSampler(img image.Image) *EnvSampler {
 	return e
 }
 
+// BuildEnvSamplerFromSky builds an importance sampler for an analytic sky function
+// (e.g. PreethamSky.At) at w x h resolution, keeping HDR radiance so a bright sun
+// is sampled often. Its directions/pdf drive env-NEE; the radiance used in shading
+// is still read from Scene.sky, so it stays exact (and MIS-consistent).
+func BuildEnvSamplerFromSky(skyAt func(Vec3) Vec3, w, h int) *EnvSampler {
+	if w < 2 || h < 2 || skyAt == nil {
+		return nil
+	}
+	e := &EnvSampler{w: w, h: h, pix: make([]Vec3, w*h), cum: make([]float64, w*h+1)}
+	for y := 0; y < h; y++ {
+		st := math.Sin(math.Pi * (float64(y) + 0.5) / float64(h))
+		v := (float64(y) + 0.5) / float64(h)
+		for x := 0; x < w; x++ {
+			u := (float64(x) + 0.5) / float64(w)
+			col := skyAt(e.dir(u, v))
+			e.pix[y*w+x] = col
+			lum := 0.2126*col.X + 0.7152*col.Y + 0.0722*col.Z
+			e.total += (lum + 1e-4) * st
+			e.cum[y*w+x+1] = e.total
+		}
+	}
+	return e
+}
+
 func (e *EnvSampler) dir(u, v float64) Vec3 {
 	y := math.Cos(math.Pi * v)
 	s := math.Sqrt(math.Max(0, 1-y*y))

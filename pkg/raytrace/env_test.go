@@ -97,3 +97,19 @@ func TestEnvNEEIsUnbiased(t *testing.T) {
 		t.Errorf("env-NEE mean %.0f vs naive %.0f (tol %.0f) - biased?", en, ref, tol)
 	}
 }
+
+// An env sampler built from the Preetham sky favours the sun direction (its pdf is
+// higher toward the sun than away), so env-NEE focuses where the light is.
+func TestEnvSamplerFromSky(t *testing.T) {
+	sun := Vec3{X: 0.3, Y: 0.5, Z: 0.8}.Norm()
+	sky := NewPreethamSky(sun, 2.5)
+	e := BuildEnvSamplerFromSky(sky.At, 64, 32)
+	if e == nil {
+		t.Fatal("sampler should build")
+	}
+	toward := e.Pdf(sun)
+	away := e.Pdf(Vec3{X: -0.3, Y: 0.5, Z: -0.8}.Norm())
+	if toward <= away {
+		t.Errorf("sky sampler should favour the sun: toward %.4f away %.4f", toward, away)
+	}
+}

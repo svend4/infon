@@ -161,6 +161,19 @@ adopting, and it was reimplemented better).
   reference brain, or a live model via `-url`): it asks for many scenes and reports
   how renderable, rich and varied they are (`BenchDirector`) — a quick objective
   read before a live session.
+- **Engine: prettier, faster, farther** (`pkg/raytrace/denoise.go`, `env.go`,
+  `pkg/raydir`): three quality/scale wins. (1) `rayexplore -denoise` renders a few
+  samples and runs the edge-aware guided à-trous denoiser (`GBuffer` +
+  `DenoiseGuided`), so a moving path-traced walk stays clean instead of waiting to
+  converge — 5 spp denoised ≈ a 220-spp reference. (2) `BuildEnvSamplerFromSky`
+  importance-samples the physical (Preetham) sky in HDR, and the day/night `World`
+  installs it (cached, rebuilt only on coarse time steps) so skylit scenes resolve
+  with much less noise — unbiased (radiance still read from `Scene.sky`, MIS
+  intact), and the sampler favours the sun. (3) `World.Prune` drops far-behind
+  regions and rebuilds from the survivors, so a long walk keeps flat memory and
+  render cost (worn paths are kept; a guest re-fetches a region via ack gap-fill if
+  it walks back). Tested: prune drops + shrinks + keeps survivors; the sky sampler
+  favours the sun.
 - **Image → world** (`pkg/raydir/imagine.go`, `cmd/rayimagine`): the project's idea
   in reverse — meaning extracted FROM pixels. `SceneFromImage` reads a picture and
   composes a rayscene: sky and ground from the top/bottom bands, a sun from the

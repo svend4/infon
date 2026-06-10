@@ -11,6 +11,8 @@
 //	go run ./cmd/rayexplore -path -grade            # path-traced, cinematically graded
 //	go run ./cmd/rayexplore -sound                  # hear the world (procedural ambient)
 //	go run ./cmd/rayexplore -guide                  # an AI companion leads you on a tour
+//	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
+//	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
 //
 // Controls (type, then Enter; combine letters): w/s walk, a/d strafe, q/e turn,
@@ -82,6 +84,7 @@ func main() {
 	grade := flag.Bool("grade", false, "post: bloom + vignette + AgX tone map for a cinematic frame")
 	clouds := flag.Bool("clouds", false, "volumetric cloud bank (path tracer; costly)")
 	imageSeed := flag.String("image", "", "seed the first region from a picture (PNG/JPG): walk into a world derived from it")
+	denoise := flag.Bool("denoise", false, "path mode: render few samples and denoise (clean frames while moving)")
 	sound := flag.Bool("sound", false, "play a procedural soundscape of the world (needs an audio device)")
 	guide := flag.Bool("guide", false, "an AI companion that walks with you and leads a tour of the world")
 	cols := flag.Int("w", 80, "width in terminal cells")
@@ -186,13 +189,23 @@ func main() {
 		}
 		var im image.Image
 		spp := 1
-		if *pathT {
+		switch {
+		case *pathT && *denoise:
+			// fast clean frame: a few samples + an edge-aware (guided) à-trous denoise,
+			// so a moving path-traced walk stays clean without waiting to converge.
+			o := pathOpt
+			o.Samples = 5
+			raw := raytrace.PathRender(fscene, c, pxW, pxH, o)
+			alb, nrm := raytrace.GBuffer(fscene, c, pxW, pxH)
+			im = raytrace.DenoiseGuided(raw, alb, nrm, 4, 0.5, 0.2, 0.3)
+			spp = 5
+		case *pathT:
 			if world.HasAnimated() || comp != nil {
 				refiner.Reset() // a moving world can't accumulate; render fresh
 			}
 			im = refiner.Frame(fscene, c)
 			spp = refiner.Samples()
-		} else {
+		default:
 			im = raytrace.Render(fscene, c, pxW, pxH, raytrace.Options{Samples: 1})
 		}
 		if *grade {
@@ -252,6 +265,11 @@ func main() {
 		// the world keeps unfolding ahead as you advance.
 		if cam.Pos.Z > frontZ-12 {
 			grow()
+		}
+		// ...and forgets far behind, so a long walk keeps flat memory (worn paths stay).
+		if world.Prune(cam.Pos.Z-55) > 0 {
+			scene = world.Scene()
+			refiner.Reset()
 		}
 		render()
 	}

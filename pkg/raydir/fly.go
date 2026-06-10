@@ -71,7 +71,10 @@ type World struct {
 	sndForest         int
 	sndBirds          bool
 	sndHum            bool
-	trace             *Trace // worn paths (the world's memory of being walked)
+	trace             *Trace               // worn paths (the world's memory of being walked)
+	env               *raytrace.EnvSampler // cached sky importance sampler (env-NEE)
+	envAt             float64              // time the env sampler was built for
+	applied           []Region             // applied regions (kept so far-behind ones can be pruned)
 }
 
 // Tread records a walker stepping at p, so paths wear into the ground over time.
@@ -161,6 +164,13 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 			// a physical (Preetham) sky while the sun is up — blue overhead, warming
 			// and reddening toward the horizon/sun automatically as it sinks.
 			s.Sky = raytrace.NewPreethamSky(sunDir, 2.6)
+			// importance-sample the sky (env-NEE) for cleaner skylight; rebuilt only on
+			// coarse time steps so it costs almost nothing per frame.
+			if w.env == nil || math.Abs(w.Time-w.envAt) > 0.02 {
+				w.env = raytrace.BuildEnvSamplerFromSky(s.Sky.At, 64, 32)
+				w.envAt = w.Time
+			}
+			s.Env = w.env
 			ahead := raytrace.Vec3{X: 0, Y: 0, Z: w.lastAt.Z} // keep the sun near the frontier
 			sun = []raytrace.Object{raytrace.Sphere{Center: sunDir.Scale(90).Add(ahead), Radius: 6, Mat: raytrace.Material{Emit: sunColor}}}
 		}
