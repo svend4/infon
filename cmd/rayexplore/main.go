@@ -32,6 +32,7 @@
 //	go run ./cmd/rayexplore -intention               # type "!a theme" and hold it: the world bends to your will
 //	go run ./cmd/rayexplore -hexagram 101010         # cast a world from an I-Ching hexagram
 //	go run ./cmd/rayexplore -hexagram 000000 -q6walk # grand tour of all 64 hexagram worlds (Q6 Gray code)
+//	go run ./cmd/rayexplore -memory                  # the director remembers and echoes past places
 //	go run ./cmd/rayexplore -path -ris 16            # ReSTIR many-lights: clean firefly/lantern worlds
 //	go run ./cmd/rayexplore -sound -music            # a generative melody tuned to the world
 //	go run ./cmd/rayexplore -travelogue              # collect the trip as postcards (saved on quit)
@@ -149,6 +150,7 @@ func main() {
 	intention := flag.Bool("intention", false, "the art of intention: type '!a theme' and hold it — the world grown ahead bends to your will")
 	hexagram := flag.String("hexagram", "", "cast a world from an I-Ching hexagram: six lines like 101010 or yynnyn")
 	q6walk := flag.Bool("q6walk", false, "with -hexagram: walk the Q6 hypercube of all 64 hexagram worlds (one line changes per region)")
+	memory := flag.Bool("memory", false, "the director remembers past regions and echoes thematically similar ones ahead (RAG-style)")
 	branch := flag.Bool("branch", false, "branching paths: at a crossroads, walk left (a) or right (d) to choose where the world goes")
 	music := flag.Bool("music", false, "play a generative melody under the soundscape (major by day, minor at night); needs -sound")
 	travel := flag.Bool("travelogue", false, "collect the journey as captioned postcards; saved to travelogue.png on quit")
@@ -191,6 +193,7 @@ func main() {
 	world := raydir.NewWorld()
 	world.SetSeasonal(*seasons) // before any region grows, so foliage is tinted as it's built
 	world.SetMoodSensing(*mood) // read how the walker moves and bias what's grown
+	world.SetMemory(*memory)    // remember regions so later prompts can echo them
 	var tale *raydir.Story
 	if *story {
 		tale = raydir.DefaultStory()
@@ -234,7 +237,7 @@ func main() {
 		}
 	}
 	if world.Chunks() == 0 {
-		if _, err := world.Grow(b, world.BiasPrompt(world.IntendPrompt(seed())), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
+		if _, err := world.Grow(b, world.BiasPrompt(world.RecallPrompt(world.IntendPrompt(seed()))), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
 			fmt.Fprintln(os.Stderr, "director failed to author the first region:", err)
 		}
 		if tale != nil {
@@ -293,7 +296,7 @@ func main() {
 	grow := func() {
 		jitter := math.Sin(float64(world.Chunks())*1.7) * 2.5
 		frontZ += 14
-		n, err := world.Grow(b, world.BiasPrompt(world.IntendPrompt(seed())), raytrace.Vec3{X: jitter, Y: 0, Z: frontZ})
+		n, err := world.Grow(b, world.BiasPrompt(world.RecallPrompt(world.IntendPrompt(seed()))), raytrace.Vec3{X: jitter, Y: 0, Z: frontZ})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "grow failed:", err)
 			return

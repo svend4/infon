@@ -92,6 +92,49 @@ type World struct {
 	sprites           []*Sprite            // dream characters you can question
 	intent            string               // held intention theme (bends what's grown ahead)
 	intentStr         float64              // intention strength (0..1), builds while held
+	memory            *Memory              // the director's memory of past regions (RAG-style recall)
+}
+
+// SetMemory turns the director's region memory on or off. When on, every grown
+// region is remembered and new prompts can recall thematically similar past places.
+func (w *World) SetMemory(on bool) {
+	if on {
+		w.memory = &Memory{}
+	} else {
+		w.memory = nil
+	}
+}
+
+// RecallHint returns a short callback phrase to a remembered place thematically
+// similar to `query` (e.g. "reminiscent of the Forest"), or ok=false when memory is
+// off or nothing close is remembered.
+func (w *World) RecallHint(query string) (string, bool) {
+	if w.memory == nil {
+		return "", false
+	}
+	e, score, ok := w.memory.Recall(query)
+	if !ok || score < 0.25 {
+		return "", false
+	}
+	return "reminiscent of the " + e.Name, true
+}
+
+// RecallPrompt appends a callback to a thematically similar past place to a grow
+// prompt (no-op when memory is off or nothing close is remembered).
+func (w *World) RecallPrompt(base string) string {
+	if h, ok := w.RecallHint(base); ok {
+		return base + ", " + h
+	}
+	return base
+}
+
+// MemoryGraph builds the knowledge graph of remembered places (edges between those
+// at least `threshold` similar).
+func (w *World) MemoryGraph(threshold float64) *BubbleGraph {
+	if w.memory == nil {
+		return NewBubbleGraph()
+	}
+	return w.memory.Graph(threshold)
 }
 
 // Reveal marks the area around p as explored on the bird's-eye map (fog-of-war).
@@ -262,6 +305,9 @@ func (w *World) Grow(b brain.Brain, prompt string, at raytrace.Vec3) (int, error
 		return 0, err
 	}
 	w.lastSpec, w.lastAt = &spec, at
+	if w.memory != nil { // remember this place so later regions can echo it
+		w.memory.Remember(w.chunks, regionName(spec, w.chunks), prompt)
+	}
 	return w.applyRegion(w.chunks, at, spec), nil
 }
 

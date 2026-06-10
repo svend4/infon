@@ -36,6 +36,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   The reference author understands "infinity"/"lemniscate" and "spirograph"/
   "rosette". Tested: both are periodic, figure8 reaches ±amp and crosses its centre,
   rosette's radius varies (nested), and the keywords author them.
+- **A director with memory (RAG-style)** (`pkg/raydir/memory.go`, in the spirit of
+  `svend4/infom`'s GraphRAG): every region grown is remembered (place name + the
+  prompt), and a new prompt recalls the most thematically similar past place (token
+  Jaccard), so the world can echo itself — "reminiscent of the Forest you saw
+  before" — via `World.RecallPrompt`. The remembered places also form a knowledge
+  graph (`Memory.Graph`) — a bubble per region, edges between thematically similar
+  ones — which lays out and draws like any `BubbleGraph`. `rayexplore -memory`.
+  Tested: tokenization/Jaccard, recall picks the similar place and ignores
+  unrelated, the graph links clusters and isolates the odd one out, and the world
+  remembers and recalls.
 
 ### 🔌 Interop — a hexagram-thinking brain directs the world
 
