@@ -38,6 +38,8 @@ func ConformanceBattery() []ConformanceCase {
 	tgState, _ := json.Marshal(PuzzleStateFromFigureTree())
 	wlState, _ := json.Marshal(map[string]int{"fold_pct": 40, "relief_pct": 30, "camera_deg": 0, "orbit_phase": 0})
 	rpgState, _ := json.Marshal(map[string]any{"you": 0, "w": 8, "h": 8, "units": []map[string]int{{"id": 0, "x": 0, "y": 0, "hp": 6}}, "enemies": []map[string]int{{"x": 5, "y": 4, "hp": 6}}})
+	rayState, _ := json.Marshal(map[string]any{"spheres": []map[string]any{{"id": 0, "x": 1.0, "y": 0.0, "z": 0.0}, {"id": 1, "x": -1.0, "y": 0.0, "z": 0.0}}})
+	rsState, _ := json.Marshal(map[string]any{"prompt": "a simple studio scene"})
 	return []ConformanceCase{
 		{"move/tictactoe", Request{Kind: "move", Game: "tictactoe", State: ttState}},
 		{"move/wordle", Request{Kind: "move", Game: "wordle", State: wState}},
@@ -45,6 +47,8 @@ func ConformanceBattery() []ConformanceCase {
 		{"move/tangram", Request{Kind: "move", Game: "tangram", State: tgState}},
 		{"move/world", Request{Kind: "move", Game: "world", State: wlState}},
 		{"move/rpg", Request{Kind: "move", Game: "rpg", State: rpgState}},
+		{"move/ray", Request{Kind: "move", Game: "ray", State: rayState}},
+		{"move/rayscene", Request{Kind: "move", Game: "rayscene", State: rsState}},
 		{"draw", Request{Kind: "draw", Prompt: "a calm harbor at dawn", Canvas: &Canvas{Width: 48, Height: 20}}},
 		{"sketch", Request{Kind: "sketch", Prompt: "sunset over mountains"}},
 		{"image/grid", Request{Kind: "image", Format: "grid", Prompt: "a calm harbor", Canvas: &Canvas{Width: 48, Height: 20}}},
@@ -86,6 +90,20 @@ func CheckResponse(req Request, resp Response) (string, bool) {
 			var mv []struct{ ID, DX, DY int }
 			if len(resp.Rpg) == 0 || json.Unmarshal(resp.Rpg, &mv) != nil {
 				return "rpg: missing or invalid moves", false
+			}
+			return "", true
+		}
+		if req.Game == "ray" {
+			var mv []struct{ ID, DX, DY, DZ int }
+			if len(resp.Ray) == 0 || json.Unmarshal(resp.Ray, &mv) != nil {
+				return "ray: missing or invalid moves", false
+			}
+			return "", true
+		}
+		if req.Game == "rayscene" {
+			var sp SceneSpec
+			if len(resp.Ray) == 0 || json.Unmarshal(resp.Ray, &sp) != nil || len(sp.Objects) == 0 {
+				return "rayscene: missing or invalid scene", false
 			}
 			return "", true
 		}

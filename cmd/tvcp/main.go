@@ -102,7 +102,7 @@ func printUsage() {
 	fmt.Println("  demo <image>        Display image in terminal (proof-of-concept)")
 	fmt.Println("  preview [pattern]   Live camera preview (animated test patterns)")
 	fmt.Println("  ai                  Stream the AI-generated video source")
-	fmt.Println("  synth [gen]         Live synthesized graphics (plasma/ripple/neural)")
+	fmt.Println("  synth [gen]         Live synthesized graphics (plasma/ripple/neural/ray)")
 	fmt.Println("  avatar <send|recv>  Neural-avatar transport (talking face for kilobits/s)")
 	fmt.Println("  game                Real-time Snake (experimental build; arrows/WASD)")
 	fmt.Println("  send <host:port>    Stream video to remote host (one-way)")

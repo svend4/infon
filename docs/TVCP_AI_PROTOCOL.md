@@ -96,6 +96,8 @@ it filled in by `HTTPBrain.Decide`; a server always stamps it on the way out.
   "tangram":   { ... },   // move/tangram: a solution figure
   "world":     { ... },   // move/world: next-tick directives
   "rpg":       [ ... ],    // move/rpg: per-unit moves
+  "ray":       [ ... ],    // move/ray: per-sphere 3-D scene moves
+                           // move/rayscene: a full authored scene graph (objects+materials+light+sky)
   "cards":     ["★","♥"],  // react
   "reasoning": "optional human-readable rationale",
   "error":     ""          // non-empty iff the brain failed the request
@@ -122,7 +124,7 @@ The `move` object covers every board/word/card game:
 
 | Kind | Response payload | Validated by §8 as |
 |---|---|---|
-| `move` | `move` / `tangram` / `world` / `rpg` | legal for the named game |
+| `move` | `move` / `tangram` / `world` / `rpg` / `ray` | legal for the named game |
 | `draw` | `scene` | a `scene.Scene` with ≥1 op |
 | `sketch` | `sketch` | a `sketch.Sketch` with ≥1 shape |
 | `image` | `image` | a `pseudo.Spec` that renders to a non-empty frame |
@@ -140,6 +142,8 @@ The `move` object covers every board/word/card game:
 | `tangram` | a `tangram.PuzzleState` | `tangram` (placements) |
 | `world` | scene brief (`fold_pct`, `relief_pct`, …) | `world` (4 directives ∈ `{-1,0,1}`) |
 | `rpg` | `you`, `w`, `h`, `units[]`, `enemies[]` | `rpg` (`[]{id,dx,dy}`) |
+| `ray` | `spheres[]{id,x,y,z}` | `ray` (`[]{id,dx,dy,dz}`, each ∈ `{-1,0,1}`) |
+| `rayscene` | `{prompt}` | `ray` (a scene graph: `{objects[]{kind:sphere\|box\|pyramid\|cylinder\|tree\|house\|mesh\|fractal\|water\|plane,name,tex,x,y,z,r,s:[hx,hy,hz],color,emit,glass,metal,reflect,rough,anim,aamp,aspd,sss,sssRad,film,filmIor}, light, skyTop, skyBottom, name}`; a region may carry a place `name` for the map; `kind:mesh` instances a named model — `name` ∈ the renderer's mesh library, e.g. `crystal`, `rock`, plus any `.obj` loaded; `kind:fractal` (alias `sdf`) ray-marches a named signed-distance form — `name` ∈ `mandelbulb`, `menger`, `sierpinski`, `mandala`, `melt`, `escher`; a mesh/fractal that sets material fields is tinted per placement; `tex` names a surface texture — `checker`, `marble`, `wood`, `stone`, `clouds`, `mandala`, `tiles`, or any image loaded; `bump` names a normal/bump map — `ripple`, `waves`, `bumps`; `anim` gives a motion evaluated locally from a shared clock — `bob`, `orbit`, `drift`, `pulse`, `wander` — with `aamp` amplitude and `aspd` rate; `sss` gives subsurface scattering (wax/jade/skin) as the boundary index of refraction, with `sssRad` the mean free path; `film` gives thin-film iridescence (soap/oil/pearl) as a thickness in nanometres, with `filmIor` its index; the full machine-readable contract is [`ai/schema/rayscene.schema.json`](../ai/schema/rayscene.schema.json), kept in lockstep with the renderer by a test) |
 
 `state` is opaque to the transport: a brain parses only the games it advertises.
 
@@ -157,8 +161,8 @@ non-empty frame, so new renderers can improve fidelity without breaking the wire
 ## 8. Conformance
 
 A brain is **tvcp-ai conformant** iff it correctly answers every case in the
-standard battery (`brain.ConformanceBattery`, 13 cases spanning all five kinds
-and all six games). `brain.CheckResponse` is the normative validator; it checks,
+standard battery (`brain.ConformanceBattery`, 14 cases spanning all five kinds
+and all seven games). `brain.CheckResponse` is the normative validator; it checks,
 per kind/game: a move is legal, a wordle guess is 5 letters, a tangram solution
 is overlap-free with intersection-over-union ≥ 0.5, a draw/sketch carries shapes,
 an image spec renders. Run the battery against any endpoint with `cmd/conform`;
@@ -178,7 +182,7 @@ GET /v1/capabilities
 {
   "protocol": "tvcp-ai/1",
   "kinds":    ["move","draw","sketch","image","react"],
-  "games":    ["tictactoe","wordle","uno","tangram","world","rpg"],
+  "games":    ["tictactoe","wordle","uno","tangram","world","rpg","ray","rayscene"],
   "formats":  ["grid","pixels","glyphs","sigils","vector","sketch","mixed","marks"]
 }
 ```

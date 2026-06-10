@@ -61,6 +61,7 @@ type Response struct {
 	Tangram   json.RawMessage `json:"tangram,omitempty"` // a tangram solution (pkg/tangram)
 	World     json.RawMessage `json:"world,omitempty"`   // next-tick world directives (pkg/world)
 	Rpg       json.RawMessage `json:"rpg,omitempty"`     // per-unit rpg moves (pkg/arena)
+	Ray       json.RawMessage `json:"ray,omitempty"`     // per-sphere ray-scene moves (game:ray)
 	Cards     []string        `json:"cards,omitempty"`   // glyph "cards" for react
 	Reasoning string          `json:"reasoning,omitempty"`
 	Error     string          `json:"error,omitempty"`
@@ -622,6 +623,52 @@ func refRpg(req Request) Response {
 	return Response{Protocol: Protocol, Kind: "move", Rpg: data, Reasoning: "reference rpg commander"}
 }
 
+// refRay is the reference scenographer for game "ray": a brain authors a 3-D
+// world of spheres. Each sphere steps toward the world centroid (gathering).
+// Returns a list of {id,dx,dy,dz}, each component in -1..1.
+func refRay(req Request) Response {
+	var b struct {
+		Spheres []struct {
+			ID int     `json:"id"`
+			X  float64 `json:"x"`
+			Y  float64 `json:"y"`
+			Z  float64 `json:"z"`
+		} `json:"spheres"`
+	}
+	_ = json.Unmarshal(req.State, &b)
+	sgn := func(v float64) int {
+		switch {
+		case v > 0.01:
+			return -1 // toward the centroid
+		case v < -0.01:
+			return 1
+		default:
+			return 0
+		}
+	}
+	type mv struct {
+		ID int `json:"id"`
+		DX int `json:"dx"`
+		DY int `json:"dy"`
+		DZ int `json:"dz"`
+	}
+	moves := make([]mv, 0, len(b.Spheres))
+	if n := len(b.Spheres); n > 0 {
+		var cx, cy, cz float64
+		for _, s := range b.Spheres {
+			cx += s.X
+			cy += s.Y
+			cz += s.Z
+		}
+		cx, cy, cz = cx/float64(n), cy/float64(n), cz/float64(n)
+		for _, s := range b.Spheres {
+			moves = append(moves, mv{s.ID, sgn(s.X - cx), sgn(s.Y - cy), sgn(s.Z - cz)})
+		}
+	}
+	data, _ := json.Marshal(moves)
+	return Response{Protocol: Protocol, Kind: "move", Ray: data, Reasoning: "reference ray scenographer"}
+}
+
 func Reference(req Request) Response {
 	switch req.Kind {
 	case "move":
@@ -639,6 +686,12 @@ func Reference(req Request) Response {
 		}
 		if req.Game == "rpg" {
 			return refRpg(req)
+		}
+		if req.Game == "ray" {
+			return refRay(req)
+		}
+		if req.Game == "rayscene" {
+			return refRayScene(req)
 		}
 		return refMove(req)
 	case "draw":

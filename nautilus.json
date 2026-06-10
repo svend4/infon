@@ -1,0 +1,26 @@
+{
+  "format": "nautilus/1",
+  "id": "infon",
+  "name": "infon — CPU-traced shared worlds",
+  "summary": "The renderer node of the Q6 federation: turns a tvcp-ai/1 rayscene into pixels and shares a walkable world.",
+  "role": "renderer",
+  "coord": {
+    "space": "Q6",
+    "bits": 6,
+    "interchange": "six '1'/'0' characters, bottom line first (a hexagram)"
+  },
+  "protocols": ["tvcp-ai/1"],
+  "schemas": ["ai/schema/rayscene.schema.json"],
+  "adapters": [
+    { "id": "pro2", "kind": "director", "path": "ai/adapters/yijing_brain.py" },
+    { "id": "equipment", "kind": "fleet", "path": "ai/adapters/equipment_brain.py" }
+  ],
+  "links": [
+    { "id": "meta", "role": "maths", "repo": "https://github.com/svend4/meta" },
+    { "id": "pro2", "role": "model", "repo": "https://github.com/svend4/pro2" },
+    { "id": "info150", "role": "systems", "repo": "https://github.com/svend4/info150" }
+  ],
+  "capabilities": ["rayscene", "hexagram-worlds", "fleet-monitor", "semantic-scene"],
+  "entry": ["cmd/rayexplore", "cmd/raymeet"],
+  "interop_doc": "docs/Q6_INTEROP.md"
+}

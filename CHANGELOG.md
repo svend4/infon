@@ -6,6 +6,659 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 🔗 Cross-project interop (the Q6 house style)
+
+- **One 6-bit coordinate, documented** (`docs/Q6_INTEROP.md`, `Hexagram.String`):
+  the sibling repos (`meta`/`pro2`/`info150`) all ride the Q6 hypercube; this records
+  how `infon` connects to them **by data and protocol, not code** — a hexagram as a
+  canonical six-character `1`/`0` string (round-trips with `ParseHexagram` for all 64,
+  tested), plus the `tvcp-ai/1` director protocol and the rayscene schema. The only
+  things crossing a project boundary are six bits and a small JSON message.
+
+### 🌉 Loose coordination (adapted from info150's portal)
+
+- **Hexagram bridges** (`pkg/raydir/hexbridge.go`, realising info150's `portal`
+  principle — "not merger, compatibility"): info150 places each domain on a 6-bit
+  coordinate and bridges domains by Hamming distance; here each world carries a
+  hexagram (its Q6 coordinate), and `HexBridges` links worlds whose hexagrams differ
+  by at most N lines — a read-only view that discovers Q6 proximity between worlds
+  without coupling or modifying them. Tested: only Hamming-near worlds bridge at low
+  N, everything bridges at N=6, and the antipode is isolated at N=1.
+
+### 📜 A formal brain contract (adapted from robot/ETD)
+
+- **JSON Schema for rayscene** (`ai/schema/rayscene.schema.json`, after the
+  schema-validated skill manifests of `svend4/robot`): the scene graph a director
+  authors now has a machine-readable contract — object kinds, the animation set,
+  material fields and their ranges. A test keeps it honest in both directions: the
+  schema's `kind`/`anim` enums must equal what the renderer accepts (no drift), and
+  the reference author's output must conform (valid kinds/anims, colours in range).
+  Linked from the protocol doc; confirms the existing `validObj`/`clampObj`/
+  conformance posture with an explicit, published contract.
+
+### 🧱 Engineering discipline (adapted from info150)
+
+- **One-command quality gate** (`scripts/qa.sh`, after the `make qa` + smoke
+  discipline of `svend4/info150`): builds, vets, tests and lints everything, checks
+  gofmt on the actively-developed packages, then headless-smokes the non-interactive
+  commands (`rayvoxel`, `rayfilm`, the `conform` reference-brain battery, and the
+  `yijing_brain` selftest), printing a pass/fail summary and exiting non-zero on any
+  failure. Currently 9/9 green.
+
+### 🧩 Ideas adapted from sibling repos (meta / pro2 / in4n)
+
+- **Delaunay terrain mesh** (`pkg/raytrace/delaunay.go`, after the InfoAquarium graph
+  of `svend4/in4n`): a Bowyer-Watson Delaunay triangulator over 2-D points, then
+  `DelaunayMesh`/`ScatterTerrain` lift a jittered, fractal-noised point cloud into an
+  organic low-poly landscape the path tracer renders — an irregular-mesh alternative
+  to the regular voxel height field. Tested with the empty-circumcircle oracle (no
+  input point lies inside any triangle's circumcircle), plus square/coverage/height
+  bounds.
+- **Hexagram cellular automaton** (`pkg/raydir/hexca.go`, after svend4/meta's hexca):
+  a toroidal grid where every cell is one of the 64 hexagram states (a 6-bit Q6
+  vertex). Each of the six lines evolves as a coupled majority automaton — a cell
+  takes the majority of its four neighbours' lines, keeping its own on a tie — so
+  yang and yin self-organise from noise into drifting regions, a living Q6 pattern,
+  rendered shaded by yang-count. Seeded/deterministic; tested for in-range states,
+  determinism, that a random grid evolves, and render size.
+- **Group-built mandalas** (`pkg/raydir/symmetry.go`, the principle behind meta's
+  hexsym): generate structure by acting with a symmetry group. `Mandala` replicates
+  any motif under the dihedral group D_n about a vertical axis (n rotations, plus
+  their mirror images), so arbitrary geometry becomes a perfectly symmetric
+  mandala — complementing the SDF mandala and the N/S mirror. Tested: the copy count
+  (n and 2n), rotational closure (rotating every copy by 2π/n lands on another copy,
+  all on the motif's ring), and reflected-triangle winding.
+- **Figure-eight & rosette motions** (`pkg/raydir/anim.go`, from the movement
+  archetypes of `svend4/data2`): two new local motions for animated objects —
+  `figure8` (a Gerono lemniscate, the ∞ path that pinches through its centre) and
+  `rosette` (a small fast loop riding a slow one — a spirograph of nested orbits).
+  The reference author understands "infinity"/"lemniscate" and "spirograph"/
+  "rosette". Tested: both are periodic, figure8 reaches ±amp and crosses its centre,
+  rosette's radius varies (nested), and the keywords author them.
+- **A director with memory (RAG-style)** (`pkg/raydir/memory.go`, in the spirit of
+  `svend4/infom`'s GraphRAG): every region grown is remembered (place name + the
+  prompt), and a new prompt recalls the most thematically similar past place (token
+  Jaccard), so the world can echo itself — "reminiscent of the Forest you saw
+  before" — via `World.RecallPrompt`. The remembered places also form a knowledge
+  graph (`Memory.Graph`) — a bubble per region, edges between thematically similar
+  ones — which lays out and draws like any `BubbleGraph`. `rayexplore -memory`.
+  Tested: tokenization/Jaccard, recall picks the similar place and ignores
+  unrelated, the graph links clusters and isolates the odd one out, and the world
+  remembers and recalls.
+
+### 🔌 Interop — a hexagram-thinking brain directs the world
+
+- **YiJing-Transformer brain adapter** (`ai/adapters/yijing_brain.py`): a `tvcp-ai/1`
+  bridge to the YiJing-Transformer (github.com/svend4/pro2), so a transformer that
+  "thinks in hexagrams" can be the live director. It reads the prompt, decides one
+  I-Ching hexagram for the region (six lines = two trigrams) — via the model's Q6
+  embedding when pro2 + a checkpoint (`YIJING_CKPT`) are present, else a
+  deterministic hash so the sidecar runs dependency-free — and authors a rayscene
+  scene graph from the two trigrams' themes (mirroring `pkg/raydir`'s Hexagram). Set
+  `BRAIN_URL=http://127.0.0.1:8095/v1/decide` and the hexagram worlds of `rayexplore`
+  are directed by it. Verified live end-to-end (Go `HTTPBrain` → this sidecar →
+  rendered scenes) and offline (`--selftest`: determinism, variety, every hexagram
+  authors a valid scene, the tvcp-ai/1 envelope).
+
+### 🌀 "Dream hackers" — cartography, voxels & dream optics (branch `claude/epic-sagan-EWTTr`)
+
+A round inspired by reading the lucid-dreaming site *Хакеры сновидений* as if it
+described a computer game: its "dream cartography" (a world that is a molecular
+structure of bubbles connected by transits, mapped with boundaries and unexplored
+"white spots"), its literal mention of *voxel graphics in dreams*, its grid
+labyrinths ("square forest"), mirror-symmetric and layered worlds, and its
+optical oddities (perspective skew, tunnel vision). Each maps cleanly onto the
+existing region/portal/map/director architecture.
+
+- **Voxel-space terrain renderer** (`pkg/raytrace/voxel.go`, `cmd/rayvoxel`): the
+  site literally names "voxel graphics in dreams" (a dreamer sees the world form as
+  "large rectangular pixel-blocks"). So there is now a classic Voxel-Space (Comanche)
+  renderer: a procedural fractal height field with a height-banded palette (water /
+  sand / grass / rock / snow), drawn column-by-column front-to-back with a y-buffer
+  (near ridges occlude far ones) and aerial haze into the distance. `cmd/rayvoxel`
+  writes a PNG; separate, cheap, no path tracing. Tested: terrain is deterministic
+  and bounded, the render fills its size, draws terrain (not only sky), and a hill
+  ahead rises higher on screen than flat ground.
+- **Dream optics** (`pkg/raytrace/dreamoptics.go`): the "unusual visual effects in
+  lucid dreams" the site catalogues, as screen-space warps — `PerspectiveSkew` (the
+  "complete violation of the laws of perspective", a lean to one side),
+  `TunnelVision` (the surround closing to black around a central circle), and
+  `DoubleVision` (the image splitting into a ghosted double). `rayexplore -optic
+  skew|tunnel|double`. Tested: a line is sheared, the corners darken while the
+  centre stays, one dot becomes two, and dimensions are preserved.
+- **Transit funnel (the voronka)** (`pkg/raydir/funnel.go`): the swirling funnel /
+  whirlpool the hackers fall through to transit between worlds — a glowing vortex of
+  orbs that spirals inward and downward and spins over time, narrowing from a wide
+  rim to a point. `World.AddFunnel` places one (re-placed each frame from the shared
+  clock); given a link transform it also drops a portal at its mouth, so looking or
+  stepping in transits you elsewhere. `rayexplore -funnel`. Tested: the orbs glow
+  and sit within the radius, the funnel narrows downward, it spins with time, and a
+  linked funnel adds both its orbs and a transit portal.
+- **"Materialize" — the world renders in** (`pkg/raytrace/materialize.go`): the moment
+  a dream forms, as the site describes it — first "large rectangular pixel-blocks",
+  then everything "adjusts itself" into a normal image. `Pixelate` gives the blocky
+  voxel look; `Materialize(img, t)` sweeps from coarse blocks (t=0) to sharp (t=1).
+  `rayexplore -materialize` makes each new region render in from blocks over a beat.
+  Tested: pixelation makes blocks uniform and cuts the colour count; t=1 is sharp
+  and earlier t is coarser.
+- **The Flyer (летун)** (`pkg/raydir/flyer.go`): a predator in the world — the
+  flyer the hackers warn about (Castaneda's): a dark, flattened shadow that stalks
+  the walker and, catching up, drains your "luminosity". It is slower than you can
+  run, so it's a thing to keep ahead of. `rayexplore -flyer` shows a luminosity
+  meter that falls when it's on you (with a warning) and recovers when you escape.
+  Local and deterministic; tested: it pursues and closes in, faces you, drains only
+  within reach, is a dark several-lobed shape, and the world steps it to a catch.
+- **Dream sprites you can question** (`pkg/raydir/sprite.go`): the dream characters
+  the hackers debate — can you talk to them, can you tell a sprite from a real
+  dreamer? A `Sprite` drifts about its spot and `Answer`s questions from a small
+  dream-logic table; the classic tell is built in (`LucidTell`): ask a sprite if
+  this is a dream and it deflects/denies, where a lucid dreamer would say yes.
+  `rayexplore -sprites` spawns a couple; type `?your question` to ask the nearest.
+  Tested: answers are deterministic and thematic, the dream question is deflected,
+  `LucidTell` separates deflection from admission, sprites drift near home, and the
+  world finds the nearest and renders them.
+- **The art of intention** (`pkg/raydir/intention.go`): the hackers' central art — you
+  hold a wish (a theme) and, the longer you sustain it, the more strongly the world
+  grown ahead bends to it. A flicker changes nothing; a sustained intention manifests
+  (`IntendPrompt` weaves the theme in as `HoldIntention` builds its strength, until
+  the theme takes the prompt over). It composes with the mood bias (mood sets the
+  tone, intention the subject). `rayexplore -intention`: type `!a theme` and hold it.
+  Tested: strength builds and resets on change, the prompt is unchanged while weak,
+  coloured as it builds and taken over when sustained, and a held intention actually
+  manifests (the director grows the theme into the world).
+- **I-Ching hexagram worlds** (`pkg/raydir/hexagram.go`): reading the world from a
+  hexagram, the hackers' "DNA of the tonal" — six lines, two trigrams, sixty-four
+  readings. A `Hexagram`'s two trigrams (heaven, lake, fire, thunder, wind, water,
+  mountain, earth) name an upper and a lower theme that compose a director prompt,
+  and its six-bit number gives a deterministic seed, so casting a hexagram conjures
+  one specific, reproducible world. `CastHexagram`, `ParseHexagram` ("101010" /
+  "yynnyn"); `rayexplore -hexagram 101010`. (Kin to the I-Ching-style positional id
+  in `pkg/tangram`.) Tested: the number is a bijection over all 64, name/prompt come
+  from the trigrams, casting and the seed are deterministic, and parsing validates.
+- **Q6 navigation of the 64 worlds** (`pkg/raydir/hexagram.go`, inspired by the
+  `hexcore` library of `svend4/meta`): the 64 hexagrams are the vertices of the
+  6-dimensional hypercube Q6 (edge = one line flipped), so a `Hexagram` now knows
+  its `Neighbors` (the six worlds one line away), its `Antipode` (the far corner),
+  `Hamming` distance, and `GrayWalk` — a Hamiltonian path (reflected Gray code)
+  visiting all 64 worlds, each differing from the last by exactly one line.
+  `rayexplore -hexagram 000000 -q6walk` makes a "grand tour": every region grown is
+  a one-line neighbour, so the world morphs one trait at a time across all 64.
+  Tested: flip/neighbours/antipode/Hamming, and the Gray walk is a true Hamiltonian
+  path (64 distinct, consecutive Hamming 1).
+- **Bubble-graph world** (`pkg/raydir/bubble.go`): the dream world as the hackers
+  map it — not a flat map but a `BubbleGraph` of numbered bubbles (places)
+  connected by transits, anchored at home. Shortest-transit routing between any two
+  bubbles (BFS), and `BubbleMap` draws the structure diagram (transits as lines,
+  bubbles as discs — home gold, current cyan, dead-ends dim — numbered/named, with
+  a route highlighted). Pure data, fully tested (add/link undirected, routing incl.
+  self and unreachable, the diagram draws nodes and edges). **Force-directed layout**
+  (`BubbleGraph.Layout`, after the InfoAquarium graph of `svend4/in4n`): Coulomb
+  repulsion between every pair, Hooke springs along transits, mild centring, with
+  home pinned at the origin, from a deterministic ring — so the structure
+  auto-arranges into an organic diagram instead of hand-placed coordinates. Tested:
+  deterministic, home pinned, no overlaps, and graph-near bubbles land spatially
+  nearer than graph-far ones. **Vector & hypercube views** (also after hexvis of
+  `svend4/meta`): `BubbleGraph.DOT` exports the structure as Graphviz and
+  `BubbleGraph.SVG` as a standalone scalable diagram (route edges green); and
+  `Q6Map` draws the whole hypercube as an 8×8 grid of all 64 hexagrams shaded by
+  yang-count (dark→gold), the current hexagram outlined and its six neighbours
+  dotted — a navigator over the 64 worlds. Tested: DOT/SVG are well-formed with the
+  right node/edge counts, and the Q6 map renders the outline and the shading.
+- **Bird's-eye fog-of-war map** (`pkg/raydir/cartograph.go`): the world drawn from
+  above the way the hackers' maps look. A coarse `Cartograph` grid is revealed as
+  you walk (`World.Reveal`), and `Render` fills the explored ground while the rest
+  stays as "white spots" (terra incognita), rings the known world with a boundary,
+  marks the named places — calling out the archetypal **reserve** (gold, where
+  things accumulate) and **prison** (red, where things are lost) — and a compass.
+  `rayexplore` lifts the fog as you move and saves `map.png` on the `k` key. Tested:
+  reveal records cells, far points stay white spots, specials are recognised, and
+  the render draws ground, white spots and the special markers.
+- **The "square forest" labyrinth** (`pkg/raydir/squareforest.go`): the recurring
+  dream structure where a forest is always divided into square sections by roads —
+  some squares impenetrable jungle, some block-filling buildings, the rest open —
+  dead flat, navigated along the roads between blocks. `NewSquareForest` seeds a
+  grid; `Objects` builds it (tree clumps for jungle, houses for buildings) and
+  `Walkable` reports the maze (roads and open squares walkable, block interiors
+  not). `rayexplore -maze` drops one across the path. Tested: the grid is sized and
+  deterministic, roads/open squares are walkable while block interiors are blocked,
+  and the geometry is flat, repeatable and within the grid.
+- **Mirror & layered worlds** (`pkg/raydir/mirror.go`, `pkg/raydir/layers.go`): two
+  more structures from the dream maps. *Mirror* — the hackers' finding that the
+  sleeping world is a north-south reflection of the waking one ("the top of the map
+  is south"): `MirrorSpecZ` flips a spec's Z, `mirrorObjectsZ` reflects built
+  geometry (triangles re-wound so faces still point out), and `rayexplore -mirror`
+  doubles the world into an eerie symmetry. *Layers* — a vertical stack (upper /
+  middle / lower): `LayerSky` repaints the mood (the lower world dark and cold), and
+  `DescentTunnel` builds the dark, ribbed shaft you fall down into it
+  (`rayexplore -layer upper|lower`). Tested: the N/S flip and reflection (incl.
+  winding), the world gains a true reflection, upper is brighter than lower, the
+  layer repaints the sky, and the tunnel descends within its radius.
+
+### 🎨 CPU ray-tracing & rendering engine (branch `claude/epic-sagan-EWTTr`)
+
+A full, clean-room CPU renderer in `pkg/raytrace`, grown into a small research
+renderer with **five unbiased light-transport algorithms** that are
+cross-validated against each other (each one's mean image matches the path
+tracer's, in linear space). Pure Go (+ stdlib); `go build ./...` and
+`go test ./...` are green, `golangci-lint` clean. Inspired by — but copying
+nothing from — the GPL Neo3dEngine (an evaluation concluded its rendering and
+networking are a strict subset of this layer; only its ASCII-ramp idea was worth
+adopting, and it was reimplemented better).
+
+#### Added — light-transport renderers (all unbiased, mutually validated)
+- **Monte-Carlo path tracer** (`pathtrace.go`): global illumination with
+  next-event estimation, multiple importance sampling (power heuristic), Russian
+  roulette, a progressive accumulator and temporal reprojection. NEE samples
+  emissive **spheres, triangles, and emissive geometry inside meshes/instances**
+  (transformed to world space, honouring an instance's material override) — so an
+  authored emissive panel, or an emissive `.obj`, is a proper area light, lit
+  correctly by GI rather than found only by chance. Lights are chosen by
+  **importance (power = luminance x area)**, not uniformly, cutting noise when a
+  scene mixes bright and dim lights; the matching power-weighted, area-form MIS
+  weight is applied on BSDF-sampled emitter hits. Verified unbiased (NEE+MIS mean
+  == pure-BSDF mean) for single, many, and in-mesh lights. (Also fixes a BVH slab
+  test that culled a flat, axis-aligned quad mesh hit perpendicularly.)
+- **Bidirectional path tracing** (`bdpt.go`, `bdpt_connect.go`): eye × light
+  subpaths, all s/t connections, balance-heuristic MIS.
+- **Light (particle) tracer** (`lighttrace.go`): light→camera splatting (the t=1
+  strategy); excels at caustics that reach the camera.
+- **Metropolis light transport** (`pssmlt.go`): primary-sample-space MLT with
+  large/small mutations and a bootstrap normalisation.
+- **Progressive photon mapping** (`ppm.go`) and **ReSTIR direct lighting**
+  (`reservoir.go`, `restir.go`): RIS reservoirs with unbiased spatial reuse,
+  ~7–12× lower direct-lighting variance in many-light scenes.
+
+#### Added — cinematography
+- **Cinematic fly-through camera** (`pkg/raydir/tour.go`, `cmd/rayfilm`): the camera
+  can fly on rails. `Tour` threads a smooth Catmull-Rom spline through a set of
+  waypoints (the world's landmarks, via `TourFromLandmarks`) and walks the camera
+  along it at a steady pace — reparameterised by arc length, so equal steps cover
+  equal distance — always looking the way it travels. `cmd/rayfilm` grows a world
+  and renders evenly-spaced shots along the tour into a contact sheet, a storyboard
+  of the fly-through (`-frames`, `-cols`, `-path`, `-grade`). Tested: Catmull-Rom
+  passes through its control points, the tour starts/ends on its waypoints and
+  passes near each, arc-length pacing keeps steps even, the camera faces its motion,
+  and a landmark tour is ordered by index at the chosen height.
+- **Camera motion blur in the fly-through** (`cmd/rayfilm -blur`): each shot of the
+  cinematic tour can be exposed over a stretch of the path, so a fast dolly streaks
+  the frame the way a real shutter does. It wires the renderer's existing camera
+  motion blur (`PathRenderMotion`, already validated) to the tour: the shutter opens
+  at `CameraAt(u)` and closes at `CameraAt(u+blur)`. Tested at the tour level: motion
+  along the path actually changes (blurs) the frame versus a zero-span static shot.
+
+#### Added — richer materials for the director
+- **Subsurface & thin-film, authorable** (`brain.ObjSpec` `sss`/`sssRad`/`film`/`filmIor`):
+  the renderer's subsurface scattering (translucent wax, jade, skin) and thin-film
+  iridescence (soap, oil, pearl) are now exposed in the scene protocol, so the AI
+  director can ask for them by name. `objMaterial` maps the fields (the base colour
+  tints the subsurface interior), they're clamped like every other untrusted field,
+  and the reference author understands the keywords — "wax"/"jade"/"skin" grow a
+  translucent surface, "soap"/"iridescent"/"oil"/"pearl" a thin-film one. Tested:
+  the fields map, count as a material override, clamp, the keywords author the right
+  material, and a subsurface object renders lit. Documented in the protocol.
+
+#### Added — engine wiring into the walk
+- **ReSTIR many-lights in the walk** (`World.SetRIS`, `rayexplore -ris N`): the
+  renderer's ReSTIR/RIS direct-lighting estimator (resampled importance sampling
+  over candidate lights, already unbiased and validated in `pkg/raytrace`) is now
+  wired into the explorable world, so a night full of fireflies, lanterns or lit
+  windows renders clean instead of speckled at the same sample count. `World.SetRIS`
+  threads the candidate count onto the scene; the path tracer runs NEE-without-MIS
+  so RIS engages. A world-level oracle confirms it stays unbiased — at equal samples
+  the RIS mean image matches plain NEE's — and the count propagates to the scene.
+
+#### Added — non-Euclidean space (Escher portals)
+- **Portals** (`pkg/raytrace/portal.go`, `Material.Link`): a finite rectangular
+  doorway that teleports any ray that crosses it by an affine transform and lets it
+  continue *unattenuated* — so you look straight through to wherever it links: a far
+  part of the world, a rotated copy, or (linking to just behind itself) an endless
+  Escher corridor. The teleport is one early case in the path tracer's bounce loop
+  (`Material.Link != nil`: move the ray by the link transform and continue), so it
+  composes with everything else. Tested: the ray reaches a place the straight ray
+  never could; an identity portal is perfectly invisible (a seamless window); the
+  rectangle is hit inside and missed outside; the affine `Apply`/`ApplyDir` helpers
+  are correct. `rayexplore -path -portals` drops one into the walk.
+
+#### Added — non-photorealistic rendering (a painter's eye)
+- **Painterly post — oil, ink, poster** (`pkg/raytrace/painterly.go`): a non-photoreal
+  "look" over any finished frame, in the spirit of a Dalí/Escher art-world. The
+  operators are classic: a **Kuwahara filter** (edge-preserving smoothing that
+  flattens regions into brush strokes while keeping edges crisp), a **Sobel
+  ink-edge** pass (dark contours), and **colour quantisation** (palette reduction),
+  combined into named styles — `oil` (soft painted regions with faint outlines),
+  `ink` (bold contours over flat colour), `poster` (few flat colours, strong
+  outlines). `rayexplore -style oil|ink|poster`. Tested: Kuwahara flattens noise yet
+  keeps a hard edge, quantise reduces the colour count, ink darkens edges and leaves
+  flat regions alone.
+- **Dream post — lens & film** (`pkg/raytrace/dream.go`): a screen-space "lens and
+  film" pass that pushes a frame toward the dreamlike — chromatic aberration (the
+  colour channels drift apart toward the edges), barrel/pincushion lens distortion
+  (a curved, bilinearly-resampled field), seeded film grain, and a soft vignette.
+  `rayexplore -path -dream` (grain shimmers from a per-frame seed). Tested: grain
+  adds variance to a flat image and is deterministic in its seed, the vignette
+  darkens corners, and chroma separates the R and B channels at an edge.
+- **Stereo depth — anaglyph** (`pkg/raytrace/stereo.go`): render the world in 3-D.
+  `StereoCameras` makes a left/right eye pair offset along the camera's own
+  horizontal axis (a parallel rig, midpoint = the original camera), and `Anaglyph`
+  fuses them red-cyan (red from the left eye, green/blue from the right). View with
+  red/cyan glasses for depth — near things shift more between the eyes than far ones.
+  `rayexplore -stereo`. Tested: the eyes straddle the camera horizontally at the
+  right separation, the anaglyph routes channels correctly, and a near object shows
+  more parallax than a far one through an actual render.
+
+#### Added — sampling, materials, effects
+- **Sampling**: Owen-scrambled Sobol (0,2) low-discrepancy sampling (`sobol.go`,
+  −18…49% AA error), cosine/GGX importance sampling.
+- **Materials**: GGX/Cook-Torrance metal, Disney principled BSDF, dielectric
+  glass with chromatic dispersion, **subsurface scattering** (volumetric random
+  walk), **thin-film interference** (iridescence), **normal/bump mapping** with
+  UV-aligned tangents.
+- **Camera/effects**: depth of field, **motion blur** (objects *and* camera),
+  caustics (photon map + PPM), **heterogeneous participating media** (delta /
+  Woodcock tracking), distance fog, volumetric god-rays, à-trous denoiser
+  (+albedo/normal guides), bloom, auto-exposure, ACES tone mapping.
+- **Geometry & acceleration**: spheres, Möller–Trumbore triangles, planes,
+  meshes (`.obj`/`.mtl`), **instancing** with affine transforms, a two-level SAH
+  BVH; importance-sampled environment maps.
+- **Textures**: checker, sRGB image, and **procedural noise** (Perlin, FBM,
+  Worley) with marble/cellular wrappers.
+
+#### Added — terminal output, transport & AI
+- **Output modes**: half-block, sextant, octant, braille, perceptual (OKLab),
+  optimal, triangle, **ASCII luminance ramp** (from Neo3dEngine, improved with
+  area averaging + colour), plus Sixel and Kitty pixel protocols.
+- **Scene transport**: the whole world over Reed-Solomon (`wire.go`, ~100 bytes),
+  delta-stream animation and broadcast/spectator streams.
+- **AI integration** (`pkg/raydir`, `internal/raysource`): the ray world as a
+  tvcp camera (`tvcp call --ray`), the brain driving the camera/world
+  (`game:ray`), and the brain **authoring a full material scene from a prompt**
+  (`game:rayscene`, formalised in the tvcp-ai/1 protocol + adapters). The scene
+  graph now includes **named procedural meshes** — `box`, `pyramid`, `cylinder`
+  and the composites `tree` (trunk + foliage) and `house` (walls + roof) — so the
+  director can build a recognizable *place* (a grove, a village) rather than only
+  abstract spheres, all reconstructed locally from a name (no geometry on the
+  wire). A new `kind:mesh` instances a model from a named **mesh library**
+  (`pkg/raydir/meshlib.go`): the built-ins `crystal` and `rock`, plus any `.obj`
+  loaded with `LoadMeshDir` — so a deployment extends the director's vocabulary
+  with no code change, and a hundred placements share one mesh via cheap
+  `Instance` transforms while still sending only a name over the wire. Unknown
+  model names are dropped by the same sanitiser that guards the rest of a spec.
+  A `mesh` placement that sets any material field (`color`/`metal`/`reflect`/
+  `rough`/`glass`/`emit`) overrides the model's baked material for that placement
+  (`raytrace.NewInstanceMat`), so one shared mesh can appear in many colours and
+  finishes; an untinted placement keeps the model's own look.
+- **Textured surfaces from a name** (`pkg/raydir/texlib.go`): an object's new
+  `tex` field names a surface texture the renderer samples by UV/position. Built-in
+  procedurals — `checker`, `marble`, `wood`, `stone`, `clouds`, a radial `mandala`
+  (`KaleidoTex`) and an interlocking Escher-style `tiles` tessellation (`TileTex`)
+  — are reconstructed from a name (no assets on the wire), and `LoadTextureDir` registers image files
+  (`.png`/`.jpg`) for real image textures. Works on any surface (the OBJ loader
+  already parses `vt`, so loaded meshes carry UVs); on a `mesh` the texture rides
+  the same per-instance override. Unknown texture names are ignored (the surface
+  stays flat-coloured, never dropped). A `bump` field names a procedural normal map
+  (`ripple`, `waves`, `bumps`) for surface relief without geometry.
+- **A prettier walk** (`pkg/raydir/refine.go`, `pkg/raytrace/postprocess.go`,
+  `cmd/rayexplore`): progressive refinement (`Refiner`) folds a small batch of
+  samples into a running average each frame and restarts when the camera moves — so
+  the walk stays responsive while moving and converges to a clean render the moment
+  you hold still (press Enter to refine; `spp` shown in the HUD). A post-grade
+  pipeline (`Grade`) adds a vignette and an **AgX** filmic tone curve alongside the
+  existing auto-exposure and bloom (`-grade`), for a cinematic frame.
+- **Ray-marched art — fractals, mandalas, surreal forms** (`pkg/raytrace/sdf.go`,
+  `pkg/raydir`): a sphere-traced signed-distance object (`Marched`) renders shapes
+  triangles can't — **Mandelbulb**, **Menger sponge**, **Sierpinski** (fractals),
+  **mandala** (radial fold), **melt** (Dali-style smooth-min metaballs) and an
+  **Escher** infinite interlocking-ring lattice — each a formula, not a mesh, so an
+  infinite world ships as a name. It composes with the path tracer, materials,
+  shadows/GI and the BVH like any primitive. The director authors them via
+  `kind:"fractal"` (alias `sdf`) + `name`; a "surreal/dream" prompt composes a dusk
+  tableau of several forms. Unknown form names are dropped by the sanitiser.
+  Protocol doc and the three adapters advertise the `fractal` kind.
+- **The experience — walk a world the AI dreams up** (`cmd/rayexplore`,
+  `pkg/raydir/fly.go`): a free-fly camera through a `World` the brain authors and
+  **extends on the fly** — walk forward and new regions are composed ahead of you,
+  each shipped as a compact scene description (meaning, not pixels) and ray-traced
+  locally. Offline with the reference brain, or a real director via `BRAIN_URL`.
+  Regions now **connect into one place** (`SceneContext`/`AuthorSceneCtx`): the
+  director is given the previous region's spec and the walking heading, so a region
+  inherits the prior sky and lays a path of stepping stones leading back — a
+  continuous journey, not independent islands.
+- **A living world — day and night** (`pkg/raydir/daynight.go`): one number, the
+  time of day, drives the sky gradient and a sun (`SkyForTime`: dawn, noon, dusk,
+  night fall out of it). A timed `World` renders the matching sky and a distant sun
+  emitter; the `raymeet` host advances it and broadcasts `EncodeEnv` (8 bytes) so
+  the whole group's light evolves in sync — `rayexplore` steps it with `t`. A
+  living world for almost nothing on the wire. While the sun is up the sky is the
+  **physical Preetham model** (`pkg/raytrace/sky.go`, `PreethamSky`): a closed-form
+  sky from the sun direction + turbidity — blue overhead, warming and reddening
+  toward the horizon and the sun, with automatic sunset colour as the sun sinks; it
+  also acts as an area light in the path tracer.
+- **A living world — motion** (`pkg/raydir/anim.go`): an object can carry a motion
+  formula — `bob`, `orbit`, `drift`, `pulse`, `wander` — that every peer evaluates
+  locally from a shared clock, so a bird flies, a beacon pulses, a moon orbits and a
+  firefly wanders without a single frame crossing the wire; the motion is meaning,
+  reconstructed identically everywhere. Animated objects are kept apart from the
+  static props and re-placed each frame (`World.SetAnimTime`); the reference author
+  spawns them on a keyword (birds, beacon, float, spirit). The world stops being
+  still.
+- **Natural elements** (`pkg/raytrace/water.go`, `medium.go`, `photon.go`):
+  **water** — an animated reflective surface (`Water`) whose normal ripples as a sum
+  of moving directional waves, so the sky and scene shimmer in it; authored as
+  `kind:"water"` and advanced by the shared clock. **Volumetric clouds** — a
+  `CloudMedium` (FBM-density participating medium) for cloud banks/fog and god rays
+  under the lit sky (`World.SetClouds`, `rayexplore -clouds`). **Caustics** — the
+  existing photon map (`BuildCaustics` → `Scene.Caustics`) focuses light through
+  glass/water onto diffuse surfaces, already added in the path tracer. Tested
+  (water ripples in time/space, cloud density is wispy + capped) and shown together.
+- **Hear the world — procedural soundscape** (`pkg/raydir/ambient.go`): the scene's
+  content and time of day become ambient audio, synthesised locally from a handful
+  of 0..1 levels (`AmbientFeatures`) — wind that rises at dusk, water lapping where
+  there's water, a forest rustle, birds by day, crickets at night, a low hum near
+  glowing fractals. `AmbientFrame` is deterministic and seamless (every term is a
+  function of absolute time, so streamed frames join without clicks); `World.Ambient`
+  derives the levels from the world. The sound is reconstructed from meaning, never
+  streamed — another sense for "meaning, not pixels". `rayexplore -sound` plays it
+  (graceful fallback without a device); a `.wav` of a dusk forest is in the showcase.
+- **Gallery & director bench** (`cmd/raygallery`, `cmd/raybench`,
+  `pkg/raydir/gallery.go`, `bench.go`): `raygallery` browses a directory of saved
+  worlds (`.rwld`) and recordings (`.rrec`), printing each one's regions/named
+  places or events/duration and how to open it — a little gallery of shareable
+  worlds and walks, each a few KB of meaning. `raybench` evaluates a director (the
+  reference brain, or a live model via `-url`): it asks for many scenes and reports
+  how renderable, rich and varied they are (`BenchDirector`) — a quick objective
+  read before a live session.
+- **Engine: prettier, faster, farther** (`pkg/raytrace/denoise.go`, `env.go`,
+  `pkg/raydir`): three quality/scale wins. (1) `rayexplore -denoise` renders a few
+  samples and runs the edge-aware guided à-trous denoiser (`GBuffer` +
+  `DenoiseGuided`), so a moving path-traced walk stays clean instead of waiting to
+  converge — 5 spp denoised ≈ a 220-spp reference. (2) `BuildEnvSamplerFromSky`
+  importance-samples the physical (Preetham) sky in HDR, and the day/night `World`
+  installs it (cached, rebuilt only on coarse time steps) so skylit scenes resolve
+  with much less noise — unbiased (radiance still read from `Scene.sky`, MIS
+  intact), and the sampler favours the sun. (3) `World.Prune` drops far-behind
+  regions and rebuilds from the survivors, so a long walk keeps flat memory and
+  render cost (worn paths are kept; a guest re-fetches a region via ack gap-fill if
+  it walks back). Tested: prune drops + shrinks + keeps survivors; the sky sampler
+  favours the sun.
+- **Image → world** (`pkg/raydir/imagine.go`, `cmd/rayimagine`): the project's idea
+  in reverse — meaning extracted FROM pixels. `SceneFromImage` reads a picture and
+  composes a rayscene: sky and ground from the top/bottom bands, a sun from the
+  brightest patch, and coloured forms from the dominant saturated colours. Offline
+  and deterministic; a live vision model can return a richer scene through the same
+  SceneSpec. `rayimagine <img>` path-traces the derived world; `rayexplore -image
+  <img>` lets you walk into a world derived from your photo. Verified: a painted
+  landscape becomes a blue-sky, green-ground scene with a sun and coloured objects.
+- **A world with memory & consequence** (`pkg/raydir/anim.go`, `trace.go`): the
+  world develops and remembers. A `grow` motion makes a planted seed scale up into a
+  full tree over time (monotonic, from the shared clock — born when it appears), so
+  regions mature instead of only oscillating. A `Trace` records foot traffic per
+  ground cell and renders it as worn earth, so **paths emerge where walkers actually
+  go** (`World.Tread`); the wear is encodable and persists between sessions as a
+  `.trace` sidecar next to a saved world. The reference author plants a growing
+  sapling on a keyword (seed/sapling/sprout). Verified live: a tree grows from
+  sprout to full, a winding path wears in, and the trace round-trips to disk.
+- **An AI inside the world — a guide companion** (`pkg/raydir/guide.go`): not an
+  off-stage director but a participant. A `Guide` walks with you, leads a tour of the
+  world's named landmarks (nearest-first), faces its motion, and comments on where
+  it's taking you — rendered as an avatar, talking in the chat. `rayexplore -guide`
+  gives a solo companion; `raymeet -host -guide` spawns it as a synthetic walker the
+  whole group sees and hears. Behaviour is local and deterministic (so it works
+  offline and is tested); a live brain can enrich what it says. Verified live: the
+  guide appears as a second walker and announces "let me show you the …".
+- **Living inhabitants — a flock with a mind of its own** (`pkg/raydir/creatures.go`):
+  the world is no longer just props you walk past. A `Flock` of boids lives by Craig
+  Reynolds' three local rules (separation, alignment, cohesion), drifts toward the
+  world's named places and gathers there, scatters when you walk into it, and stays
+  airborne within an altitude band — re-placed every frame from the shared animation
+  clock, like water. Seeded and deterministic, so it runs offline and is fully tested
+  (separation pushes coincident boids apart; cohesion pulls a strung-out chain
+  together; the flock flees the walker and drifts to a distant landmark; it stays
+  finite and airborne). `rayexplore -creatures` gives the world a flock; the render
+  loop now rebuilds the scene each frame whenever the world is alive (movers, flock,
+  or a companion), so motion actually shows.
+- **Weather that follows you** (`pkg/raydir/weather.go`): a sky that does something —
+  `rayexplore -weather rain|snow|fog`. Rain streaks down on the wind (thin ribbon
+  geometry tilted along the fall direction), snow drifts with a lateral sway, and a
+  band of particles is recycled around the walker as it falls or leaves view, so the
+  count — and the cost — stays flat however far you walk. Fog is aerial perspective
+  (Beer-Lambert distance fade) plus a hazed sky, so the world recedes into the
+  distance. Seeded and deterministic; tested for flat particle count, the band
+  tracking the walker, descent, wind tilt, and the fog scene wiring.
+- **A walk through the year — seasons** (`pkg/raydir/season.go`): `rayexplore -seasons`
+  turns distance forward into a journey through the year. Foliage, ground and sky
+  cross-fade spring → summer → autumn → winter and back (`SeasonAt(z)`, a smooth-
+  stepped blend of four palettes). A region's trees are tinted for the season where
+  they sit, baked once at build time (no per-frame cost); the shared floor whitens
+  under winter snow and the sky tints to match, following the frontier as the world
+  grows. Pure functions of position, so deterministic and tested (cycle order,
+  periodicity, palette character, smooth cross-fade, tree tinting, snowy floor).
+- **A world with a mood** (`pkg/raydir/mood.go`): `rayexplore -mood` lets the director
+  read how you move and shift the tone of what it builds. A `Mood` keeps smoothed
+  (EMA) estimates of your speed and turn rate and classifies them — *calm* (you
+  linger), *restless* (you press on), *curious* (you look around) — then biases the
+  grow prompt toward a matching tone ("quiet, still and intimate" / "vast, grand and
+  open" / "strange, varied and surprising"). The reference author now understands
+  those tones, so even offline the world it builds changes with your mood: a calm
+  walk grows still ponds and warm lanterns, a restless one a grand distant monument,
+  a curious one strange floating oddities. Tested end to end (each gait reads the
+  right mood, the prompts differ, and the three tones author three different scenes).
+- **A world as a story** (`pkg/raydir/story.go`): `rayexplore -story` makes the walk
+  an arc instead of unrelated regions. A `Story` is an ordered set of `Chapter`s,
+  each with its own director prompt (the seed the world grows from) and a line the
+  guide speaks on entering it; a chapter spans a few regions, and when you walk far
+  enough the page turns — a coloured **beacon** (a stack of glowing orbs) marks the
+  threshold and the narration moves on. The built-in five-act arc runs from a dawn
+  meadow through a night forest, a drowned city and a crystal cave to a golden
+  summit. A pure state machine (tested: it turns the page every N regions in order,
+  stops on the last chapter, reports progress; beacons glow and stand in place).
+- **A generative score** (`pkg/raydir/score.go`): the world gets a melody, not just
+  an ambient drone. A small composer reads the world — day or night, how lively it
+  is, your mood — and picks a key and tempo: major and quick by day, minor and slow
+  at night, pentatonic and unhurried when you're calm. Over a soft bass drone it
+  walks a melody through the scale (a biased random walk over scale degrees), each
+  note a plucked tone with harmonics and an envelope; deterministic from a seed and
+  rendered to PCM/WAV. `rayexplore -sound -music` mixes it (looped) under the
+  procedural ambient. Tested: day is major / night is minor and slower, a livelier
+  world plays faster, calm is pentatonic, every note lands in the chosen scale, the
+  render is deterministic and audible, and `World.Score` tracks day vs night.
+- **A travelogue** (`pkg/raydir/travelogue.go`): the walk becomes a keepsake.
+  `rayexplore -travelogue` captures a moment at each new place — the place's name,
+  the time of day, and a thumbnail of the view — and on quit assembles them into one
+  illustrated page: a postcard montage, each thumbnail captioned with its place and
+  a little clock (drawn with the microfont), saved to `travelogue.png`. Tested:
+  capture caps at the most recent moments, the thumbnailer scales and keeps colour,
+  the clock formats, and the rendered page contains each captured thumbnail.
+- **Branching paths** (`pkg/raydir/branch.go`): the walk can fork. At a crossroads
+  the world offers two ways — a high road or a low one, press on into the night or
+  make camp — and which you take steers what the director builds next. The choice is
+  the most direct kind: with `rayexplore -branch` you simply walk left (`a`) or right
+  (`d`). `Branching` is a pure state machine (the forks, where you are, the path
+  taken, the prompt in effect), fully tested: choosing walks the forks in order and
+  applies the chosen prompt, the two arms diverge, and it stops cleanly at the end.
+- **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
+  people say steers what the director builds — the most recent chat line becomes the
+  next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"
+  makes the regions ahead exactly that (offline via keywords, or a live model). Each
+  region is named (`SceneSpec.name`, or a default) and remembered as a landmark; a
+  top-down ASCII `Minimap` shows the named places and the walkers (toggle `m`), and
+  `/go <place>` fast-travels to one. A growing world becomes navigable and
+  conversational.
+- **The shared world — two walkers, one space** (`cmd/raymeet`,
+  `pkg/raydir/pose.go`, `pkg/raydir/region.go`): two peers "call in" over UDP and
+  walk the *same* growing world together, each seeing the other's glowing avatar.
+  Pixels never cross the wire. With `-host`, one peer is the director: it asks its
+  brain to author each region and broadcasts the region's compact scene spec
+  (`Region`, ~100 bytes, idempotent re-broadcast for lossy UDP), and the guest
+  reconstructs each identical region locally — so the shared world stays in sync
+  even with a **live, non-deterministic AI director** (`BRAIN_URL` on the host).
+  The only things on the wire are 40-byte poses and region specs — meaning, not
+  pixels, even for multiplayer. Verified live: a guest's world fills entirely from
+  the host's broadcasts and both place each other correctly.
+- **Group mode (>2 walkers)** (`cmd/raymeet -host`, `pkg/raydir` `PoseSet`): the
+  host is a hub that learns peers dynamically, broadcasts the world to all guests,
+  and relays everyone's pose to everyone (a `PoseSet`, 44 bytes/walker), pruning
+  the disconnected. Each participant sees the others as distinctly-coloured
+  avatars. Verified live with three participants: all report `walkers:3` and the
+  guests' worlds fill from the host's broadcasts.
+- **Talk in the shared world — reliably** (`cmd/raymeet`, `pkg/raydir/chat.go`,
+  `pkg/raydir/chatsync.go`): a `/message` is relayed through the hub to everyone
+  and shown in a chat log under the view, with a `-name`. Delivery is reliable over
+  lossy UDP without a server of record (`ChatSync`): every message carries a
+  globally-unique id (origin in the high 32 bits, a per-origin sequence in the
+  low 32); receivers **dedup by id**, the hub keeps a recent ring of every message
+  and **re-broadcasts** it, and a guest re-sends its own ring to the hub — so a
+  dropped message self-heals and is never shown twice. Verified live: a guest's
+  message reaches the other guest and the hub.
+- **Voice in the shared world — mixed** (`cmd/raymeet -voice`,
+  `pkg/raydir/voicemix.go`): the mic is captured in 20 ms PCM chunks and relayed on
+  the same hub path as chat (`PacketTypeAudio`, reusing `internal/audio`). Each
+  speaker's frame is tagged with its origin id and fed to a `VoiceMixer` that keeps
+  a per-speaker jitter buffer and, on a steady playback pull, **sums one frame from
+  every active speaker** (with saturation) into a single output stream — so people
+  talking at once blend instead of serialising and lagging. Buffers are bounded and
+  silent speakers pruned. It falls back to text-only when there is no audio device,
+  so the experience never depends on hardware. Chat/pose/world relay all share one
+  `sendGroup`/`relayToOthers` path. Voice is now **positional** (`VoiceGain`): a
+  speaker is quieter with distance and softer from behind, by their pose relative
+  to you — people sound where they stand (mono presence, not stereo panning).
+- **Collaborative building** (`cmd/raymeet` `/place`, `pkg/raydir/build.go`): a
+  walker drops an object in front of them (`/place crystal|rock|box|sphere|tree|
+  mandelbulb|mandala|melt|escher|…`, tinted in their avatar colour) into the shared
+  world for everyone. A placement is an ordinary `Region`, so it is broadcast,
+  ack-healed and persisted like any authored chunk: a guest sends a build request,
+  the host re-indexes it authoritatively and fans it out; the sanitiser guards it.
+  The multiplayer world goes from director-only to co-created. Verified live: a
+  guest's placed crystal appears for host and guest alike.
+- **Reliable world delivery (acks, not blind re-broadcast)** (`cmd/raymeet`,
+  `pkg/raydir` `EncodeAck`/`Known`/`MissingRegions`): a guest periodically acks
+  the region indices it has; the host re-sends only the missing regions, only to
+  that guest, instead of blasting everything to everyone. New regions are still
+  pushed immediately; gaps (loss or late join) self-heal. Verified live: a guest
+  that joins after authoring reaches the full world purely via ack gap-fill.
+- **Persistent worlds** (`cmd/raymeet -world`, `pkg/raydir/persist.go`): a host can
+  save its authored world and resume it. The world *is* its list of `Region`s —
+  positions plus the director's scene specs — so `SaveWorld`/`LoadWorldFile` write a
+  tiny file (meaning, not pixels): a host restarts where it left off instead of
+  re-authoring, and a world becomes something you can copy and share. Saved
+  atomically (temp + rename), only when the world grows; reloaded regions reach
+  guests through the existing ack gap-fill. Round-trip and rebuild are tested.
+- **Record & replay a session** (`cmd/raymeet -record`, `cmd/rayplay`,
+  `pkg/raydir/replay.go`): the host can record the whole shared session — the
+  regions that appear, the walkers' poses, the chat and the time of day, each
+  stamped with when it happened — to a tiny file (a 6 s walk is ~3 KB: meaning, not
+  pixels). `rayplay` replays it in the terminal from a participant's point of view,
+  reconstructing the world, avatars and chat over time with a `Player` (with a
+  `-speed` control). Round-trip and reconstruction are tested; verified live:
+  record a session, replay it, the placed crystal and chat reappear.
+- **Hardening against a live model** (`pkg/raydir`): the director's output is
+  sanitised so a sloppy or adversarial brain can't crash or corrupt the world —
+  unknown object kinds and non-finite coordinates are dropped, sizes/emission/
+  material weights are clamped, the object count is capped, and broken JSON or an
+  empty/unrenderable response falls back to a safe region (so the world never
+  stalls). Ready to drive with a real `BRAIN_URL` model.
+- **CLI**: `cmd/ray3d -renderer raster|path|bdpt|mlt|lighttrace|ppm|restir`
+  exposes every engine; `cmd/rayworld`, `cmd/rayarena`, `cmd/rayview`.
+
 ### 🧠🌐 tvcp-ai/1 — agents, governance & the semantic substrate (PR #11)
 
 The `feat/ai-next` "second nervous system" matured from a protocol into an open,
