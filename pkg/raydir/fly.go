@@ -75,7 +75,25 @@ type World struct {
 	env               *raytrace.EnvSampler // cached sky importance sampler (env-NEE)
 	envAt             float64              // time the env sampler was built for
 	applied           []Region             // applied regions (kept so far-behind ones can be pruned)
+	flock             *Flock               // optional living inhabitants (boids)
 }
+
+// SpawnFlock gives the world a flock of n inhabitants near `at` (seeded, so it
+// animates identically everywhere).
+func (w *World) SpawnFlock(n int, at raytrace.Vec3, seed int64) { w.flock = NewFlock(n, at, seed) }
+
+// StepCreatures advances the world's inhabitants by dt seconds — they flee the
+// walker and gather at landmarks — and keeps them near the frontier.
+func (w *World) StepCreatures(dt float64, player raytrace.Vec3) {
+	if w.flock == nil {
+		return
+	}
+	w.flock.Step(dt, player, w.landmarks)
+	w.flock.Recenter(player)
+}
+
+// HasCreatures reports whether the world has living inhabitants.
+func (w *World) HasCreatures() bool { return w.flock != nil && len(w.flock.Boids) > 0 }
 
 // Tread records a walker stepping at p, so paths wear into the ground over time.
 func (w *World) Tread(p raytrace.Vec3) {
@@ -110,7 +128,7 @@ func (w *World) SetAnimTime(sec float64) { w.animTime = sec }
 
 // HasAnimated reports whether the world contains any moving objects (so a viewer
 // knows the frame isn't static and progressive refinement should restart).
-func (w *World) HasAnimated() bool { return len(w.animated) > 0 }
+func (w *World) HasAnimated() bool { return len(w.animated) > 0 || w.HasCreatures() }
 
 // NewWorld returns a world with a checkerboard floor and a soft sky, no props yet.
 func NewWorld() *World {
@@ -194,6 +212,9 @@ func (w *World) SceneWith(extra []raytrace.Object) *raytrace.Scene {
 	}
 	if w.trace != nil { // worn paths the world remembers
 		s.Objects = append(s.Objects, w.trace.Objects()...)
+	}
+	if w.flock != nil { // living inhabitants, re-placed each frame
+		s.Objects = append(s.Objects, w.flock.Objects()...)
 	}
 	s.Objects = append(s.Objects, extra...)
 	s.BuildBVH()

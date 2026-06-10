@@ -199,6 +199,17 @@ adopting, and it was reimplemented better).
   whole group sees and hears. Behaviour is local and deterministic (so it works
   offline and is tested); a live brain can enrich what it says. Verified live: the
   guide appears as a second walker and announces "let me show you the …".
+- **Living inhabitants — a flock with a mind of its own** (`pkg/raydir/creatures.go`):
+  the world is no longer just props you walk past. A `Flock` of boids lives by Craig
+  Reynolds' three local rules (separation, alignment, cohesion), drifts toward the
+  world's named places and gathers there, scatters when you walk into it, and stays
+  airborne within an altitude band — re-placed every frame from the shared animation
+  clock, like water. Seeded and deterministic, so it runs offline and is fully tested
+  (separation pushes coincident boids apart; cohesion pulls a strung-out chain
+  together; the flock flees the walker and drifts to a distant landmark; it stays
+  finite and airborne). `rayexplore -creatures` gives the world a flock; the render
+  loop now rebuilds the scene each frame whenever the world is alive (movers, flock,
+  or a companion), so motion actually shows.
 - **A world that listens** (`pkg/raydir/listen.go`, `pkg/raydir/landmark.go`): what
   people say steers what the director builds — the most recent chat line becomes the
   next region's prompt (`DirectorPrompt`), so "a forest at night with fireflies"

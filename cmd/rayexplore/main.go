@@ -11,6 +11,7 @@
 //	go run ./cmd/rayexplore -path -grade            # path-traced, cinematically graded
 //	go run ./cmd/rayexplore -sound                  # hear the world (procedural ambient)
 //	go run ./cmd/rayexplore -guide                  # an AI companion leads you on a tour
+//	go run ./cmd/rayexplore -creatures              # a flock lives in the world and reacts to you
 //	go run ./cmd/rayexplore -path -denoise          # clean path-traced frames while moving
 //	go run ./cmd/rayexplore -image photo.png        # walk into a world derived from a picture
 //	BRAIN_URL=http://localhost:11434/... go run ./cmd/rayexplore -prompt "a glass city"
@@ -87,6 +88,7 @@ func main() {
 	denoise := flag.Bool("denoise", false, "path mode: render few samples and denoise (clean frames while moving)")
 	sound := flag.Bool("sound", false, "play a procedural soundscape of the world (needs an audio device)")
 	guide := flag.Bool("guide", false, "an AI companion that walks with you and leads a tour of the world")
+	creatures := flag.Bool("creatures", false, "a flock of inhabitants that lives in the world, gathers at places, and scatters from you")
 	cols := flag.Int("w", 80, "width in terminal cells")
 	rows := flag.Int("h", 38, "height in terminal cells")
 	flag.Parse()
@@ -164,28 +166,39 @@ func main() {
 	if *guide {
 		comp = raydir.NewGuide("Guide", cam.Pos.Add(raytrace.Vec3{X: 3, Z: 3}))
 	}
+	if *creatures { // give the world a flock of its own, ahead of the start
+		world.SpawnFlock(14, cam.Pos.Add(raytrace.Vec3{Y: 4, Z: 16}), 20)
+	}
 	var guideMsg string
 
-	start, lastGuide := time.Now(), time.Now()
+	start, lastTick := time.Now(), time.Now()
 	render := func() {
+		now := time.Now()
+		dt := now.Sub(lastTick).Seconds() // wall-clock frame step for movers
+		if dt > 0.5 {
+			dt = 0.5
+		}
+		lastTick = now
 		world.SetAnimTime(time.Since(start).Seconds()) // keep the world alive
 		world.Tread(cam.Pos)                           // wear a path where you walk
+		world.StepCreatures(dt, cam.Pos)               // the inhabitants live and react
 		featMu.Lock()
 		feat = world.Ambient()
 		featMu.Unlock()
 		c := cam.Camera()
-		fscene := scene
+		var extra []raytrace.Object
 		if comp != nil { // a moving companion: step it and inject its avatar this frame
-			dt := time.Since(lastGuide).Seconds()
-			if dt > 0.5 {
-				dt = 0.5
-			}
-			lastGuide = time.Now()
 			comp.Step(dt, cam.Pos, world.Landmarks())
 			if r, ok := comp.Remark(time.Since(start).Seconds(), world.Landmarks()); ok {
 				guideMsg = comp.Name + ": " + r
 			}
-			fscene = world.SceneWith(raydir.AvatarSpheres(comp.Pose(), raydir.GuideColor))
+			extra = raydir.AvatarSpheres(comp.Pose(), raydir.GuideColor)
+		}
+		// a living world (movers, flock, or a companion) is rebuilt each frame so the
+		// motion shows; a fully static world reuses the cached, BVH-built scene.
+		fscene := scene
+		if world.HasAnimated() || comp != nil {
+			fscene = world.SceneWith(extra)
 		}
 		var im image.Image
 		spp := 1
