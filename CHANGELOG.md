@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 🧱 Engineering discipline (adapted from info150)
+
+- **One-command quality gate** (`scripts/qa.sh`, after the `make qa` + smoke
+  discipline of `svend4/info150`): builds, vets, tests and lints everything, checks
+  gofmt on the actively-developed packages, then headless-smokes the non-interactive
+  commands (`rayvoxel`, `rayfilm`, the `conform` reference-brain battery, and the
+  `yijing_brain` selftest), printing a pass/fail summary and exiting non-zero on any
+  failure. Currently 9/9 green.
+
 ### 🧩 Ideas adapted from sibling repos (meta / pro2 / in4n)
 
 - **Delaunay terrain mesh** (`pkg/raytrace/delaunay.go`, after the InfoAquarium graph
