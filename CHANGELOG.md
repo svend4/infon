@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-06-02
 
+### 🧩 Ideas adapted from sibling repos (meta / pro2 / in4n)
+
+- **Delaunay terrain mesh** (`pkg/raytrace/delaunay.go`, after the InfoAquarium graph
+  of `svend4/in4n`): a Bowyer-Watson Delaunay triangulator over 2-D points, then
+  `DelaunayMesh`/`ScatterTerrain` lift a jittered, fractal-noised point cloud into an
+  organic low-poly landscape the path tracer renders — an irregular-mesh alternative
+  to the regular voxel height field. Tested with the empty-circumcircle oracle (no
+  input point lies inside any triangle's circumcircle), plus square/coverage/height
+  bounds.
+
 ### 🔌 Interop — a hexagram-thinking brain directs the world
 
 - **YiJing-Transformer brain adapter** (`ai/adapters/yijing_brain.py`): a `tvcp-ai/1`
