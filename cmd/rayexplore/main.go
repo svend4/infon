@@ -24,6 +24,8 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"math"
 	"os"
 	"strings"
@@ -37,6 +39,17 @@ import (
 	"github.com/svend4/infon/pkg/raytrace"
 	"github.com/svend4/infon/pkg/terminal"
 )
+
+// loadImage decodes a PNG/JPG file.
+func loadImage(path string) (image.Image, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	img, _, err := image.Decode(f)
+	return img, err
+}
 
 // startSoundscape plays the world's procedural ambient (a guarded snapshot of
 // features the render loop keeps fresh), or falls back silently with no device.
@@ -68,6 +81,7 @@ func main() {
 	pathT := flag.Bool("path", false, "use the path tracer (prettier, slower) instead of the raster preview")
 	grade := flag.Bool("grade", false, "post: bloom + vignette + AgX tone map for a cinematic frame")
 	clouds := flag.Bool("clouds", false, "volumetric cloud bank (path tracer; costly)")
+	imageSeed := flag.String("image", "", "seed the first region from a picture (PNG/JPG): walk into a world derived from it")
 	sound := flag.Bool("sound", false, "play a procedural soundscape of the world (needs an audio device)")
 	guide := flag.Bool("guide", false, "an AI companion that walks with you and leads a tour of the world")
 	cols := flag.Int("w", 80, "width in terminal cells")
@@ -90,8 +104,18 @@ func main() {
 
 	world := raydir.NewWorld()
 	frontZ := 10.0
-	if _, err := world.Grow(b, nextPrompt(), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
-		fmt.Fprintln(os.Stderr, "director failed to author the first region:", err)
+	if *imageSeed != "" { // walk into a world derived from a picture
+		if img, err := loadImage(*imageSeed); err == nil {
+			world.AddRegion(raydir.Region{Index: 0, At: raytrace.Vec3{Z: frontZ}, Spec: raydir.SceneFromImage(img)})
+			who = "image: " + *imageSeed
+		} else {
+			fmt.Fprintln(os.Stderr, "image:", err)
+		}
+	}
+	if world.Chunks() == 0 {
+		if _, err := world.Grow(b, nextPrompt(), raytrace.Vec3{X: 0, Y: 0, Z: frontZ}); err != nil {
+			fmt.Fprintln(os.Stderr, "director failed to author the first region:", err)
+		}
 	}
 	cam := raydir.FlyCam{Pos: raytrace.Vec3{X: 0, Y: 2.2, Z: 0}, Yaw: 0, Pitch: -0.08, FOV: math.Pi / 3}
 

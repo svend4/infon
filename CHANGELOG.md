@@ -161,6 +161,14 @@ adopting, and it was reimplemented better).
   reference brain, or a live model via `-url`): it asks for many scenes and reports
   how renderable, rich and varied they are (`BenchDirector`) — a quick objective
   read before a live session.
+- **Image → world** (`pkg/raydir/imagine.go`, `cmd/rayimagine`): the project's idea
+  in reverse — meaning extracted FROM pixels. `SceneFromImage` reads a picture and
+  composes a rayscene: sky and ground from the top/bottom bands, a sun from the
+  brightest patch, and coloured forms from the dominant saturated colours. Offline
+  and deterministic; a live vision model can return a richer scene through the same
+  SceneSpec. `rayimagine <img>` path-traces the derived world; `rayexplore -image
+  <img>` lets you walk into a world derived from your photo. Verified: a painted
+  landscape becomes a blue-sky, green-ground scene with a sun and coloured objects.
 - **A world with memory & consequence** (`pkg/raydir/anim.go`, `trace.go`): the
   world develops and remembers. A `grow` motion makes a planted seed scale up into a
   full tree over time (monotonic, from the shared clock — born when it appears), so
