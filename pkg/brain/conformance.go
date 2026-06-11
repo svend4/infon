@@ -35,6 +35,13 @@ func ConformanceBattery() []ConformanceCase {
 	})
 	wState, _ := json.Marshal(map[string]any{"length": 5, "guesses": []any{}})
 	uState, _ := json.Marshal(map[string]any{"hand": []string{"Red 5", "Blue 2"}, "color": "Red", "playable": []int{0}})
+	hbState, _ := json.Marshal(map[string]any{
+		"you": 0, "score": 0, "hints": 8, "fuses": 3, "deck": 40,
+		"stacks":    map[string]int{"R": 0, "G": 0, "B": 0, "Y": 0, "W": 0},
+		"your_hand": []map[string]any{{"known_color": "", "known_num": 0}},
+		"mate":      map[string]any{"player": 1, "hand": []map[string]any{{"color": "R", "num": 1}}},
+		"discard":   []string{},
+	})
 	tgState, _ := json.Marshal(PuzzleStateFromFigureTree())
 	wlState, _ := json.Marshal(map[string]int{"fold_pct": 40, "relief_pct": 30, "camera_deg": 0, "orbit_phase": 0})
 	rpgState, _ := json.Marshal(map[string]any{"you": 0, "w": 8, "h": 8, "units": []map[string]int{{"id": 0, "x": 0, "y": 0, "hp": 6}}, "enemies": []map[string]int{{"x": 5, "y": 4, "hp": 6}}})
@@ -42,6 +49,7 @@ func ConformanceBattery() []ConformanceCase {
 		{"move/tictactoe", Request{Kind: "move", Game: "tictactoe", State: ttState}},
 		{"move/wordle", Request{Kind: "move", Game: "wordle", State: wState}},
 		{"move/uno", Request{Kind: "move", Game: "uno", State: uState}},
+		{"move/hanabi", Request{Kind: "move", Game: "hanabi", State: hbState}},
 		{"move/tangram", Request{Kind: "move", Game: "tangram", State: tgState}},
 		{"move/world", Request{Kind: "move", Game: "world", State: wlState}},
 		{"move/rpg", Request{Kind: "move", Game: "rpg", State: rpgState}},
@@ -118,6 +126,22 @@ func CheckResponse(req Request, resp Response) (string, bool) {
 		case "uno":
 			if resp.Move.CardIndex == nil && !resp.Move.Draw {
 				return "uno move is neither a card_index nor draw", false
+			}
+		case "hanabi":
+			switch resp.Move.Action {
+			case "play", "discard":
+				if resp.Move.CardIndex == nil {
+					return "hanabi play/discard needs a card_index", false
+				}
+			case "hint":
+				if resp.Move.Hint == nil {
+					return "hanabi hint needs a hint", false
+				}
+				if resp.Move.Hint.Kind != "color" && resp.Move.Hint.Kind != "number" {
+					return "hanabi hint kind must be color or number", false
+				}
+			default:
+				return "hanabi action must be play, discard, or hint", false
 			}
 		default: // tic-tac-toe
 			if resp.Move.Row < 0 || resp.Move.Row > 2 || resp.Move.Col < 0 || resp.Move.Col > 2 {

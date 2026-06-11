@@ -45,9 +45,21 @@ type Move struct {
 	Row       int    `json:"row"`
 	Col       int    `json:"col"`
 	Word      string `json:"word,omitempty"`       // word games (Wordle)
-	CardIndex *int   `json:"card_index,omitempty"` // card games (UNO): index in hand
+	CardIndex *int   `json:"card_index,omitempty"` // card games (UNO/Hanabi): index in hand
 	Draw      bool   `json:"draw,omitempty"`       // UNO: draw instead of play
 	Color     string `json:"color,omitempty"`      // UNO: chosen color for a wild
+	Action    string `json:"action,omitempty"`     // Hanabi: play | discard | hint
+	Hint      *Hint  `json:"hint,omitempty"`       // Hanabi: a clue offered to a teammate
+}
+
+// Hint is a Hanabi clue: it tells a teammate which of their cards share a single
+// colour or a single number. It is the whole constrained communication channel of
+// the game — the only way information crosses between hands.
+type Hint struct {
+	To    int    `json:"to"`              // teammate (player index) being told
+	Kind  string `json:"kind"`            // "color" | "number"
+	Color string `json:"color,omitempty"` // colour code (R/G/B/Y/W) when Kind=="color"
+	Num   int    `json:"num,omitempty"`   // value 1..5 when Kind=="number"
 }
 
 // Response is the brain's answer.
@@ -622,6 +634,105 @@ func refRpg(req Request) Response {
 	return Response{Protocol: Protocol, Kind: "move", Rpg: data, Reasoning: "reference rpg commander"}
 }
 
+// ---- Hanabi: the cooperative game of speaking through a tiny channel --------
+
+// A Hanabi player sees every hand BUT their own; the only way knowledge crosses
+// is a colour/number clue. These mirror session.Hanabi's Brief.
+type hanabiCard struct {
+	Color      string `json:"color,omitempty"`       // teammate cards only (you can see them)
+	Num        int    `json:"num,omitempty"`         // teammate cards only
+	KnownColor string `json:"known_color,omitempty"` // what clues have revealed (public)
+	KnownNum   int    `json:"known_num,omitempty"`
+}
+
+type hanabiMate struct {
+	Player int          `json:"player"`
+	Hand   []hanabiCard `json:"hand"`
+}
+
+type hanabiView struct {
+	You      int            `json:"you"`
+	Score    int            `json:"score"`
+	Hints    int            `json:"hints"`
+	Fuses    int            `json:"fuses"`
+	Deck     int            `json:"deck"`
+	Stacks   map[string]int `json:"stacks"`
+	YourHand []hanabiCard   `json:"your_hand"`
+	Mate     hanabiMate     `json:"mate"`
+	Discard  []string       `json:"discard"`
+}
+
+// refHanabi is a safe, fully-cooperative reference policy. It NEVER risks a fuse:
+// it only plays a card it knows (colour+number) to be the next one needed, and it
+// spends its clues to make the partner's playable cards knowable. So two reference
+// brains cooperating build the fireworks without ever misplaying.
+func refHanabi(req Request) Response {
+	var v hanabiView
+	_ = json.Unmarshal(req.State, &v)
+	play := func(i int) Response {
+		ci := i
+		return Response{Protocol: Protocol, Kind: "move", Move: &Move{Action: "play", CardIndex: &ci}, Reasoning: "reference hanabi: play a known card"}
+	}
+	discard := func(i int) Response {
+		ci := i
+		return Response{Protocol: Protocol, Kind: "move", Move: &Move{Action: "discard", CardIndex: &ci}, Reasoning: "reference hanabi: recycle a clue"}
+	}
+	// 1) Play any own card I fully know to be the next one its stack needs.
+	for i, c := range v.YourHand {
+		if c.KnownColor != "" && c.KnownNum != 0 && v.Stacks[c.KnownColor]+1 == c.KnownNum {
+			return play(i)
+		}
+	}
+	// 2) With a clue token, advance the partner: pick their lowest playable card
+	//    and tell them the single dimension (colour or number) they still lack.
+	if v.Hints > 0 {
+		best, bestNum := -1, 99
+		for j, c := range v.Mate.Hand {
+			if v.Stacks[c.Color]+1 == c.Num { // playable right now
+				full := c.KnownColor != "" && c.KnownNum != 0
+				if !full && c.Num < bestNum {
+					best, bestNum = j, c.Num
+				}
+			}
+		}
+		if best >= 0 {
+			c := v.Mate.Hand[best]
+			if c.KnownColor == "" {
+				return Response{Protocol: Protocol, Kind: "move", Move: &Move{Action: "hint", Hint: &Hint{To: v.Mate.Player, Kind: "color", Color: c.Color}}, Reasoning: "reference hanabi: clue a playable colour"}
+			}
+			return Response{Protocol: Protocol, Kind: "move", Move: &Move{Action: "hint", Hint: &Hint{To: v.Mate.Player, Kind: "number", Num: c.Num}}, Reasoning: "reference hanabi: clue a playable number"}
+		}
+	}
+	// 3) Recycle a clue token by discarding the safest card (provably dead, else
+	//    the oldest card I know nothing about) whenever that regains a token.
+	if v.Hints < 8 {
+		return discard(hanabiSafeDiscard(v))
+	}
+	// 4) Clues full, nothing to play or usefully clue: give a benign number clue
+	//    (always touches >=1 card and can never cause a misplay).
+	if len(v.Mate.Hand) > 0 {
+		n := v.Mate.Hand[len(v.Mate.Hand)-1].Num
+		return Response{Protocol: Protocol, Kind: "move", Move: &Move{Action: "hint", Hint: &Hint{To: v.Mate.Player, Kind: "number", Num: n}}, Reasoning: "reference hanabi: keep the channel busy"}
+	}
+	return discard(0)
+}
+
+// hanabiSafeDiscard prefers a card known to be dead (its number already on the
+// stack), then the oldest card with no clue on it, then the oldest card.
+func hanabiSafeDiscard(v hanabiView) int {
+	for i, c := range v.YourHand {
+		if c.KnownColor != "" && c.KnownNum != 0 && v.Stacks[c.KnownColor] >= c.KnownNum {
+			return i
+		}
+	}
+	for i, c := range v.YourHand {
+		if c.KnownColor == "" && c.KnownNum == 0 {
+			return i
+		}
+	}
+	return 0
+}
+
 func Reference(req Request) Response {
 	switch req.Kind {
 	case "move":
@@ -639,6 +750,9 @@ func Reference(req Request) Response {
 		}
 		if req.Game == "rpg" {
 			return refRpg(req)
+		}
+		if req.Game == "hanabi" {
+			return refHanabi(req)
 		}
 		return refMove(req)
 	case "draw":
