@@ -74,6 +74,7 @@ step "rayquest" go run ./cmd/rayquest -seed 16 -walls 0.6 -rooms 3 -w 60 -h 46 -
 step "raydungeon" go run ./cmd/raydungeon -seed 16 -walls 0.6 -ticks 30 -rooms 2 -w 56 -h 44 -spp 3 -out "$tmp/dungeon"
 step "raymetaverse" go run ./cmd/raymetaverse -n 3 -w 64 -h 48 -spp 4 -out "$tmp/metaverse"
 step "rayread" go run ./cmd/rayread -w 64 -h 48 -spp 4 -out "$tmp/read"
+step "rayquestai" go run ./cmd/rayquestai -seed 16 -walls 0.6 -episodes 8 -out "$tmp/questai"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
