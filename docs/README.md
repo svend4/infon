@@ -8,6 +8,9 @@ Technical documentation. The index below lists what actually lives in `docs/`.
   conceptual map of what the ray/Q6/alife platform can do and how the capabilities
   compose and get reused (the A–L feature series + `raypipe`). Read this first to
   see where the project is now.
+- **[COMMANDS.md](COMMANDS.md)** — **how to run it**: a quick start and a grouped
+  command reference for the ray/Q6/alife commands (the exact `go run ./cmd/…` lines,
+  what each outputs, and the optional `BRAIN_URL`/`VISION_API_URL` model seams).
 
 ## The shared world & the meaning bridge
 

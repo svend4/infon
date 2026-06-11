@@ -58,7 +58,8 @@ reader (`world`/`image → hexagram + mood`), a 64-world Gray-tour atlas, alife
 ecosystems with seasons, a Q6-hypercube roguelike with a learning agent and a
 taste-driven curator, sonification, and an end-to-end **brain → wire → render**
 demo (`cmd/raypipe`). For the current stage and how all of it composes/reuses, see
-**[docs/CONCEPT_MAP.md](docs/CONCEPT_MAP.md)**.
+**[docs/CONCEPT_MAP.md](docs/CONCEPT_MAP.md)**; to **run any of it** (quick start +
+the exact `go run ./cmd/…` lines, grouped), see **[docs/COMMANDS.md](docs/COMMANDS.md)**.
 
 ## ⚡ Key Features
 
