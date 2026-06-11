@@ -79,6 +79,7 @@ step "raytour" go run ./cmd/raytour -tw 24 -th 18 -spp 2 -out "$tmp/tour"
 step "raysound" go run ./cmd/raysound -seconds 1 -rate 8000 -out "$tmp/sound.wav"
 step "raysound life" go run ./cmd/raysound -life -ticks 20 -seconds 1 -rate 8000 -out "$tmp/life.wav"
 step "raycurator" go run ./cmd/raycurator -seed 16 -walls 0.4 -out "$tmp/curator"
+step "rayseasons" go run ./cmd/rayseasons -years 1 -year 40 -snaps 2 -w 56 -h 44 -spp 3 -out "$tmp/seasons"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 

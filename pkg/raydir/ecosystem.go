@@ -30,8 +30,14 @@ type Ecosystem struct {
 	rng       *rand.Rand
 	tick      int
 	maxPop    int
-	richness  float64 // multiplies food regrowth (a room's fertility); 1 = normal
+	richness  float64                              // multiplies food regrowth (a room's fertility); 1 = normal
+	weather   func(x, z float64, tick int) float64 // optional moving/cyclic weather (seasons), overrides climate
 }
+
+// SetWeather installs a weather field that overrides the climate: it returns the food
+// regrowth at (x,z) for the given tick, so weather can move and cycle over time (the
+// turning of the seasons). Pass nil to fall back to the climate.
+func (e *Ecosystem) SetWeather(fn func(x, z float64, tick int) float64) { e.weather = fn }
 
 // NewEcosystem seeds a gw×gh arena with n creatures, fed at a rate set by climate
 // (pass nil for a uniform climate).
@@ -96,10 +102,13 @@ func (e *Ecosystem) cellIdx(x, z float64) int {
 	return cz*e.gw + cx
 }
 
-// regen is the per-tick food regrowth at (x,z): the climate's rain zones grow food
-// fast, snow slow (a uniform middling rate without a climate), scaled by the room's
-// richness.
+// regen is the per-tick food regrowth at (x,z): a weather override (for moving,
+// cyclic seasons) takes precedence; otherwise the climate's rain zones grow food fast,
+// snow slow (a uniform middling rate without a climate). Scaled by the room's richness.
 func (e *Ecosystem) regen(x, z float64) float64 {
+	if e.weather != nil {
+		return e.weather(x, z, e.tick) * e.richness
+	}
 	base := 0.02
 	if e.climate != nil {
 		switch e.climate.KindAt(x, z, e.cell*3) {
