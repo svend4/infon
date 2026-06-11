@@ -4,6 +4,12 @@
 **Version**: 0.3.0-alpha
 **Session**: https://claude.ai/code/session_01WVBqyJgVyBdg5bkaebsxYn
 
+> ✅ **Source of truth.** This file is the canonical record of what is *actually*
+> implemented. Aspirational and planned items live in
+> [`experimental/ROADMAP.md`](experimental/ROADMAP.md); where the two disagree, this
+> file wins. (Reconciled per the audit's P0: one source of truth, roadmaps in
+> quarantine with an explicit marker.)
+
 ---
 
 ## 📊 Feature Status Overview

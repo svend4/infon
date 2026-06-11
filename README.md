@@ -52,6 +52,15 @@ go run ./cmd/ray3d -renderer bdpt -spp 32 -png out.png   # any of 5 renderers
 See **[docs/SHARED_WORLD.md](docs/SHARED_WORLD.md)** for the full guide (group
 mode, voice, and driving it with a real `BRAIN_URL` model).
 
+This grew into a wider **ray/Q6/alife platform**: a hexagram ↔ scene "meaning"
+bridge (`SceneVector`, byte-identical in Go and the Python director), an inverse
+reader (`world`/`image → hexagram + mood`), a 64-world Gray-tour atlas, alife
+ecosystems with seasons, a Q6-hypercube roguelike with a learning agent and a
+taste-driven curator, sonification, and an end-to-end **brain → wire → render**
+demo (`cmd/raypipe`). For the current stage and how all of it composes/reuses, see
+**[docs/CONCEPT_MAP.md](docs/CONCEPT_MAP.md)**; to **run any of it** (quick start +
+the exact `go run ./cmd/…` lines, grouped), see **[docs/COMMANDS.md](docs/COMMANDS.md)**.
+
 ## ⚡ Key Features
 
 - **🚀 Ultra-low bandwidth:** 382 kbps total (vs 1.8 Mbps for Zoom)

@@ -4,7 +4,42 @@ All notable changes to TVCP will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased] - 2026-06-02
+## [Unreleased] - 2026-06-11
+
+The **ray/Q6/alife platform** — meaning ⇄ world, end to end. See
+[`docs/CONCEPT_MAP.md`](docs/CONCEPT_MAP.md) for the conceptual map and reuse matrix.
+
+### 🌐 The meaning bridge (Q6)
+
+- `SceneVector` (six continuous Q6 floats) ⇄ hexagram ⇄ a ray-traced world, with the
+  inverse reader `ReadScene` and the pixel reader `ReadImage` (image → hexagram + mood).
+- `VectorFromPrompt` / `SceneVector.SceneSpec()` are **byte-identical** to the Python
+  `vector_from_prompt` / `scene_from_vector` — one vocabulary across Go and `pro2`.
+- `cmd/raypipe` proves the **brain → wire → render** triangle end to end and reports
+  ~40× less on the wire than a frame of pixels (lossless round trip).
+
+### 🧭 The Q6 hypercube as a place
+
+- `rayquest` — a roguelike maze on the 64-hexagram cube (changing lines = moves).
+- `rayquestai` — an agent that learns the maze under fog of war (cost → optimum).
+- `raycurator` — a best-first curator that finds the world a viewer loves most.
+- `raytour` — the Gray-code grand tour as an 8×8 atlas of all 64 worlds + a morph film.
+
+### 🌱 Living worlds (alife)
+
+- `raylife` — a self-running foraging ecosystem (boom/bust, climate-fed).
+- `raydungeon` — an ecosystem at each maze room, coupled by migration (source–sink).
+- `rayseasons` — a cyclic, moving rain front; creatures migrate, populations cycle.
+
+### 🎬 Meeting & media
+
+- `raygather` / `raymetaverse` — a meeting inside a shared hexagram world; networked
+  presence (pose + face keypoints) over UDP, world changes as scene-deltas.
+- `raydirect` — a learning director (engagement → taste) + the inverse reader.
+- `raysound` — sonification: a world's axes → music; the Gray tour as one track; a
+  sonified ecosystem (boom/crash you can hear).
+
+## 2026-06-02
 
 ### 🔗 Cross-project interop (the Q6 house style)
 
