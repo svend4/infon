@@ -5,6 +5,10 @@
 > возможностей и узлов переиспользования. Срез по состоянию репозитория:
 > ~120 команд в `cmd/`, ~50 пакетов, ~740 публичных символов в одном `pkg/raydir`.
 
+**Статус:** это **актуальная карта текущей стадии** ray/Q6/alife-платформы (серия
+блоков A–L + `raypipe`). Доменные доки TVCP-ядра (видео/аудио/камеры/сеть) описывают
+свои подсистемы и здесь не дублируются. Что предложено, но ещё не построено — см. §6.
+
 ## 1. Семь «миров» (что вообще умеет система)
 
 | Мир | Суть возможности | Где живёт |
@@ -45,7 +49,8 @@
 prompt | hexagram → SceneVector / AuthorScene → SceneSpec → BuildScene → PathRender → PostProcess
 ```
 
-используют: `rayask`, `raydebate`, `raydirect`, `raymetaverse`, `rayquest`, `raytour`, `rayread`.
+используют: `rayask`, `raydebate`, `raydirect`, `raymetaverse`, `rayquest`, `raytour`, `rayread`, `raypipe`.
+Промпт-вход у офлайн-автора — `VectorFromPrompt` (sha256→6 Q6-float, побайтно = Python `vector_from_prompt`).
 
 **② Смысл по проводу** (вместо пикселей):
 
@@ -97,6 +102,7 @@ G инвертирует C (а `SceneSpec` в Go **побайтно** равен
 | J `raysound` | **SceneVector → ScoreParams** + GrayCode + **Ecosystem (B)** + ScoreWAV |
 | K `raycurator` | **Quest (D) × ViewerModel (C)** + Hexagram.Neighbors |
 | L `rayseasons` | **Ecosystem weather-hook** + SeasonalWorld + overhead-render |
+| — `raypipe` | **доказательство треугольника**: VectorFromPrompt → SceneSpec → `Region.Encode` (байты UDP) → DecodeRegion → BuildScene → render; печатает «смысл vs пиксели» (~40×) и read-back hex+mood |
 
 Видно: `SceneVector`, `Hexagram`, `Quest`, `Ecosystem` — четыре опоры, на пересечениях
 которых рождаются все новые фичи (E = D×B, K = D×C, J = C-mapping × B, и т. д.).
@@ -113,6 +119,14 @@ G инвертирует C (а `SceneSpec` в Go **побайтно** равен
 - **«Всё активировано»** — каждый прежде спящий модуль (каустики, MLT, HexCA, Mandala,
   ScoreWAV, BVH…) получил свою команду; новые фичи специально строятся как *сплав*
   существующих, а не сбоку.
+
+## 6. Предложено, но ещё не построено
+
+- **Block M — Reverse (综) + Nuclear (互)** на `Hexagram`: реверс черт (64 → 36 фигур;
+  8 палиндромов) и нуклеарная гексаграмма (нижняя триграмма из черт 2-3-4, верхняя из
+  3-4-5). Числа уже проверены: итерация нуклеарной операции стекает все 64 в **3
+  аттрактора** — Цянь `111111`, Кунь `000000`, 2-цикл `010101↔101010` (Цзи-цзи/Вэй-цзи).
+  Источник идеи — разбор Склярова «Компьютер древнего Китая».
 
 ---
 

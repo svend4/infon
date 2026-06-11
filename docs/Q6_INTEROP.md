@@ -43,6 +43,26 @@ python3 ai/adapters/yijing_brain.py 8095
 BRAIN_URL=http://127.0.0.1:8095/v1/decide go run ./cmd/rayexplore -hexagram 011010
 ```
 
+## Interchange format 3 — the continuous Q6 vector (6 floats)
+
+Beyond the discrete hexagram, the same six axes carry a **continuous** reading: six
+floats in `0..1` (fog, warmth, density, sun, scale, glow). Its signs recover the
+hexagram (`>= 0.5` → yang), and the vector authors a whole world. The Go and Python
+sides compute the **same world from the same vector, byte for byte**:
+
+| meaning | Go (`pkg/raydir`) | Python (`ai/adapters/yijing_brain.py`) |
+|---|---|---|
+| prompt → vector | `VectorFromPrompt` (sha256 fallback) | `vector_from_prompt` |
+| vector → scene | `SceneVector.SceneSpec()` | `scene_from_vector` |
+| vector → hexagram | `SceneVector.Hexagram()` | `signs_to_hexagram` |
+| scene/image → vector (inverse) | `ReadScene` / `ReadImage` | — |
+
+Verified byte-identical (the JSON `SceneSpec` matches field for field), so an offline
+Go author and the pro2 director agree on the world a prompt or a vector makes.
+`cmd/raypipe` runs the whole chain — prompt → vector → `SceneSpec` → the exact UDP
+wire bytes (`Region.Encode`) → render — and prints how little crosses the wire vs a
+frame of pixels.
+
 ## The principle
 
 Keep the engines apart; let them meet at the data. `infon` is the Go renderer and
