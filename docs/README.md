@@ -11,6 +11,9 @@ Technical documentation. The index below lists what actually lives in `docs/`.
 - **[COMMANDS.md](COMMANDS.md)** — **how to run it**: a quick start and a grouped
   command reference for the ray/Q6/alife commands (the exact `go run ./cmd/…` lines,
   what each outputs, and the optional `BRAIN_URL`/`VISION_API_URL` model seams).
+- **[COMMAND_INDEX.md](COMMAND_INDEX.md)** — the **complete auto-generated index** of
+  all 121 commands (one-line description + run example each), built from the code by
+  `go run scripts/gen_command_index.go`.
 
 ## The shared world & the meaning bridge
 

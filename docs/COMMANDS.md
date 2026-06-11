@@ -113,8 +113,10 @@ go run ./cmd/raysound -hexagram 110010 -out world.wav    # hear a world as music
 
 ## The full set
 
-There are ~120 commands in `cmd/` (this page covers the ray/Q6/alife platform). To
-discover the rest:
+There are 121 commands in `cmd/` (this page covers the ray/Q6/alife platform). For a
+**complete, auto-generated index of every command** with a one-line description and a
+run example, see **[COMMAND_INDEX.md](COMMAND_INDEX.md)** (regenerate it with
+`go run scripts/gen_command_index.go`). To discover commands directly:
 
 ```bash
 ls ./cmd                          # every command
