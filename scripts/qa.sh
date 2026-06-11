@@ -71,6 +71,7 @@ step "raygather" go run ./cmd/raygather -n 3 -w 80 -h 60 -spp 6 -out "$tmp/gathe
 step "raylife" go run ./cmd/raylife -ticks 40 -snaps 3 -w 70 -h 52 -spp 4 -out "$tmp/life"
 step "raydirect" go run ./cmd/raydirect -rounds 80 -w 70 -h 52 -spp 4 -out "$tmp/direct"
 step "rayquest" go run ./cmd/rayquest -seed 16 -walls 0.6 -rooms 3 -w 60 -h 46 -spp 4 -out "$tmp/quest"
+step "raydungeon" go run ./cmd/raydungeon -seed 16 -walls 0.6 -ticks 30 -rooms 2 -w 56 -h 44 -spp 3 -out "$tmp/dungeon"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 

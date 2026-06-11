@@ -30,13 +30,14 @@ type Ecosystem struct {
 	rng       *rand.Rand
 	tick      int
 	maxPop    int
+	richness  float64 // multiplies food regrowth (a room's fertility); 1 = normal
 }
 
 // NewEcosystem seeds a gw×gh arena with n creatures, fed at a rate set by climate
 // (pass nil for a uniform climate).
 func NewEcosystem(gw, gh, n int, climate *Climate, seed int64) *Ecosystem {
 	rng := rand.New(rand.NewSource(seed))
-	e := &Ecosystem{gw: gw, gh: gh, cell: 4, food: make([]float64, gw*gh), climate: climate, rng: rng, maxPop: 250}
+	e := &Ecosystem{gw: gw, gh: gh, cell: 4, food: make([]float64, gw*gh), climate: climate, rng: rng, maxPop: 250, richness: 1}
 	for i := range e.food {
 		e.food[i] = rng.Float64()
 	}
@@ -46,6 +47,42 @@ func NewEcosystem(gw, gh, n int, climate *Climate, seed int64) *Ecosystem {
 		})
 	}
 	return e
+}
+
+// SetRichness scales how fast food regrows (a room's fertility): >1 lusher, <1
+// barren. A barren room cannot feed many on its own and leans on immigration.
+func (e *Ecosystem) SetRichness(r float64) { e.richness = math.Max(0, r) }
+
+// Migrant is a creature crossing between worlds, carrying its energy.
+type Migrant struct{ Energy float64 }
+
+// Emigrate removes about frac of the living creatures and returns them as migrants
+// (carrying their energy) — those that wander off toward an adjacent world.
+func (e *Ecosystem) Emigrate(frac float64) []Migrant {
+	frac = clampf(frac, 0, 1)
+	var out []Migrant
+	for i := range e.creatures {
+		c := &e.creatures[i]
+		if c.alive && e.rng.Float64() < frac {
+			out = append(out, Migrant{Energy: c.energy})
+			c.alive = false
+		}
+	}
+	return out
+}
+
+// Immigrate drops migrants into the world at random places — arrivals from an
+// adjacent world.
+func (e *Ecosystem) Immigrate(ms []Migrant) {
+	sw, sh := e.span()
+	for _, m := range ms {
+		if len(e.creatures) >= e.maxPop {
+			break
+		}
+		e.creatures = append(e.creatures, creature{
+			x: e.rng.Float64() * sw, z: e.rng.Float64() * sh, energy: m.Energy, alive: true,
+		})
+	}
 }
 
 func (e *Ecosystem) span() (float64, float64) { return float64(e.gw) * e.cell, float64(e.gh) * e.cell }
@@ -60,19 +97,19 @@ func (e *Ecosystem) cellIdx(x, z float64) int {
 }
 
 // regen is the per-tick food regrowth at (x,z): the climate's rain zones grow food
-// fast, snow slow (a uniform middling rate without a climate).
+// fast, snow slow (a uniform middling rate without a climate), scaled by the room's
+// richness.
 func (e *Ecosystem) regen(x, z float64) float64 {
-	if e.climate == nil {
-		return 0.02
+	base := 0.02
+	if e.climate != nil {
+		switch e.climate.KindAt(x, z, e.cell*3) {
+		case "rain":
+			base = 0.045
+		case "snow":
+			base = 0.006
+		}
 	}
-	switch e.climate.KindAt(x, z, e.cell*3) {
-	case "rain":
-		return 0.045
-	case "snow":
-		return 0.006
-	default:
-		return 0.02
-	}
+	return base * e.richness
 }
 
 // Step advances the world one tick: food regrows, creatures forage, eat, reproduce
