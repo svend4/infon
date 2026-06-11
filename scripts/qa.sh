@@ -76,6 +76,8 @@ step "raymetaverse" go run ./cmd/raymetaverse -n 3 -w 64 -h 48 -spp 4 -out "$tmp
 step "rayread" go run ./cmd/rayread -w 64 -h 48 -spp 4 -out "$tmp/read"
 step "rayquestai" go run ./cmd/rayquestai -seed 16 -walls 0.6 -episodes 8 -out "$tmp/questai"
 step "raytour" go run ./cmd/raytour -tw 24 -th 18 -spp 2 -out "$tmp/tour"
+step "raysound" go run ./cmd/raysound -seconds 1 -rate 8000 -out "$tmp/sound.wav"
+step "raysound life" go run ./cmd/raysound -life -ticks 20 -seconds 1 -rate 8000 -out "$tmp/life.wav"
 step "yijing_brain selftest" python3 ai/adapters/yijing_brain.py --selftest
 step "equipment_brain selftest" python3 ai/adapters/equipment_brain.py --selftest
 
