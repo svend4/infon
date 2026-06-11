@@ -1,6 +1,7 @@
 package raydir
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"math/rand"
@@ -57,6 +58,20 @@ func VectorFromHexagram(h Hexagram) SceneVector {
 		} else {
 			v[i] = 0.25
 		}
+	}
+	return v
+}
+
+// VectorFromPrompt derives six Q6 coordinates from a prompt by hashing it: sha256 of
+// the prompt, its first six bytes scaled to 0..1. This is the deterministic fallback
+// the pro2 director uses when no embedding model is present, and it matches
+// yijing_brain.vector_from_prompt exactly — so the offline Go author and the Python
+// adapter agree on the world a prompt makes.
+func VectorFromPrompt(prompt string) SceneVector {
+	d := sha256.Sum256([]byte(prompt))
+	var v SceneVector
+	for i := 0; i < 6; i++ {
+		v[i] = float64(d[i]) / 255.0
 	}
 	return v
 }

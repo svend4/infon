@@ -82,6 +82,26 @@ func TestLearningDirectorConverges(t *testing.T) {
 	}
 }
 
+func TestVectorFromPrompt(t *testing.T) {
+	a := VectorFromPrompt("a calm dawn")
+	b := VectorFromPrompt("a calm dawn")
+	if a != b {
+		t.Error("same prompt must give the same vector")
+	}
+	for i, x := range a {
+		if x < 0 || x > 1 {
+			t.Errorf("axis %d out of range: %g", i, x)
+		}
+	}
+	if VectorFromPrompt("a vast cold desert") == a {
+		t.Error("different prompts should give different worlds")
+	}
+	// the empty prompt is the sha256 of "" — a fixed, known anchor (first byte 0xe3)
+	if got := VectorFromPrompt(""); math.Abs(got[0]-float64(0xe3)/255) > 1e-9 {
+		t.Errorf("empty-prompt anchor moved: %g", got[0])
+	}
+}
+
 func TestSceneVectorMood(t *testing.T) {
 	cases := []struct {
 		v    SceneVector
