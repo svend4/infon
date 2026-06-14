@@ -47,8 +47,9 @@ func EncodeFrame(frame *terminal.Frame) ([]byte, error) {
 	numBlocks := frame.Width * frame.Height
 	totalSize := FrameHeaderSize + (numBlocks * BlockDataSize)
 
-	// For now, we encode full frames
-	// In production, we'd use delta encoding and compression
+	// EncodeFrame emits a full frame; for the wire, run a stream of these encoded
+	// frames through pkg/framecodec, which picks the smallest of RAW / ZLIB / DELTA
+	// per frame (see cmd/framecast for measured savings on each motion regime).
 	buf := make([]byte, totalSize)
 
 	// Write header
