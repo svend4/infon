@@ -12,7 +12,7 @@ Technical documentation. The index below lists what actually lives in `docs/`.
   command reference for the ray/Q6/alife commands (the exact `go run ./cmd/…` lines,
   what each outputs, and the optional `BRAIN_URL`/`VISION_API_URL` model seams).
 - **[COMMAND_INDEX.md](COMMAND_INDEX.md)** — the **complete auto-generated index** of
-  all 121 commands (one-line description + run example each), built from the code by
+  all commands (one-line description + run example each), built from the code by
   `go run scripts/gen_command_index.go`.
 
 ## The shared world & the meaning bridge
@@ -43,10 +43,17 @@ Technical documentation. The index below lists what actually lives in `docs/`.
   implementation-status table for graphics × neural networks.
 - [PSEUDO3D.md](PSEUDO3D.md) — the pseudo-3D renderer notes.
 
+## Games
+
+- [gaming-in-tvcp.md](gaming-in-tvcp.md) — games in TVCP: the BABE renderer for
+  arbitrary graphics, co-op game sharing, architecture analysis.
+
 ## Networking
 
 - [dns-peer-discovery.md](dns-peer-discovery.md) — DNS-based peer discovery
   (human-readable `user@domain` addressing via DNS TXT records).
+- [cross-pollination-analysis.md](cross-pollination-analysis.md) — technical
+  cross-pollination: TVCP × "Doom Over DNS" mutual-enrichment matrix.
 
 ## Related (repo root)
 
@@ -54,27 +61,6 @@ Technical documentation. The index below lists what actually lives in `docs/`.
 - [../CHANGELOG.md](../CHANGELOG.md) — running history of notable changes.
 - [../tvcp-business-plan.md](../tvcp-business-plan.md),
   [../tvcp-appendix.md](../tvcp-appendix.md) — the TVCP platform background.
+- [../REPOSITORY_REVIEW.md](../REPOSITORY_REVIEW.md) — repository review.
 - TVCP-core subsystem docs (audio, cameras, screen sharing, recording, codecs,
   Yggdrasil, …) live at the repo root as `*.md` and describe their own subsystems.
-Technical documentation for TVCP development.
-
-## Contents
-
-- `architecture.md` — System architecture and design decisions
-- `protocol-spec.md` — Network protocol specification
-- `babe-format-spec.md` — .babe codec format specification
-- `yggdrasil-integration.md` — Yggdrasil mesh network integration
-- `dns-peer-discovery.md` — DNS-based peer discovery (inspired by «Doom Over DNS»): using DNS TXT records for human-readable addressing (`user@domain`)
-- `gaming-in-tvcp.md` — Games in TVCP: BABE renderer for arbitrary graphics, co-op game sharing, architecture analysis
-- `cross-pollination-analysis.md` — Technical cross-pollination: TVCP × Doom Over DNS mutual enrichment matrix
-- `NEURAL_GRAPHICS_ROADMAP.md` — Design doc + implementation-status table for graphics × neural networks (render modes, neural backends, cross-modal)
-- `EXTERNAL_MODELS.md` — Connecting real models via HTTP sidecars or cloud APIs (the seams, env vars, and reference Python adapters)
-- `terminal-compatibility.md` — Terminal compatibility matrix
-- `api.md` — Public API documentation
-- `contributing.md` — Contribution guidelines
-
-## Related Documents
-
-- [Business Plan](../tvcp-business-plan.md)
-- [Technical Appendix](../tvcp-appendix.md)
-- [Repository Review](../REPOSITORY_REVIEW.md)
