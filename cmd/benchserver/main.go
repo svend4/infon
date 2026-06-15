@@ -35,9 +35,11 @@ import (
 	"github.com/svend4/infon/pkg/bench"
 	"github.com/svend4/infon/pkg/blazon"
 	"github.com/svend4/infon/pkg/brain"
+	"github.com/svend4/infon/pkg/fold"
 	"github.com/svend4/infon/pkg/glyphqr"
 	"github.com/svend4/infon/pkg/relief"
 	"github.com/svend4/infon/pkg/republic"
+	"github.com/svend4/infon/pkg/scene3d"
 	"github.com/svend4/infon/pkg/tangram"
 	"github.com/svend4/infon/pkg/tangram7"
 	"github.com/svend4/infon/pkg/world"
@@ -70,6 +72,7 @@ func main() {
 	http.HandleFunc("/api/game/summon", apiGameSummon)
 	http.HandleFunc("/api/game/step", apiGameStep)
 	http.HandleFunc("/api/walk", apiWalk)
+	http.HandleFunc("/api/craft", apiCraft)
 
 	log.Printf("TVCP benchserver — open http://localhost%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -533,6 +536,104 @@ func apiWalk(w http.ResponseWriter, r *http.Request) {
 	writePNG(w, walkState.Render(380, 260))
 }
 
+// ---- TVCP Craft: a Minecraft-style voxel builder from tangram/origami blocks.
+// Each block is a scene3d.Item (a tangram piece at a 3D grid cell); the whole
+// structure renders isometrically via fold.RenderCam with an orbitable camera. ----
+
+const craftG = 8
+
+var (
+	craftMu                   sync.Mutex
+	craftItems                []scene3d.Item
+	craftYaw                  float64
+	craftCX, craftCY, craftCZ uint8
+	craftPiece, craftColor    uint8
+	craftInit                 bool
+)
+
+func clampU(v, max int) uint8 {
+	if v < 0 {
+		return 0
+	}
+	if v >= max {
+		return uint8(max - 1)
+	}
+	return uint8(v)
+}
+
+func craftResetLocked() {
+	craftItems = nil
+	for x := uint8(2); x <= 5; x++ { // a small starter platform
+		for y := uint8(2); y <= 5; y++ {
+			craftItems = append(craftItems, scene3d.Item{Piece: 0, X: x, Y: y, Z: 0, Color: 3})
+		}
+	}
+	craftYaw = 0.6
+	craftCX, craftCY, craftCZ = 3, 3, 1
+	craftPiece, craftColor = 1, 1
+	craftInit = true
+}
+
+func craftAt(x, y, z uint8) int {
+	for i, it := range craftItems {
+		if it.X == x && it.Y == y && it.Z == z {
+			return i
+		}
+	}
+	return -1
+}
+
+func apiCraft(w http.ResponseWriter, r *http.Request) {
+	craftMu.Lock()
+	defer craftMu.Unlock()
+	q := r.URL.Query()
+	if q.Get("reset") == "1" || !craftInit {
+		craftResetLocked()
+	}
+	switch q.Get("mv") {
+	case "x+":
+		craftCX = clampU(int(craftCX)+1, craftG)
+	case "x-":
+		craftCX = clampU(int(craftCX)-1, craftG)
+	case "y+":
+		craftCY = clampU(int(craftCY)+1, craftG)
+	case "y-":
+		craftCY = clampU(int(craftCY)-1, craftG)
+	case "z+":
+		craftCZ = clampU(int(craftCZ)+1, 6)
+	case "z-":
+		craftCZ = clampU(int(craftCZ)-1, 6)
+	}
+	if p := q.Get("piece"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			craftPiece = clampU(n, 7)
+		}
+	}
+	if c := q.Get("color"); c != "" {
+		if n, err := strconv.Atoi(c); err == nil {
+			craftColor = clampU(n, 6)
+		}
+	}
+	if q.Get("place") == "1" && craftAt(craftCX, craftCY, craftCZ) < 0 {
+		craftItems = append(craftItems, scene3d.Item{Piece: craftPiece, X: craftCX, Y: craftCY, Z: craftCZ, Color: craftColor})
+	}
+	if q.Get("remove") == "1" {
+		if i := craftAt(craftCX, craftCY, craftCZ); i >= 0 {
+			craftItems = append(craftItems[:i], craftItems[i+1:]...)
+		}
+	}
+	switch q.Get("yaw") {
+	case "l":
+		craftYaw -= 0.3
+	case "r":
+		craftYaw += 0.3
+	}
+	// render the structure plus a ghost block at the cursor (preview)
+	render := append([]scene3d.Item(nil), craftItems...)
+	render = append(render, scene3d.Item{Piece: craftPiece, X: craftCX, Y: craftCY, Z: craftCZ, Color: craftColor})
+	writePNG(w, fold.RenderCam(scene3d.SceneFaces(render), 420, 300, craftYaw))
+}
+
 func index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(page))
@@ -563,6 +664,13 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <div id="gamebtns"></div>
    <div id="gamestat" class="dim" style="margin-top:6px">—</div>
    <canvas id="gamecv" width="468" height="286" style="display:block;margin-top:8px;background:#0b1118;border-radius:8px;width:100%;max-width:600px"></canvas>
+ </div>
+
+ <div class="panel">
+   <h2>🧱 TVCP Craft — мир из танграмов/оригами (3D)</h2>
+   <div class="dim" style="margin-bottom:6px">двигай курсор (x/y/z), ставь блоки‑оригами, верти камеру. Каждый блок — 6 байт.</div>
+   <div id="craftbtns"></div>
+   <img id="craftimg" alt="craft" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
  </div>
 
  <div class="panel">
@@ -730,8 +838,19 @@ document.addEventListener('keydown',function(ev){ const k=ev.key;
   else if(k==='ArrowRight'){walkGo('cam=1');ev.preventDefault();}
   else if(k==='ArrowUp'){walkGo('rise=1');ev.preventDefault();}
   else if(k==='ArrowDown'){walkGo('rise=-1');ev.preventDefault();} });
+function craftGo(p){ const i=document.getElementById('craftimg'); if(i) i.src='/api/craft?'+p+'&_t='+Date.now(); }
+function loadCraft(){ document.getElementById('craftbtns').innerHTML=
+  '<span class="dim">курсор:</span> <button onclick="craftGo(\'mv=x-\')">x−</button><button onclick="craftGo(\'mv=x+\')">x+</button>'+
+  '<button onclick="craftGo(\'mv=y-\')">y−</button><button onclick="craftGo(\'mv=y+\')">y+</button>'+
+  '<button onclick="craftGo(\'mv=z-\')">z−</button><button onclick="craftGo(\'mv=z+\')">z+</button>'+
+  ' <span class="dim">фигура:</span> '+[0,1,2,3,4,5,6].map(function(p){return '<button onclick="craftGo(\'piece='+p+'\')">'+p+'</button>';}).join('')+
+  ' <span class="dim">цвет:</span> '+[0,1,2,3,4,5].map(function(c){return '<button onclick="craftGo(\'color='+c+'\')">'+c+'</button>';}).join('')+
+  '<br><button onclick="craftGo(\'place=1\')">🧱 поставить</button><button onclick="craftGo(\'remove=1\')">🗑 убрать</button>'+
+  '<button onclick="craftGo(\'yaw=l\')">◄ камера</button><button onclick="craftGo(\'yaw=r\')">камера ►</button>'+
+  '<button onclick="craftGo(\'reset=1\')">🌀 новый</button>'; }
 loadGame(); gameFetch('/api/game?new=1');
 loadWalk(); walkGo('reset=1');
+loadCraft(); craftGo('reset=1');
 loadFigs(); runBench(); runRepublic(); arenaStep(true); loadGallery(); showImg(0);
 </script>
 </div></body></html>`
