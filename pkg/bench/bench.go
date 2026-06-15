@@ -15,6 +15,7 @@ import (
 	"github.com/svend4/infon/pkg/brain"
 	"github.com/svend4/infon/pkg/glyphqr"
 	"github.com/svend4/infon/pkg/registry"
+	"github.com/svend4/infon/pkg/republic"
 	"github.com/svend4/infon/pkg/session"
 	"github.com/svend4/infon/pkg/sign"
 	"github.com/svend4/infon/pkg/tangram"
@@ -60,6 +61,7 @@ func Run() Report {
 		timed("security", "sign", checkSign),
 		timed("directory", "registry", checkRegistry),
 		timed("agent-world", "arena", checkArena),
+		timed("agent-world", "republic", checkRepublic),
 	}
 	r := Report{Protocol: brain.Protocol, When: time.Now().UTC().Format(time.RFC3339), Checks: checks}
 	for _, c := range checks {
@@ -195,4 +197,25 @@ func checkArena() (bool, string, string, int) {
 	}
 	snap := len(a.Snapshot())
 	return a.TotalHP() < hp0, fmt.Sprintf("%d ticks · %d vs %d", ticks, a.AliveCount(0), a.AliveCount(1)), fmt.Sprintf("snapshot %d B", snap), snap
+}
+
+// checkRepublic exercises the self-organizing world: brains register, an ACL
+// Contract-Net round awards the two faction seats to distinct lowest bidders,
+// and the arena is then fought out by those awarded commanders.
+func checkRepublic() (bool, string, string, int) {
+	cands := []republic.Candidate{
+		{Name: "scout", Brain: brain.Local{}, Cost: func(int) int { return 3 }},
+		{Name: "planner", Brain: brain.Local{}, Cost: func(int) int { return 4 }},
+		{Name: "warden", Brain: brain.Local{}, Cost: func(int) int { return 5 }},
+	}
+	r := republic.Convene(cands, 7)
+	ok := len(r.Seats) == 2 && r.Seats[0].Awarded && r.Seats[1].Awarded && r.Seats[0].Brain != r.Seats[1].Brain && r.Ticks > 0
+	win := "draw"
+	switch r.Winner {
+	case 0:
+		win = "faction 0"
+	case 1:
+		win = "faction 1"
+	}
+	return ok, "2 seats negotiated", fmt.Sprintf("%s · %d ticks", win, r.Ticks), 0
 }

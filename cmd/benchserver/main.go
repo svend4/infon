@@ -23,7 +23,10 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/svend4/infon/pkg/arena"
 	"github.com/svend4/infon/pkg/bench"
+	"github.com/svend4/infon/pkg/brain"
+	"github.com/svend4/infon/pkg/republic"
 	"github.com/svend4/infon/pkg/tangram"
 )
 
@@ -35,6 +38,7 @@ func main() {
 	http.HandleFunc("/api/bench", apiBench)
 	http.HandleFunc("/api/figures", apiFigures)
 	http.HandleFunc("/api/figure", apiFigure)
+	http.HandleFunc("/api/republic", apiRepublic)
 
 	log.Printf("TVCP benchserver — open http://localhost%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -45,6 +49,51 @@ func apiBench(w http.ResponseWriter, _ *http.Request) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(bench.Run())
+}
+
+func apiRepublic(w http.ResponseWriter, _ *http.Request) {
+	cands := []republic.Candidate{
+		{Name: "scout", Brain: brain.Local{}, Cost: func(int) int { return 3 }},
+		{Name: "planner", Brain: brain.Local{}, Cost: func(int) int { return 4 }},
+		{Name: "warden", Brain: brain.Local{}, Cost: func(int) int { return 5 }},
+		{Name: "ranger", Brain: brain.Local{}, Cost: func(int) int { return 6 }},
+	}
+	res := republic.Convene(cands, 7)
+	out := struct {
+		republic.Result
+		Field []string `json:"field"`
+	}{Result: res, Field: fieldRows(res.Final)}
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(out)
+}
+
+func fieldRows(a *arena.Arena) []string {
+	if a == nil {
+		return nil
+	}
+	rows := make([]string, a.H)
+	for y := 0; y < a.H; y++ {
+		line := make([]rune, a.W)
+		for x := range line {
+			line[x] = '·'
+		}
+		rows[y] = string(line)
+	}
+	for _, u := range a.Units {
+		if !u.Alive || int(u.Y) >= a.H || int(u.X) >= a.W {
+			continue
+		}
+		r := []rune(rows[u.Y])
+		if u.Faction == 1 {
+			r[u.X] = 'R'
+		} else {
+			r[u.X] = 'B'
+		}
+		rows[u.Y] = string(r)
+	}
+	return rows
 }
 
 func apiFigures(w http.ResponseWriter, _ *http.Request) {
@@ -114,6 +163,14 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <pre id="figart">выбери фигуру…</pre>
  </div>
 
+ <div class="panel">
+   <h2>республика — discover ▸ negotiate ▸ fight</h2>
+   <button onclick="runRepublic()">▶ собрать республику</button>
+   <span id="repverdict" class="dim">—</span>
+   <div id="repseats" style="margin:8px 0"></div>
+   <pre id="repfield"></pre>
+ </div>
+
 <script>
 async function runBench(){
   document.getElementById('verdict').textContent='…';
@@ -138,6 +195,16 @@ async function showFig(n){
   document.getElementById('figid').textContent=d.name+'  ·  address '+d.address+'  ·  gate '+d.gate;
   document.getElementById('figart').textContent=d.rows.join('\n');
 }
-loadFigs(); runBench();
+async function runRepublic(){
+  document.getElementById('repverdict').textContent='…';
+  const d=await (await fetch('/api/republic')).json();
+  const seats=(d.seats||[]).map(x=>'faction '+x.faction+' ⇐ <span class="ok">'+x.brain+'</span> (bid '+x.cost+')').join('<br>');
+  document.getElementById('repseats').innerHTML='<span class="dim">registered: '+(d.registered||[]).join(', ')+'</span><br>'+seats;
+  const win=d.winner===0?'faction 0 holds':d.winner===1?'faction 1 holds':'draw';
+  const v=document.getElementById('repverdict'); v.className='ok';
+  v.textContent=win+' · '+d.ticks+' ticks · '+d.alive0+' vs '+d.alive1;
+  document.getElementById('repfield').textContent=(d.field||[]).join('\n');
+}
+loadFigs(); runBench(); runRepublic();
 </script>
 </div></body></html>`
