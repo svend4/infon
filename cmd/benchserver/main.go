@@ -68,6 +68,7 @@ func main() {
 	http.HandleFunc("/api/game", apiGame)
 	http.HandleFunc("/api/game/summon", apiGameSummon)
 	http.HandleFunc("/api/game/step", apiGameStep)
+	http.HandleFunc("/api/walk", apiWalk)
 
 	log.Printf("TVCP benchserver — open http://localhost%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -476,6 +477,57 @@ func apiGameStep(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(gameSnapshot())
 }
 
+// ---- an INTERACTIVE walk: you steer the camera and morph a living surreal
+// world with directives; the server holds the state and renders each step. ----
+
+var (
+	walkMu    sync.Mutex
+	walkState world.State
+	walkInit  bool
+)
+
+func qdir(r *http.Request, key string) int {
+	v, err := strconv.Atoi(r.URL.Query().Get(key))
+	if err != nil {
+		return 0
+	}
+	if v < -1 {
+		return -1
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func apiWalk(w http.ResponseWriter, r *http.Request) {
+	walkMu.Lock()
+	defer walkMu.Unlock()
+	q := r.URL.Query()
+	if q.Get("reset") == "1" || !walkInit {
+		walkState = world.Init()
+		walkInit = true
+	}
+	var d world.Directives
+	if q.Get("morph") == "1" {
+		d = world.RefController{}.Decide(walkState) // keep it evolving
+	}
+	if q.Get("cam") != "" {
+		d.Camera = qdir(r, "cam")
+	}
+	if q.Get("fold") != "" {
+		d.Fold = qdir(r, "fold")
+	}
+	if q.Get("rise") != "" {
+		d.Rise = qdir(r, "rise")
+	}
+	if q.Get("spin") != "" {
+		d.Spin = qdir(r, "spin")
+	}
+	walkState = world.Apply(walkState, d)
+	writePNG(w, walkState.Render(380, 260))
+}
+
 func index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(page))
@@ -551,6 +603,13 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <img id="worldimg" alt="world" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
    <div class="dim" style="margin-top:8px;font-size:10.5px">первая возможность: тот же мир оригинальным кодеком «картинка → блоки» (babe)</div>
    <pre id="wblocks" style="font-size:8px;line-height:1.05;color:#9be8b5;background:#0b1118;border-radius:6px;padding:6px;overflow:auto;margin:4px 0 0"></pre>
+ </div>
+
+ <div class="panel">
+   <h2>🚶 прогулка по сюрреалистическому миру</h2>
+   <div class="dim" style="margin-bottom:6px">веди сам: стрелки ← → — камера, ↑ ↓ — рельеф; кнопки — склад/вращение; «морф» — мир сам эволюционирует</div>
+   <div id="walkbtns"></div>
+   <img id="walkimg" alt="walk" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
  </div>
 
 <script>
@@ -650,7 +709,22 @@ function gameNew(){ if(gameAuto){clearInterval(gameAuto);gameAuto=null;} gameFet
 function gameAutoToggle(){ if(gameAuto){clearInterval(gameAuto);gameAuto=null;} else { gameAuto=setInterval(gameStepOnce,450); } }
 function loadGame(){ const figs=['cat','fox','owl','crab','turtle','swan'];
   document.getElementById('gamebtns').innerHTML=figs.map(f=>'<button onclick="gameSummon(\''+f+'\')">+ '+f+'</button>').join('')+' <button onclick="gameStepOnce()">⚔ ход</button><button onclick="gameAutoToggle()">▶ авто</button><button onclick="gameNew()">🔄 новая</button>'; }
+let walkMorph=null;
+function walkGo(p){ const i=document.getElementById('walkimg'); if(i) i.src='/api/walk?'+p+'&_t='+Date.now(); }
+function walkReset(){ if(walkMorph){clearInterval(walkMorph);walkMorph=null;} walkGo('reset=1'); }
+function walkMorphToggle(){ if(walkMorph){clearInterval(walkMorph);walkMorph=null;} else { walkMorph=setInterval(function(){walkGo('morph=1');},260); } }
+function loadWalk(){ document.getElementById('walkbtns').innerHTML=
+  '<button onclick="walkGo(\'cam=-1\')">◄ камера</button><button onclick="walkGo(\'cam=1\')">камера ►</button>'+
+  '<button onclick="walkGo(\'fold=1\')">склад +</button><button onclick="walkGo(\'fold=-1\')">склад −</button>'+
+  '<button onclick="walkGo(\'spin=1\')">↻</button><button onclick="walkGo(\'spin=-1\')">↺</button>'+
+  '<button onclick="walkMorphToggle()">↻ морф</button><button onclick="walkReset()">🌀 новый мир</button>'; }
+document.addEventListener('keydown',function(ev){ const k=ev.key;
+  if(k==='ArrowLeft'){walkGo('cam=-1');ev.preventDefault();}
+  else if(k==='ArrowRight'){walkGo('cam=1');ev.preventDefault();}
+  else if(k==='ArrowUp'){walkGo('rise=1');ev.preventDefault();}
+  else if(k==='ArrowDown'){walkGo('rise=-1');ev.preventDefault();} });
 loadGame(); gameFetch('/api/game?new=1');
+loadWalk(); walkGo('reset=1');
 loadFigs(); runBench(); runRepublic(); arenaStep(true); loadGallery(); showImg(0);
 </script>
 </div></body></html>`
