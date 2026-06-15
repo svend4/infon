@@ -1,6 +1,7 @@
 # worldwalk-live.ps1 - one command for the live-brain pseudo-3D world walk.
 # Starts a tvcp-ai/1 adapter and benchserver -worldbrain together, then you open
-# the browser. Ctrl-C stops both.
+# the browser. Ctrl-C stops both. Picks a free port automatically if the chosen
+# one is busy.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\worldwalk-live.ps1
 #   ... -adapter openai      # use the OpenAI adapter instead of Anthropic
@@ -14,22 +15,35 @@ param(
   [string]$adapter = 'anthropic'   # anthropic | openai | ollama
 )
 $ErrorActionPreference = 'Stop'
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $repo = Split-Path $PSScriptRoot -Parent
 $py = "ai/adapters/$($adapter)_brain.py"
 if (-not (Test-Path (Join-Path $repo $py))) { Write-Error "adapter not found: $py"; exit 1 }
 
+function Find-FreePort([int]$p) {
+  for ($i = 0; $i -lt 60; $i++) {
+    try {
+      $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $p)
+      $l.Start(); $l.Stop(); return $p
+    } catch { $p++ }
+  }
+  return $p
+}
+$port = Find-FreePort $port
+$brainport = Find-FreePort $brainport
+
 Write-Host "TVCP world-walk (live brain)" -ForegroundColor Cyan
-Write-Host "  adapter : $adapter on http://127.0.0.1:$brainport/v1/decide"
+Write-Host ("  adapter : {0} on http://127.0.0.1:{1}/v1/decide" -f $adapter, $brainport)
 $a = Start-Process -FilePath 'python' -ArgumentList "$py $brainport" -WorkingDirectory $repo -PassThru
 Start-Sleep -Seconds 5
 
-Write-Host "  open    : http://localhost:$port" -ForegroundColor Green
-Write-Host "            panel 'прогулка по живому 2.5D-миру' -> button 'живой мозг'"
-Write-Host "            (the brain renders ~18 frames over ~1 min; reference world plays until ready)"
+Write-Host ("  open    : http://localhost:{0}" -f $port) -ForegroundColor Green
+Write-Host "            open the live 2.5D world-walk panel, then click the 'live brain' button"
+Write-Host "            (the brain renders ~18 frames over ~1 min; the reference world plays until ready)"
 Write-Host "  Ctrl-C to stop."
 try {
   Push-Location $repo
-  & go run ./cmd/benchserver -addr ":$port" -worldbrain "http://127.0.0.1:$brainport/v1/decide"
+  & go run ./cmd/benchserver -addr (":{0}" -f $port) -worldbrain ("http://127.0.0.1:{0}/v1/decide" -f $brainport)
 }
 finally {
   Pop-Location
