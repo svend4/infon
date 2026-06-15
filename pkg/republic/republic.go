@@ -46,7 +46,14 @@ type Result struct {
 }
 
 // Convene runs the whole act: register, negotiate the two seats, then fight.
-func Convene(cands []Candidate, seed int64) Result {
+func Convene(cands []Candidate, seed int64) Result { return ConveneN(cands, seed, 200) }
+
+// ConveneN is Convene with an explicit cap on the battle length (maxTurns ticks),
+// which keeps a LIVE duel bounded - each tick costs one API call per live faction.
+func ConveneN(cands []Candidate, seed int64, maxTurns int) Result {
+	if maxTurns <= 0 {
+		maxTurns = 200
+	}
 	var res Result
 	res.Winner = -1
 
@@ -98,7 +105,7 @@ func Convene(cands []Candidate, seed int64) Result {
 	}
 	c0, c1 := commander(0), commander(1)
 	ticks := 0
-	for ticks < 200 && a.AliveCount(0) > 0 && a.AliveCount(1) > 0 {
+	for ticks < maxTurns && a.AliveCount(0) > 0 && a.AliveCount(1) > 0 {
 		a.Step(c0, c1)
 		ticks++
 	}

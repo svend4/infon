@@ -31,6 +31,7 @@ func main() {
 	brain0 := flag.String("brain0", "", "tvcp-ai/1 URL of a live brain to enter the auction (bids to win)")
 	brain1 := flag.String("brain1", "", "a second live brain URL")
 	asJSON := flag.Bool("json", false, "emit the Result as JSON")
+	turns := flag.Int("turns", 200, "cap the battle length in ticks (keeps a live duel bounded)")
 	flag.Parse()
 
 	// The standing candidates: reference brains with distinct bids. Live brains,
@@ -48,7 +49,7 @@ func main() {
 		cands = append(cands, republic.Candidate{Name: "live-openai", Brain: brain.HTTPBrain{URL: *brain1}, Cost: fixed(2)})
 	}
 
-	res := republic.Convene(cands, *seed)
+	res := republic.ConveneN(cands, *seed, *turns)
 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
