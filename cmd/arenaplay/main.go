@@ -89,7 +89,7 @@ func main() {
 	}
 
 	a := build(*seed)
-	fmt.Print("\x1b[2J\x1b[?25l")       // clear screen, hide cursor
+	fmt.Print("\x1b[2J\x1b[?25l")        // clear screen, hide cursor
 	defer fmt.Print("\x1b[?25h" + reset) // restore cursor on exit
 
 	delay := time.Second / time.Duration(*fps)
