@@ -65,6 +65,9 @@ func main() {
 	http.HandleFunc("/img/blazon", imgBlazon)
 	http.HandleFunc("/img/world", imgWorld)
 	http.HandleFunc("/api/worldblocks", apiWorldBlocks)
+	http.HandleFunc("/api/game", apiGame)
+	http.HandleFunc("/api/game/summon", apiGameSummon)
+	http.HandleFunc("/api/game/step", apiGameStep)
 
 	log.Printf("TVCP benchserver — open http://localhost%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -347,6 +350,132 @@ func apiWorldBlocks(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(ansiColor.ReplaceAllString(fr.Render(), "")))
 }
 
+// ---- a playable browser game: you summon tangram-creatures, the AI commands the
+// other side, the arena fights it out. Combines arena + summon + commander. ----
+
+var (
+	gameMu     sync.Mutex
+	gameA      *arena.Arena
+	gameBudget int
+	gameStep   int
+)
+
+type gameFrame struct {
+	Tick   int   `json:"tick"`
+	W      int   `json:"w"`
+	H      int   `json:"h"`
+	Cells  []int `json:"cells"`
+	Alive0 int   `json:"alive0"`
+	Alive1 int   `json:"alive1"`
+	Budget int   `json:"budget"`
+	Over   bool  `json:"over"`
+	Winner int   `json:"winner"`
+}
+
+func gameNewLocked() {
+	a := &arena.Arena{W: 18, H: 11, Terrain: make([]uint8, 18*11)}
+	cat := tangram.Catalog()
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	roster := []string{"cat", "fox", "owl", "crab", "turtle", "swan"}
+	for i := 0; i < 5; i++ {
+		if fig, ok := cat[roster[r.Intn(len(roster))]]; ok {
+			if u, _, ok2 := arena.Summon(fig, 1, 15, uint8(1+i*2)); ok2 {
+				a.Units = append(a.Units, u)
+			}
+		}
+	}
+	gameA, gameBudget, gameStep = a, 4, 0
+}
+
+func gameFreeSlot() uint8 {
+	used := map[uint8]bool{}
+	for _, u := range gameA.Units {
+		if u.Alive && u.Faction == 0 && u.X <= 3 {
+			used[u.Y] = true
+		}
+	}
+	for y := uint8(1); y < uint8(gameA.H-1); y++ {
+		if !used[y] {
+			return y
+		}
+	}
+	return uint8(gameA.H / 2)
+}
+
+func gameSnapshot() gameFrame {
+	cells := make([]int, gameA.W*gameA.H)
+	for _, u := range gameA.Units {
+		if u.Alive && int(u.X) < gameA.W && int(u.Y) < gameA.H {
+			cells[int(u.Y)*gameA.W+int(u.X)] = int(u.Faction) + 1
+		}
+	}
+	a0, a1 := gameA.AliveCount(0), gameA.AliveCount(1)
+	over, win := false, -1
+	switch {
+	case a1 == 0 && a0 > 0:
+		over, win = true, 0
+	case a0 == 0 && gameStep > 0:
+		over, win = true, 1
+	case gameStep >= 300:
+		over = true
+		if a0 > a1 {
+			win = 0
+		} else if a1 > a0 {
+			win = 1
+		}
+	}
+	return gameFrame{Tick: gameStep, W: gameA.W, H: gameA.H, Cells: cells, Alive0: a0, Alive1: a1, Budget: gameBudget, Over: over, Winner: win}
+}
+
+func apiGame(w http.ResponseWriter, r *http.Request) {
+	gameMu.Lock()
+	defer gameMu.Unlock()
+	if r.URL.Query().Get("new") == "1" || gameA == nil {
+		gameNewLocked()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(gameSnapshot())
+}
+
+func apiGameSummon(w http.ResponseWriter, r *http.Request) {
+	gameMu.Lock()
+	defer gameMu.Unlock()
+	if gameA == nil {
+		gameNewLocked()
+	}
+	if s := gameSnapshot(); !s.Over && gameBudget > 0 {
+		name := r.URL.Query().Get("fig")
+		if name == "" {
+			name = "cat"
+		}
+		if fig, ok := tangram.Catalog()[name]; ok {
+			if u, _, ok2 := arena.Summon(fig, 0, 2, gameFreeSlot()); ok2 {
+				gameA.Units = append(gameA.Units, u)
+				gameBudget--
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(gameSnapshot())
+}
+
+func apiGameStep(w http.ResponseWriter, _ *http.Request) {
+	gameMu.Lock()
+	defer gameMu.Unlock()
+	if gameA == nil {
+		gameNewLocked()
+	}
+	if s := gameSnapshot(); !s.Over {
+		gameA.Step(arena.RefCommander{}, arena.RefCommander{})
+		gameStep++
+		if gameStep%2 == 0 && gameBudget < 6 {
+			gameBudget++
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(gameSnapshot())
+}
+
 func index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(page))
@@ -370,6 +499,14 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
 </style></head><body><div class="wrap">
  <h1>TVCP · benchserver</h1>
  <div class="sub">живой стенд — этот сервер реально выполняет возможности infon и отдаёт их сюда</div>
+
+ <div class="panel">
+   <h2>🎮 игра: арена — ты против ИИ</h2>
+   <div class="dim" style="margin-bottom:6px">призывай юниты (синие), ИИ командует красными. Победа — выбить всех. «авто» гоняет бой сам.</div>
+   <div id="gamebtns"></div>
+   <div id="gamestat" class="dim" style="margin-top:6px">—</div>
+   <canvas id="gamecv" width="468" height="286" style="display:block;margin-top:8px;background:#0b1118;border-radius:8px;width:100%;max-width:600px"></canvas>
+ </div>
 
  <div class="panel">
    <h2>тест-стенд</h2>
@@ -494,6 +631,26 @@ function toggleWorldLive(){ window.worldLive=!window.worldLive; document.getElem
   function step(){ fetch('/api/worldblocks?f='+bf).then(function(r){return r.text();}).then(function(t){ wb.textContent=t; }).catch(function(){}); bf++; setTimeout(step, 220); }
   step();
 })();
+let gameAuto=null;
+function drawGame(d){
+  const cv=document.getElementById('gamecv'); if(!cv)return; const ctx=cv.getContext('2d'),W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
+  const cw=W/d.w, ch=H/d.h;
+  for(let y=0;y<d.h;y++) for(let x=0;x<d.w;x++){ const v=d.cells[y*d.w+x];
+    if(v===0){ ctx.fillStyle='rgba(120,150,190,.10)'; ctx.fillRect(x*cw+cw*0.42,y*ch+ch*0.42,cw*0.16,ch*0.16); }
+    else { ctx.fillStyle=(v===1)?'#4a9bff':'#ff5a5a'; ctx.fillRect(x*cw+1,y*ch+1,cw-2,ch-2); } }
+}
+function gameStatTxt(d){
+  const v=d.over?(d.winner===0?' · 🏆 ты победил!':d.winner===1?' · ☠ ИИ победил':' · ничья'):'';
+  document.getElementById('gamestat').innerHTML='бюджет призыва '+d.budget+' · <span style="color:#4a9bff">ты '+d.alive0+'</span> vs <span style="color:#ff5a5a">ИИ '+d.alive1+'</span> · ход '+d.tick+v;
+}
+async function gameFetch(u){ try{ const d=await (await fetch(u)).json(); drawGame(d); gameStatTxt(d); if(d.over&&gameAuto){clearInterval(gameAuto);gameAuto=null;} return d; }catch(e){} }
+function gameSummon(f){ gameFetch('/api/game/summon?fig='+f); }
+function gameStepOnce(){ gameFetch('/api/game/step'); }
+function gameNew(){ if(gameAuto){clearInterval(gameAuto);gameAuto=null;} gameFetch('/api/game?new=1'); }
+function gameAutoToggle(){ if(gameAuto){clearInterval(gameAuto);gameAuto=null;} else { gameAuto=setInterval(gameStepOnce,450); } }
+function loadGame(){ const figs=['cat','fox','owl','crab','turtle','swan'];
+  document.getElementById('gamebtns').innerHTML=figs.map(f=>'<button onclick="gameSummon(\''+f+'\')">+ '+f+'</button>').join('')+' <button onclick="gameStepOnce()">⚔ ход</button><button onclick="gameAutoToggle()">▶ авто</button><button onclick="gameNew()">🔄 новая</button>'; }
+loadGame(); gameFetch('/api/game?new=1');
 loadFigs(); runBench(); runRepublic(); arenaStep(true); loadGallery(); showImg(0);
 </script>
 </div></body></html>`
