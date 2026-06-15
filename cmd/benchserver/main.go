@@ -43,7 +43,12 @@ import (
 
 func main() {
 	addr := flag.String("addr", ":8086", "listen address")
+	worldBrain := flag.String("worldbrain", "", "tvcp-ai/1 URL to let a live brain direct the /img/world walk (game:world)")
 	flag.Parse()
+
+	if *worldBrain != "" {
+		go generateLiveWorld(*worldBrain)
+	}
 
 	http.HandleFunc("/", index)
 	http.HandleFunc("/api/bench", apiBench)
@@ -274,15 +279,36 @@ func imgBlazon(w http.ResponseWriter, r *http.Request) {
 // camera; we hold the evolving 240-frame sequence and serve any frame as a PNG ----
 
 var (
-	worldOnce   sync.Once
-	worldFrames []world.State
+	worldOnce       sync.Once
+	worldFrames     []world.State
+	liveMu          sync.Mutex
+	liveWorldFrames []world.State
 )
 
+// generateLiveWorld asks a live brain (game:world) to fold/spin/walk an 18-frame
+// world; it runs once at startup when -worldbrain is set (bounded API calls).
+func generateLiveWorld(url string) {
+	b := brain.HTTPBrain{URL: url, HTTP: &http.Client{Timeout: 60 * time.Second}}
+	frames, _ := world.LoopC(&world.BrainController{B: b}, world.Init(), 18)
+	liveMu.Lock()
+	liveWorldFrames = frames
+	liveMu.Unlock()
+}
+
 func imgWorld(w http.ResponseWriter, r *http.Request) {
-	worldOnce.Do(func() {
-		worldFrames, _ = world.LoopC(world.RefController{}, world.Init(), 240)
-	})
-	if len(worldFrames) == 0 {
+	var frames []world.State
+	if r.URL.Query().Get("live") == "1" {
+		liveMu.Lock()
+		frames = liveWorldFrames
+		liveMu.Unlock()
+	}
+	if len(frames) == 0 {
+		worldOnce.Do(func() {
+			worldFrames, _ = world.LoopC(world.RefController{}, world.Init(), 240)
+		})
+		frames = worldFrames
+	}
+	if len(frames) == 0 {
 		http.Error(w, "no world", http.StatusInternalServerError)
 		return
 	}
@@ -290,8 +316,8 @@ func imgWorld(w http.ResponseWriter, r *http.Request) {
 	if v, err := strconv.Atoi(r.URL.Query().Get("f")); err == nil {
 		f = v
 	}
-	n := len(worldFrames)
-	writePNG(w, worldFrames[((f%n)+n)%n].Render(380, 260))
+	n := len(frames)
+	writePNG(w, frames[((f%n)+n)%n].Render(380, 260))
 }
 
 func index(w http.ResponseWriter, _ *http.Request) {
@@ -356,7 +382,9 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
  <div class="panel">
    <h2>прогулка по живому 2.5D-миру</h2>
    <div class="dim" style="margin-bottom:6px">контроллер ведёт мир: fold · rise · spin · камера — 51 байт состояния на кадр</div>
-   <img id="worldimg" alt="world" style="display:block;max-width:100%;border-radius:8px;background:#0b1118">
+   <button id="wlbtn" onclick="toggleWorldLive()">○ живой мозг</button>
+   <span class="dim" style="font-size:10.5px">требует запуск: benchserver -worldbrain URL</span>
+   <img id="worldimg" alt="world" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
  </div>
 
 <script>
@@ -425,10 +453,13 @@ function loadGallery(){
   document.getElementById('galbtns').innerHTML=galleryItems.map((it,i)=>'<button onclick="showImg('+i+')">'+it[0]+'</button>').join('');
 }
 function showImg(i){ document.getElementById('galimg').src=galleryItems[i][1]+'&_t='+Date.now(); }
+window.worldLive=false;
+function toggleWorldLive(){ window.worldLive=!window.worldLive; document.getElementById('wlbtn').textContent=window.worldLive?'● живой мозг: ВКЛ':'○ живой мозг'; }
 (function(){ const wimg=document.getElementById('worldimg'); let wf=0;
-  wimg.onload=function(){ setTimeout(function(){ wf++; wimg.src='/img/world?f='+wf; }, 90); };
-  wimg.onerror=function(){ setTimeout(function(){ wimg.src='/img/world?f='+wf; }, 400); };
-  wimg.src='/img/world?f=0';
+  function nextSrc(){ return '/img/world?f='+wf+(window.worldLive?'&live=1':''); }
+  wimg.onload=function(){ setTimeout(function(){ wf++; wimg.src=nextSrc(); }, 90); };
+  wimg.onerror=function(){ setTimeout(function(){ wimg.src=nextSrc(); }, 400); };
+  wimg.src=nextSrc();
 })();
 loadFigs(); runBench(); runRepublic(); arenaStep(true); loadGallery(); showImg(0);
 </script>
