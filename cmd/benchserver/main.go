@@ -658,6 +658,59 @@ func craftBuild(name string) []scene3d.Item {
 	return it
 }
 
+// craftBuildViaBrain asks a brain (reference, or a live LLM via -worldbrain) to
+// design a structure with game:build, then places its blocks. Falls back to the
+// local architect if the brain returns nothing.
+func craftBuildViaBrain(prompt string, live bool) {
+	var b brain.Brain = brain.Local{}
+	if live && worldBrainURL != "" {
+		b = brain.HTTPBrain{URL: worldBrainURL, HTTP: &http.Client{Timeout: 60 * time.Second}}
+	}
+	resp, err := b.Decide(brain.Request{Protocol: brain.Protocol, Kind: "move", Game: "build", Prompt: prompt})
+	var blocks []brain.BuildBlock
+	if err == nil && len(resp.Build) > 0 {
+		_ = json.Unmarshal(resp.Build, &blocks)
+	}
+	if len(blocks) == 0 {
+		craftItems = craftBuild(prompt)
+		return
+	}
+	craftItems = nil
+	for _, bl := range blocks {
+		craftItems = append(craftItems, scene3d.Item{
+			Piece: clampU(bl.Piece, 7), X: clampU(bl.X, craftG), Y: clampU(bl.Y, craftG),
+			Z: clampU(bl.Z, 8), Color: clampU(bl.Color, 6),
+		})
+	}
+}
+
+// craftPopulateLocked is the AI populating the world: it scatters inhabitant
+// blocks on top of the existing structure.
+func craftPopulateLocked() {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	top := map[[2]uint8]uint8{}
+	for _, it := range craftItems {
+		k := [2]uint8{it.X, it.Y}
+		if z, ok := top[k]; !ok || it.Z >= z {
+			top[k] = it.Z
+		}
+	}
+	cols := make([][2]uint8, 0, len(top))
+	for k := range top {
+		cols = append(cols, k)
+	}
+	if len(cols) == 0 {
+		return
+	}
+	for i := 0; i < 4+rng.Intn(4); i++ {
+		k := cols[rng.Intn(len(cols))]
+		z := top[k] + 1
+		if z < 7 && craftAt(k[0], k[1], z) < 0 {
+			craftItems = append(craftItems, scene3d.Item{Piece: 6, X: k[0], Y: k[1], Z: z, Color: uint8(1 + rng.Intn(4))})
+		}
+	}
+}
+
 func apiCraft(w http.ResponseWriter, r *http.Request) {
 	craftMu.Lock()
 	defer craftMu.Unlock()
@@ -665,8 +718,11 @@ func apiCraft(w http.ResponseWriter, r *http.Request) {
 	if q.Get("reset") == "1" || !craftInit {
 		craftResetLocked()
 	}
-	if name := q.Get("build"); name != "" {
-		craftItems = craftBuild(name)
+	if prompt := q.Get("build"); prompt != "" {
+		craftBuildViaBrain(prompt, q.Get("live") == "1")
+	}
+	if q.Get("populate") == "1" {
+		craftPopulateLocked()
 	}
 	switch q.Get("mv") {
 	case "x+":
@@ -748,6 +804,7 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <h2>🧱 TVCP Craft — мир из танграмов/оригами (3D)</h2>
    <div class="dim" style="margin-bottom:6px">двигай курсор (x/y/z), ставь блоки‑оригами, верти камеру. Каждый блок — 6 байт.</div>
    <div id="craftbtns"></div>
+   <div style="margin:6px 0"><input id="craftprompt" placeholder="что построить: замок, дом, дерево, мост…" style="font:inherit;background:#0e141c;color:#cfe9d8;border:1px solid #25323f;border-radius:6px;padding:5px 8px;width:230px;max-width:60%"><button onclick="craftLLM()">🏰 LLM строит</button><button onclick="craftGo('populate=1')">👥 заселить</button></div>
    <img id="craftimg" alt="craft" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
  </div>
 
@@ -917,6 +974,7 @@ document.addEventListener('keydown',function(ev){ const k=ev.key;
   else if(k==='ArrowUp'){walkGo('rise=1');ev.preventDefault();}
   else if(k==='ArrowDown'){walkGo('rise=-1');ev.preventDefault();} });
 function craftGo(p){ const i=document.getElementById('craftimg'); if(i) i.src='/api/craft?'+p+'&_t='+Date.now(); }
+function craftLLM(){ const p=document.getElementById('craftprompt').value||'tower'; craftGo('build='+encodeURIComponent(p)+'&live=1'); }
 function loadCraft(){ document.getElementById('craftbtns').innerHTML=
   '<span class="dim">курсор:</span> <button onclick="craftGo(\'mv=x-\')">x−</button><button onclick="craftGo(\'mv=x+\')">x+</button>'+
   '<button onclick="craftGo(\'mv=y-\')">y−</button><button onclick="craftGo(\'mv=y+\')">y+</button>'+

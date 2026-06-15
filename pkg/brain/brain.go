@@ -73,6 +73,7 @@ type Response struct {
 	Tangram   json.RawMessage `json:"tangram,omitempty"` // a tangram solution (pkg/tangram)
 	World     json.RawMessage `json:"world,omitempty"`   // next-tick world directives (pkg/world)
 	Rpg       json.RawMessage `json:"rpg,omitempty"`     // per-unit rpg moves (pkg/arena)
+	Build     json.RawMessage `json:"build,omitempty"`   // a structure: list of blocks (game:build)
 	Cards     []string        `json:"cards,omitempty"`   // glyph "cards" for react
 	Reasoning string          `json:"reasoning,omitempty"`
 	Error     string          `json:"error,omitempty"`
@@ -733,6 +734,108 @@ func hanabiSafeDiscard(v hanabiView) int {
 	return 0
 }
 
+// BuildBlock is one placed block in a game:build structure (TVCP Craft).
+type BuildBlock struct {
+	Piece int `json:"piece"`
+	X     int `json:"x"`
+	Y     int `json:"y"`
+	Z     int `json:"z"`
+	Color int `json:"color"`
+}
+
+// refBuild is the reference architect: it reads keywords from the prompt and
+// returns a structure of blocks. Any LLM can answer game:build the same way.
+func refBuild(req Request) Response {
+	p := strings.ToLower(req.Prompt)
+	var bs []BuildBlock
+	add := func(piece, x, y, z, c int) { bs = append(bs, BuildBlock{piece, x, y, z, c}) }
+	has := func(words ...string) bool {
+		for _, w := range words {
+			if strings.Contains(p, w) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case has("pyramid", "пирамид"):
+		for z := 0; z < 5; z++ {
+			lo, hi := 1+z, 6-z
+			for x := lo; x <= hi; x++ {
+				for y := lo; y <= hi; y++ {
+					if z == 0 || x == lo || x == hi || y == lo || y == hi {
+						add((x+y)%7, x, y, z, z%6)
+					}
+				}
+			}
+		}
+	case has("house", "дом", "хат"):
+		for x := 2; x <= 5; x++ {
+			for y := 2; y <= 5; y++ {
+				add(0, x, y, 0, 3)
+			}
+		}
+		for z := 1; z <= 2; z++ {
+			for x := 2; x <= 5; x++ {
+				add(1, x, 2, z, 2)
+				add(1, x, 5, z, 2)
+			}
+			for y := 3; y <= 4; y++ {
+				add(1, 2, y, z, 2)
+				add(1, 5, y, z, 2)
+			}
+		}
+		for x := 2; x <= 5; x++ {
+			for y := 2; y <= 5; y++ {
+				add(2, x, y, 3, 4)
+			}
+		}
+	case has("tree", "дерев"):
+		for z := 0; z < 3; z++ {
+			add(4, 3, 3, z, 1)
+		}
+		for x := 2; x <= 4; x++ {
+			for y := 2; y <= 4; y++ {
+				add(5, x, y, 3, 4)
+			}
+		}
+		add(5, 3, 3, 4, 4)
+	case has("castle", "замок", "крепост"):
+		corners := [][2]int{{1, 1}, {6, 1}, {1, 6}, {6, 6}}
+		for _, c := range corners {
+			for z := 0; z < 5; z++ {
+				add(z%7, c[0], c[1], z, z%6)
+			}
+		}
+		for x := 1; x <= 6; x++ {
+			add(1, x, 1, 0, 3)
+			add(1, x, 6, 0, 3)
+			add(1, 1, x, 0, 3)
+			add(1, 6, x, 0, 3)
+		}
+	case has("bridge", "мост"):
+		for x := 0; x < 8; x++ {
+			add(0, x, 3, 2, 3)
+			add(0, x, 4, 2, 3)
+		}
+		for _, x := range []int{1, 6} {
+			for z := 0; z < 3; z++ {
+				add(1, x, 3, z, 2)
+				add(1, x, 4, z, 2)
+			}
+		}
+	default: // a tower
+		for z := 0; z < 6; z++ {
+			add(z%7, 3, 3, z, z%6)
+			add(z%7, 4, 3, z, z%6)
+			add(z%7, 3, 4, z, z%6)
+			add(z%7, 4, 4, z, z%6)
+		}
+	}
+	data, _ := json.Marshal(bs)
+	return Response{Protocol: Protocol, Kind: "move", Build: data, Reasoning: "reference architect: " + req.Prompt}
+}
+
 func Reference(req Request) Response {
 	switch req.Kind {
 	case "move":
@@ -753,6 +856,9 @@ func Reference(req Request) Response {
 		}
 		if req.Game == "hanabi" {
 			return refHanabi(req)
+		}
+		if req.Game == "build" {
+			return refBuild(req)
 		}
 		return refMove(req)
 	case "draw":

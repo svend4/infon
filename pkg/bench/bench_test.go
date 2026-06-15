@@ -21,8 +21,8 @@ func TestRunAllGreen(t *testing.T) {
 		t.Fatalf("%d/%d checks passed", r.Passed, r.Total)
 	}
 	for _, c := range r.Checks {
-		if c.Name == "conformance" && c.Metric != "14/14" {
-			t.Errorf("conformance metric = %q, want 14/14", c.Metric)
+		if c.Name == "conformance" && c.Metric != "15/15" {
+			t.Errorf("conformance metric = %q, want 15/15", c.Metric)
 		}
 	}
 }

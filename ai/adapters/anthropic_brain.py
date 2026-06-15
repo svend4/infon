@@ -147,6 +147,13 @@ def _norm_image(spec, req):
         spec["palette"] = req["palette"]
     return spec
 
+BUILD_SYS = ("You are an architect for a tiny voxel world built from tangram pieces. "
+    "Reply with ONLY one JSON object: {\"build\": [{\"piece\":int,\"x\":int,\"y\":int,\"z\":int,\"color\":int}, ...]}. "
+    "No prose. The grid is 8x8 in x,y (each 0..7) and up to 6 high in z (0..5). piece is 0..6 (a tangram piece), "
+    "color is 0..5. Build what the prompt asks (castle, house, tree, bridge, tower, ...) as 10..80 blocks; "
+    "stack higher z on top of lower so it reads in 3D, and centre larger builds around x=3,y=3.")
+
+
 def decide(req):
     kind = req.get("kind")
     resp = {"protocol": "tvcp-ai/1", "kind": kind}
@@ -158,6 +165,8 @@ def decide(req):
                 sysmsg = IMG_SYS
             elif kind == "move" and req.get("game") == "tangram":
                 sysmsg = TANGRAM_SYS
+            elif kind == "move" and req.get("game") == "build":
+                sysmsg = BUILD_SYS
             m = ask(req, sysmsg)
             if kind == "move":
                 if req.get("game") == "tangram":
@@ -191,6 +200,23 @@ def decide(req):
                         resp["reasoning"] = f"rpg:{MODEL}"
                         return resp
                     last = "no rpg moves"
+                    continue
+                if req.get("game") == "build":
+                    bl = m.get("build", m)
+                    if isinstance(bl, list) and bl:
+                        out = []
+                        for b in bl[:120]:
+                            try:
+                                out.append({"piece": int(b.get("piece", 0)), "x": int(b.get("x", 0)),
+                                            "y": int(b.get("y", 0)), "z": int(b.get("z", 0)),
+                                            "color": int(b.get("color", 0))})
+                            except Exception:
+                                pass
+                        if out:
+                            resp["build"] = out
+                            resp["reasoning"] = f"build:{MODEL}"
+                            return resp
+                    last = "no build blocks"
                     continue
                 mv = m.get("move", m)
                 if not isinstance(mv, dict):

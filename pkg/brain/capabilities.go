@@ -33,7 +33,7 @@ func ReferenceCapabilities() Capabilities {
 	return Capabilities{
 		Protocol: Protocol,
 		Kinds:    []string{"move", "draw", "sketch", "image", "react"},
-		Games:    []string{"tictactoe", "wordle", "uno", "hanabi", "tangram", "world", "rpg"},
+		Games:    []string{"tictactoe", "wordle", "uno", "hanabi", "tangram", "world", "rpg", "build"},
 		Formats:  []string{"grid", "pixels", "glyphs", "sigils", "vector", "sketch", "mixed", "marks"},
 	}
 }

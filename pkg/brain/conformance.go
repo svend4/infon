@@ -53,6 +53,7 @@ func ConformanceBattery() []ConformanceCase {
 		{"move/tangram", Request{Kind: "move", Game: "tangram", State: tgState}},
 		{"move/world", Request{Kind: "move", Game: "world", State: wlState}},
 		{"move/rpg", Request{Kind: "move", Game: "rpg", State: rpgState}},
+		{"move/build", Request{Kind: "move", Game: "build", Prompt: "a small tower"}},
 		{"draw", Request{Kind: "draw", Prompt: "a calm harbor at dawn", Canvas: &Canvas{Width: 48, Height: 20}}},
 		{"sketch", Request{Kind: "sketch", Prompt: "sunset over mountains"}},
 		{"image/grid", Request{Kind: "image", Format: "grid", Prompt: "a calm harbor", Canvas: &Canvas{Width: 48, Height: 20}}},
@@ -94,6 +95,13 @@ func CheckResponse(req Request, resp Response) (string, bool) {
 			var mv []struct{ ID, DX, DY int }
 			if len(resp.Rpg) == 0 || json.Unmarshal(resp.Rpg, &mv) != nil {
 				return "rpg: missing or invalid moves", false
+			}
+			return "", true
+		}
+		if req.Game == "build" {
+			var blocks []BuildBlock
+			if len(resp.Build) == 0 || json.Unmarshal(resp.Build, &blocks) != nil || len(blocks) == 0 {
+				return "build: missing or invalid blocks", false
 			}
 			return "", true
 		}
