@@ -24,11 +24,13 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/svend4/infon/internal/codec/babe"
 	"github.com/svend4/infon/pkg/arena"
 	"github.com/svend4/infon/pkg/bench"
 	"github.com/svend4/infon/pkg/blazon"
@@ -62,6 +64,7 @@ func main() {
 	http.HandleFunc("/img/glyphqr", imgGlyphQR)
 	http.HandleFunc("/img/blazon", imgBlazon)
 	http.HandleFunc("/img/world", imgWorld)
+	http.HandleFunc("/api/worldblocks", apiWorldBlocks)
 
 	log.Printf("TVCP benchserver — open http://localhost%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -320,6 +323,30 @@ func imgWorld(w http.ResponseWriter, r *http.Request) {
 	writePNG(w, frames[((f%n)+n)%n].Render(380, 260))
 }
 
+// ansiColor strips SGR colour codes so the block render shows cleanly in a <pre>.
+var ansiColor = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// apiWorldBlocks renders a world frame with the ORIGINAL image-to-blocks codec
+// (internal/codec/babe -> terminal.Frame quadrant glyphs) and serves it as text:
+// the project's first capability applied to its newest one, in the browser.
+func apiWorldBlocks(w http.ResponseWriter, r *http.Request) {
+	worldOnce.Do(func() {
+		worldFrames, _ = world.LoopC(world.RefController{}, world.Init(), 240)
+	})
+	if len(worldFrames) == 0 {
+		http.Error(w, "no world", http.StatusInternalServerError)
+		return
+	}
+	f := 0
+	if v, err := strconv.Atoi(r.URL.Query().Get("f")); err == nil {
+		f = v
+	}
+	n := len(worldFrames)
+	fr := babe.ImageToFrame(worldFrames[((f%n)+n)%n].Render(120, 72), 60, 30)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(ansiColor.ReplaceAllString(fr.Render(), "")))
+}
+
 func index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(page))
@@ -385,6 +412,8 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <button id="wlbtn" onclick="toggleWorldLive()">○ живой мозг</button>
    <span class="dim" style="font-size:10.5px">запусти scripts/worldwalk-live.ps1 (или benchserver -worldbrain URL)</span>
    <img id="worldimg" alt="world" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
+   <div class="dim" style="margin-top:8px;font-size:10.5px">первая возможность: тот же мир оригинальным кодеком «картинка → блоки» (babe)</div>
+   <pre id="wblocks" style="font-size:8px;line-height:1.05;color:#9be8b5;background:#0b1118;border-radius:6px;padding:6px;overflow:auto;margin:4px 0 0"></pre>
  </div>
 
 <script>
@@ -460,6 +489,10 @@ function toggleWorldLive(){ window.worldLive=!window.worldLive; document.getElem
   wimg.onload=function(){ setTimeout(function(){ wf++; wimg.src=nextSrc(); }, 90); };
   wimg.onerror=function(){ setTimeout(function(){ wimg.src=nextSrc(); }, 400); };
   wimg.src=nextSrc();
+})();
+(function(){ const wb=document.getElementById('wblocks'); if(!wb)return; let bf=0;
+  function step(){ fetch('/api/worldblocks?f='+bf).then(function(r){return r.text();}).then(function(t){ wb.textContent=t; }).catch(function(){}); bf++; setTimeout(step, 220); }
+  step();
 })();
 loadFigs(); runBench(); runRepublic(); arenaStep(true); loadGallery(); showImg(0);
 </script>
