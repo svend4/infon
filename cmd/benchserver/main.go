@@ -20,8 +20,11 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
+	"math/rand"
 	"net/http"
 	"sort"
+	"sync"
+	"time"
 
 	"github.com/svend4/infon/pkg/arena"
 	"github.com/svend4/infon/pkg/bench"
@@ -39,6 +42,7 @@ func main() {
 	http.HandleFunc("/api/figures", apiFigures)
 	http.HandleFunc("/api/figure", apiFigure)
 	http.HandleFunc("/api/republic", apiRepublic)
+	http.HandleFunc("/api/arena", apiArena)
 
 	log.Printf("TVCP benchserver — open http://localhost%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -125,6 +129,69 @@ func apiFigure(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(figResp{Name: name, Address: f.Address(), Gate: f.GateCode(6), Rows: f.GlyphRows()})
 }
 
+// ---- live animated arena: the server holds one battle and steps it per request ----
+
+var (
+	arMu   sync.Mutex
+	arGame *arena.Arena
+	arTick int
+)
+
+func buildBattle() *arena.Arena {
+	a := &arena.Arena{W: 20, H: 12, Terrain: make([]uint8, 20*12)}
+	cat := tangram.Catalog()
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	roster := []string{"cat", "fox", "owl", "crab", "turtle", "swan"}
+	add := func(name string, f, x, y uint8) {
+		if fig, ok := cat[name]; ok {
+			if u, _, ok2 := arena.Summon(fig, f, x, y); ok2 {
+				a.Units = append(a.Units, u)
+			}
+		}
+	}
+	for i := 0; i < 5; i++ {
+		add(roster[r.Intn(len(roster))], 0, 2, uint8(1+i*2))
+		add(roster[r.Intn(len(roster))], 1, 17, uint8(1+i*2))
+	}
+	return a
+}
+
+type arenaFrame struct {
+	Tick   int   `json:"tick"`
+	W      int   `json:"w"`
+	H      int   `json:"h"`
+	Cells  []int `json:"cells"` // row-major, 0 empty / 1 faction0 / 2 faction1
+	Alive0 int   `json:"alive0"`
+	Alive1 int   `json:"alive1"`
+	Done   bool  `json:"done"`
+}
+
+// apiArena returns the next animation frame: it resets on ?reset=1 (or first
+// call), otherwise advances the held battle by one tick.
+func apiArena(w http.ResponseWriter, r *http.Request) {
+	arMu.Lock()
+	defer arMu.Unlock()
+	if r.URL.Query().Get("reset") == "1" || arGame == nil {
+		arGame = buildBattle()
+		arTick = 0
+	} else if arGame.AliveCount(0) > 0 && arGame.AliveCount(1) > 0 && arTick < 300 {
+		arGame.Step(arena.RefCommander{}, arena.RefCommander{})
+		arTick++
+	}
+	cells := make([]int, arGame.W*arGame.H)
+	for _, u := range arGame.Units {
+		if u.Alive && int(u.X) < arGame.W && int(u.Y) < arGame.H {
+			cells[int(u.Y)*arGame.W+int(u.X)] = int(u.Faction) + 1
+		}
+	}
+	a0, a1 := arGame.AliveCount(0), arGame.AliveCount(1)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(arenaFrame{
+		Tick: arTick, W: arGame.W, H: arGame.H, Cells: cells,
+		Alive0: a0, Alive1: a1, Done: a0 == 0 || a1 == 0 || arTick >= 300,
+	})
+}
+
 func index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(page))
@@ -171,6 +238,13 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <pre id="repfield"></pre>
  </div>
 
+ <div class="panel">
+   <h2>арена — живой бой (анимация)</h2>
+   <button onclick="arenaReset()">⟳ новый бой</button>
+   <span id="arstat" class="dim">—</span>
+   <canvas id="arcanvas" width="420" height="252" style="display:block;margin-top:8px;background:#0b1118;border-radius:8px;width:100%;max-width:560px"></canvas>
+ </div>
+
 <script>
 async function runBench(){
   document.getElementById('verdict').textContent='…';
@@ -205,6 +279,27 @@ async function runRepublic(){
   v.textContent=win+' · '+d.ticks+' ticks · '+d.alive0+' vs '+d.alive1;
   document.getElementById('repfield').textContent=(d.field||[]).join('\n');
 }
-loadFigs(); runBench(); runRepublic();
+let arTimer=null;
+function drawArena(d){
+  const cv=document.getElementById('arcanvas'); if(!cv) return;
+  const ctx=cv.getContext('2d'), W=cv.width, H=cv.height; ctx.clearRect(0,0,W,H);
+  const cw=W/d.w, ch=H/d.h;
+  for(let y=0;y<d.h;y++) for(let x=0;x<d.w;x++){
+    const v=d.cells[y*d.w+x];
+    if(v===0){ ctx.fillStyle='rgba(120,150,190,.10)'; ctx.fillRect(x*cw+cw*0.42,y*ch+ch*0.42,cw*0.16,ch*0.16); }
+    else { ctx.fillStyle=(v===1)?'#4a9bff':'#ff5a5a'; ctx.fillRect(x*cw+1,y*ch+1,cw-2,ch-2); }
+  }
+}
+async function arenaStep(reset){
+  let d; try { d=await (await fetch('/api/arena'+(reset?'?reset=1':''))).json(); } catch(e){ return; }
+  drawArena(d);
+  const st=document.getElementById('arstat');
+  const verdict=d.done?(d.alive0>d.alive1?' · blue holds':d.alive1>d.alive0?' · red holds':' · draw'):'';
+  st.innerHTML='tick '+d.tick+' · <span style="color:#4a9bff">blue '+d.alive0+'</span> vs <span style="color:#ff5a5a">red '+d.alive1+'</span>'+verdict;
+  clearTimeout(arTimer);
+  arTimer=setTimeout(()=>arenaStep(d.done), d.done?2000:170);
+}
+function arenaReset(){ clearTimeout(arTimer); arenaStep(true); }
+loadFigs(); runBench(); runRepublic(); arenaStep(true);
 </script>
 </div></body></html>`
