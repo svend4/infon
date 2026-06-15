@@ -583,12 +583,90 @@ func craftAt(x, y, z uint8) int {
 	return -1
 }
 
+// craftBuild is the reference "AI architect": from a name it generates a
+// recognizable structure (a live brain could do the same via the protocol).
+func craftBuild(name string) []scene3d.Item {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var it []scene3d.Item
+	add := func(p, x, y, z, c uint8) { it = append(it, scene3d.Item{Piece: p, X: x, Y: y, Z: z, Color: c}) }
+	col := func() uint8 { return uint8(rng.Intn(6)) }
+	switch name {
+	case "tower":
+		for z := uint8(0); z < 6; z++ {
+			c := col()
+			add(uint8(z%7), 3, 3, z, c)
+			add(uint8(z%7), 4, 3, z, c)
+			add(uint8(z%7), 3, 4, z, c)
+			add(uint8(z%7), 4, 4, z, c)
+		}
+	case "pyramid":
+		for z := uint8(0); z < 5; z++ {
+			lo, hi := 1+z, 6-z
+			c := uint8(int(z) % 6)
+			for x := lo; x <= hi; x++ {
+				for y := lo; y <= hi; y++ {
+					if z == 0 || x == lo || x == hi || y == lo || y == hi {
+						add(uint8((int(x)+int(y))%7), x, y, z, c)
+					}
+				}
+			}
+		}
+	case "house":
+		for x := uint8(2); x <= 5; x++ {
+			for y := uint8(2); y <= 5; y++ {
+				add(0, x, y, 0, 3)
+			}
+		}
+		for z := uint8(1); z <= 2; z++ {
+			for x := uint8(2); x <= 5; x++ {
+				add(1, x, 2, z, 2)
+				add(1, x, 5, z, 2)
+			}
+			for y := uint8(3); y <= 4; y++ {
+				add(1, 2, y, z, 2)
+				add(1, 5, y, z, 2)
+			}
+		}
+		for x := uint8(2); x <= 5; x++ {
+			for y := uint8(2); y <= 5; y++ {
+				add(2, x, y, 3, 4)
+			}
+		}
+	case "tree":
+		for z := uint8(0); z < 3; z++ {
+			add(4, 3, 3, z, 1)
+		}
+		for x := uint8(2); x <= 4; x++ {
+			for y := uint8(2); y <= 4; y++ {
+				add(5, x, y, 3, 4)
+			}
+		}
+		add(5, 3, 3, 4, 4)
+	case "spiral":
+		pts := [][2]uint8{{2, 2}, {3, 2}, {4, 3}, {4, 4}, {3, 5}, {2, 4}, {2, 3}}
+		for z := uint8(0); z < 6; z++ {
+			p := pts[int(z)%len(pts)]
+			add(uint8(z%7), p[0], p[1], z, col())
+		}
+	default: // wall
+		for x := uint8(1); x <= 6; x++ {
+			for z := uint8(0); z < 3; z++ {
+				add(1, x, 3, z, 2)
+			}
+		}
+	}
+	return it
+}
+
 func apiCraft(w http.ResponseWriter, r *http.Request) {
 	craftMu.Lock()
 	defer craftMu.Unlock()
 	q := r.URL.Query()
 	if q.Get("reset") == "1" || !craftInit {
 		craftResetLocked()
+	}
+	if name := q.Get("build"); name != "" {
+		craftItems = craftBuild(name)
 	}
 	switch q.Get("mv") {
 	case "x+":
@@ -847,7 +925,8 @@ function loadCraft(){ document.getElementById('craftbtns').innerHTML=
   ' <span class="dim">цвет:</span> '+[0,1,2,3,4,5].map(function(c){return '<button onclick="craftGo(\'color='+c+'\')">'+c+'</button>';}).join('')+
   '<br><button onclick="craftGo(\'place=1\')">🧱 поставить</button><button onclick="craftGo(\'remove=1\')">🗑 убрать</button>'+
   '<button onclick="craftGo(\'yaw=l\')">◄ камера</button><button onclick="craftGo(\'yaw=r\')">камера ►</button>'+
-  '<button onclick="craftGo(\'reset=1\')">🌀 новый</button>'; }
+  '<button onclick="craftGo(\'reset=1\')">🌀 новый</button>'+
+  '<br><span class="dim">🤖 ИИ строит:</span> '+['tower','pyramid','house','tree','spiral','wall'].map(function(b){return '<button onclick="craftGo(\'build='+b+'\')">'+b+'</button>';}).join(''); }
 loadGame(); gameFetch('/api/game?new=1');
 loadWalk(); walkGo('reset=1');
 loadCraft(); craftGo('reset=1');
