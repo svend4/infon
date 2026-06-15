@@ -48,6 +48,7 @@ func main() {
 	worldBrain := flag.String("worldbrain", "", "tvcp-ai/1 URL to let a live brain direct the /img/world walk (game:world)")
 	flag.Parse()
 
+	worldBrainURL = *worldBrain
 	if *worldBrain != "" {
 		go generateLiveWorld(*worldBrain)
 	}
@@ -481,9 +482,10 @@ func apiGameStep(w http.ResponseWriter, _ *http.Request) {
 // world with directives; the server holds the state and renders each step. ----
 
 var (
-	walkMu    sync.Mutex
-	walkState world.State
-	walkInit  bool
+	walkMu        sync.Mutex
+	walkState     world.State
+	walkInit      bool
+	worldBrainURL string
 )
 
 func qdir(r *http.Request, key string) int {
@@ -509,8 +511,11 @@ func apiWalk(w http.ResponseWriter, r *http.Request) {
 		walkInit = true
 	}
 	var d world.Directives
-	if q.Get("morph") == "1" {
-		d = world.RefController{}.Decide(walkState) // keep it evolving
+	if q.Get("live") == "1" && worldBrainURL != "" {
+		b := brain.HTTPBrain{URL: worldBrainURL, HTTP: &http.Client{Timeout: 60 * time.Second}}
+		d = (&world.BrainController{B: b}).Decide(walkState) // a live brain dreams the world
+	} else if q.Get("morph") == "1" || q.Get("live") == "1" {
+		d = world.RefController{}.Decide(walkState) // reference morph (or fallback)
 	}
 	if q.Get("cam") != "" {
 		d.Camera = qdir(r, "cam")
@@ -709,15 +714,17 @@ function gameNew(){ if(gameAuto){clearInterval(gameAuto);gameAuto=null;} gameFet
 function gameAutoToggle(){ if(gameAuto){clearInterval(gameAuto);gameAuto=null;} else { gameAuto=setInterval(gameStepOnce,450); } }
 function loadGame(){ const figs=['cat','fox','owl','crab','turtle','swan'];
   document.getElementById('gamebtns').innerHTML=figs.map(f=>'<button onclick="gameSummon(\''+f+'\')">+ '+f+'</button>').join('')+' <button onclick="gameStepOnce()">⚔ ход</button><button onclick="gameAutoToggle()">▶ авто</button><button onclick="gameNew()">🔄 новая</button>'; }
-let walkMorph=null;
+let walkTimer=null, walkMode=null;
 function walkGo(p){ const i=document.getElementById('walkimg'); if(i) i.src='/api/walk?'+p+'&_t='+Date.now(); }
-function walkReset(){ if(walkMorph){clearInterval(walkMorph);walkMorph=null;} walkGo('reset=1'); }
-function walkMorphToggle(){ if(walkMorph){clearInterval(walkMorph);walkMorph=null;} else { walkMorph=setInterval(function(){walkGo('morph=1');},260); } }
+function walkStop(){ if(walkTimer){clearInterval(walkTimer);walkTimer=null;} walkMode=null; }
+function walkReset(){ walkStop(); walkGo('reset=1'); }
+function walkMorphToggle(){ if(walkMode==='morph'){walkStop();} else { walkStop(); walkMode='morph'; walkTimer=setInterval(function(){walkGo('morph=1');},260); } }
+function walkDreamToggle(){ if(walkMode==='dream'){walkStop();} else { walkStop(); walkMode='dream'; walkTimer=setInterval(function(){walkGo('live=1');},1500); } }
 function loadWalk(){ document.getElementById('walkbtns').innerHTML=
   '<button onclick="walkGo(\'cam=-1\')">◄ камера</button><button onclick="walkGo(\'cam=1\')">камера ►</button>'+
   '<button onclick="walkGo(\'fold=1\')">склад +</button><button onclick="walkGo(\'fold=-1\')">склад −</button>'+
   '<button onclick="walkGo(\'spin=1\')">↻</button><button onclick="walkGo(\'spin=-1\')">↺</button>'+
-  '<button onclick="walkMorphToggle()">↻ морф</button><button onclick="walkReset()">🌀 новый мир</button>'; }
+  '<button onclick="walkMorphToggle()">↻ морф</button><button onclick="walkDreamToggle()">🌙 живой сон</button><button onclick="walkReset()">🌀 новый мир</button>'; }
 document.addEventListener('keydown',function(ev){ const k=ev.key;
   if(k==='ArrowLeft'){walkGo('cam=-1');ev.preventDefault();}
   else if(k==='ArrowRight'){walkGo('cam=1');ev.preventDefault();}
