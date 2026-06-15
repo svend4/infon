@@ -383,7 +383,7 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <h2>прогулка по живому 2.5D-миру</h2>
    <div class="dim" style="margin-bottom:6px">контроллер ведёт мир: fold · rise · spin · камера — 51 байт состояния на кадр</div>
    <button id="wlbtn" onclick="toggleWorldLive()">○ живой мозг</button>
-   <span class="dim" style="font-size:10.5px">требует запуск: benchserver -worldbrain URL</span>
+   <span class="dim" style="font-size:10.5px">запусти scripts/worldwalk-live.ps1 (или benchserver -worldbrain URL)</span>
    <img id="worldimg" alt="world" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
  </div>
 
