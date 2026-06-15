@@ -19,6 +19,8 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"image"
+	"image/png"
 	"log"
 	"math/rand"
 	"net/http"
@@ -28,9 +30,13 @@ import (
 
 	"github.com/svend4/infon/pkg/arena"
 	"github.com/svend4/infon/pkg/bench"
+	"github.com/svend4/infon/pkg/blazon"
 	"github.com/svend4/infon/pkg/brain"
+	"github.com/svend4/infon/pkg/glyphqr"
+	"github.com/svend4/infon/pkg/relief"
 	"github.com/svend4/infon/pkg/republic"
 	"github.com/svend4/infon/pkg/tangram"
+	"github.com/svend4/infon/pkg/tangram7"
 )
 
 func main() {
@@ -43,6 +49,11 @@ func main() {
 	http.HandleFunc("/api/figure", apiFigure)
 	http.HandleFunc("/api/republic", apiRepublic)
 	http.HandleFunc("/api/arena", apiArena)
+	http.HandleFunc("/img/figure", imgFigure)
+	http.HandleFunc("/img/relief", imgRelief)
+	http.HandleFunc("/img/tangram7", imgTangram7)
+	http.HandleFunc("/img/glyphqr", imgGlyphQR)
+	http.HandleFunc("/img/blazon", imgBlazon)
 
 	log.Printf("TVCP benchserver — open http://localhost%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -192,6 +203,70 @@ func apiArena(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ---- live gallery: each capability rendered to a PNG on demand ----
+
+func qstr(r *http.Request, key, def string) string {
+	if v := r.URL.Query().Get(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func writePNG(w http.ResponseWriter, img image.Image) {
+	w.Header().Set("Content-Type", "image/png")
+	_ = png.Encode(w, img)
+}
+
+func imgFigure(w http.ResponseWriter, r *http.Request) {
+	f, ok := tangram.Named(qstr(r, "name", "cat"))
+	if !ok {
+		http.Error(w, "unknown figure", http.StatusNotFound)
+		return
+	}
+	writePNG(w, f.Image(360, 360))
+}
+
+func imgRelief(w http.ResponseWriter, r *http.Request) {
+	f, ok := tangram.Named(qstr(r, "name", "cat"))
+	if !ok {
+		http.Error(w, "unknown figure", http.StatusNotFound)
+		return
+	}
+	writePNG(w, relief.Render(f, relief.Gradient(f, 70, 150), 360, 360))
+}
+
+func imgTangram7(w http.ResponseWriter, r *http.Request) {
+	var img image.Image
+	switch qstr(r, "fig", "square") {
+	case "tray":
+		img = tangram7.Render(tangram7.Tray(), 720, 340)
+	case "diamond":
+		img = tangram7.Render(tangram7.Place(tangram7.Square(), 1, false, 0, 0), 420, 420)
+	default:
+		img = tangram7.Render(tangram7.Square(), 420, 420)
+	}
+	writePNG(w, img)
+}
+
+func imgGlyphQR(w http.ResponseWriter, r *http.Request) {
+	grid, err := glyphqr.EncodeText(qstr(r, "msg", "TVCP-AI gate address: CAT"), 14)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writePNG(w, glyphqr.Render(grid, 16))
+}
+
+func imgBlazon(w http.ResponseWriter, r *http.Request) {
+	sp := blazon.Parse(qstr(r, "arms", "Azure, a bend Or"))
+	img, err := sp.Image(440, 240)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writePNG(w, img)
+}
+
 func index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(page))
@@ -243,6 +318,12 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <button onclick="arenaReset()">⟳ новый бой</button>
    <span id="arstat" class="dim">—</span>
    <canvas id="arcanvas" width="420" height="252" style="display:block;margin-top:8px;background:#0b1118;border-radius:8px;width:100%;max-width:560px"></canvas>
+ </div>
+
+ <div class="panel">
+   <h2>галерея демо — серверный рендер (PNG на лету)</h2>
+   <div id="galbtns"></div>
+   <img id="galimg" alt="render" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
  </div>
 
 <script>
@@ -300,6 +381,17 @@ async function arenaStep(reset){
   arTimer=setTimeout(()=>arenaStep(d.done), d.done?2000:170);
 }
 function arenaReset(){ clearTimeout(arTimer); arenaStep(true); }
-loadFigs(); runBench(); runRepublic(); arenaStep(true);
+const galleryItems=[
+  ['фигура (растр)','/img/figure?name=cat'],
+  ['рельеф 2.5D','/img/relief?name=fox'],
+  ['танграм-7','/img/tangram7?fig=square'],
+  ['glyph-QR','/img/glyphqr?msg='+encodeURIComponent('TVCP-AI gate address: CAT')],
+  ['герб (blazon)','/img/blazon?arms='+encodeURIComponent('Azure, a bend Or')],
+];
+function loadGallery(){
+  document.getElementById('galbtns').innerHTML=galleryItems.map((it,i)=>'<button onclick="showImg('+i+')">'+it[0]+'</button>').join('');
+}
+function showImg(i){ document.getElementById('galimg').src=galleryItems[i][1]+'&_t='+Date.now(); }
+loadFigs(); runBench(); runRepublic(); arenaStep(true); loadGallery(); showImg(0);
 </script>
 </div></body></html>`
