@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"net/http"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/svend4/infon/pkg/republic"
 	"github.com/svend4/infon/pkg/tangram"
 	"github.com/svend4/infon/pkg/tangram7"
+	"github.com/svend4/infon/pkg/world"
 )
 
 func main() {
@@ -54,6 +56,7 @@ func main() {
 	http.HandleFunc("/img/tangram7", imgTangram7)
 	http.HandleFunc("/img/glyphqr", imgGlyphQR)
 	http.HandleFunc("/img/blazon", imgBlazon)
+	http.HandleFunc("/img/world", imgWorld)
 
 	log.Printf("TVCP benchserver — open http://localhost%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -267,6 +270,30 @@ func imgBlazon(w http.ResponseWriter, r *http.Request) {
 	writePNG(w, img)
 }
 
+// ---- a living pseudo-3D world: a controller folds/rises/spins it and orbits the
+// camera; we hold the evolving 240-frame sequence and serve any frame as a PNG ----
+
+var (
+	worldOnce   sync.Once
+	worldFrames []world.State
+)
+
+func imgWorld(w http.ResponseWriter, r *http.Request) {
+	worldOnce.Do(func() {
+		worldFrames, _ = world.LoopC(world.RefController{}, world.Init(), 240)
+	})
+	if len(worldFrames) == 0 {
+		http.Error(w, "no world", http.StatusInternalServerError)
+		return
+	}
+	f := 0
+	if v, err := strconv.Atoi(r.URL.Query().Get("f")); err == nil {
+		f = v
+	}
+	n := len(worldFrames)
+	writePNG(w, worldFrames[((f%n)+n)%n].Render(380, 260))
+}
+
 func index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(page))
@@ -324,6 +351,12 @@ const page = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
    <h2>галерея демо — серверный рендер (PNG на лету)</h2>
    <div id="galbtns"></div>
    <img id="galimg" alt="render" style="display:block;margin-top:8px;max-width:100%;border-radius:8px;background:#0b1118">
+ </div>
+
+ <div class="panel">
+   <h2>прогулка по живому 2.5D-миру</h2>
+   <div class="dim" style="margin-bottom:6px">контроллер ведёт мир: fold · rise · spin · камера — 51 байт состояния на кадр</div>
+   <img id="worldimg" alt="world" style="display:block;max-width:100%;border-radius:8px;background:#0b1118">
  </div>
 
 <script>
@@ -392,6 +425,11 @@ function loadGallery(){
   document.getElementById('galbtns').innerHTML=galleryItems.map((it,i)=>'<button onclick="showImg('+i+')">'+it[0]+'</button>').join('');
 }
 function showImg(i){ document.getElementById('galimg').src=galleryItems[i][1]+'&_t='+Date.now(); }
+(function(){ const wimg=document.getElementById('worldimg'); let wf=0;
+  wimg.onload=function(){ setTimeout(function(){ wf++; wimg.src='/img/world?f='+wf; }, 90); };
+  wimg.onerror=function(){ setTimeout(function(){ wimg.src='/img/world?f='+wf; }, 400); };
+  wimg.src='/img/world?f=0';
+})();
 loadFigs(); runBench(); runRepublic(); arenaStep(true); loadGallery(); showImg(0);
 </script>
 </div></body></html>`
