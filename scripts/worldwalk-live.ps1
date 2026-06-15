@@ -21,11 +21,13 @@ $py = "ai/adapters/$($adapter)_brain.py"
 if (-not (Test-Path (Join-Path $repo $py))) { Write-Error "adapter not found: $py"; exit 1 }
 
 function Find-FreePort([int]$p) {
+  # Query the TCP table for a listener; binding-to-probe is unreliable on Windows
+  # because Go's server and the probe can both bind the same port (SO_REUSEADDR).
   for ($i = 0; $i -lt 60; $i++) {
-    try {
-      $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $p)
-      $l.Start(); $l.Stop(); return $p
-    } catch { $p++ }
+    $busy = $null
+    try { $busy = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue } catch {}
+    if (-not $busy) { return $p }
+    $p++
   }
   return $p
 }
