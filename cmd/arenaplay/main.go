@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/svend4/infon/pkg/arena"
+	"github.com/svend4/infon/pkg/brain"
 	"github.com/svend4/infon/pkg/tangram"
 )
 
@@ -27,6 +28,9 @@ const (
 	dim   = "\x1b[38;5;240m"
 	bold  = "\x1b[1m"
 )
+
+// commander labels shown in the header (set from flags in main).
+var cmdLabel0, cmdLabel1 = "ref", "ref"
 
 func build(seed int64) *arena.Arena {
 	a := &arena.Arena{W: 20, H: 12, Terrain: make([]uint8, 20*12)}
@@ -58,8 +62,8 @@ func frame(a *arena.Arena, tick int) string {
 	}
 	var b strings.Builder
 	b.WriteString("\x1b[H") // cursor home
-	b.WriteString(fmt.Sprintf("%sTVCP arena%s  tick %s%3d%s   %s██ blue %d%s  vs  %s██ red %d%s        \r\n",
-		bold, reset, bold, tick, reset, blue, a.AliveCount(0), reset, red, a.AliveCount(1), reset))
+	b.WriteString(fmt.Sprintf("%sTVCP arena%s  tick %s%3d%s   %s██ blue(%s) %d%s  vs  %s██ red(%s) %d%s        \r\n",
+		bold, reset, bold, tick, reset, blue, cmdLabel0, a.AliveCount(0), reset, red, cmdLabel1, a.AliveCount(1), reset))
 	b.WriteString(dim + "+" + strings.Repeat("--", a.W) + "+" + reset + "\r\n")
 	for y := 0; y < a.H; y++ {
 		b.WriteString(dim + "|" + reset)
@@ -83,9 +87,19 @@ func main() {
 	fps := flag.Int("fps", 12, "frames per second")
 	seed := flag.Int64("seed", 7, "battlefield seed")
 	maxTurns := flag.Int("turns", 300, "safety cap on ticks")
+	brain0 := flag.String("brain0", "", "tvcp-ai/1 URL to command blue via game:rpg (default: the reference bot)")
+	brain1 := flag.String("brain1", "", "tvcp-ai/1 URL to command red")
 	flag.Parse()
 	if *fps < 1 {
 		*fps = 1
+	}
+
+	var c0, c1 arena.Commander = arena.RefCommander{}, arena.RefCommander{}
+	if *brain0 != "" {
+		c0, cmdLabel0 = arena.BrainCommander{B: brain.HTTPBrain{URL: *brain0}}, "live"
+	}
+	if *brain1 != "" {
+		c1, cmdLabel1 = arena.BrainCommander{B: brain.HTTPBrain{URL: *brain1}}, "live"
 	}
 
 	a := build(*seed)
@@ -99,7 +113,7 @@ func main() {
 		if a.AliveCount(0) == 0 || a.AliveCount(1) == 0 {
 			break
 		}
-		a.Step(arena.RefCommander{}, arena.RefCommander{})
+		a.Step(c0, c1)
 		time.Sleep(delay)
 	}
 
