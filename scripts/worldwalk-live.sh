@@ -25,7 +25,7 @@ p = int(sys.argv[1])
 for _ in range(60):
     s = socket.socket()
     try:
-        s.bind(("127.0.0.1", p)); print(p); s.close(); break
+        s.bind(("0.0.0.0", p)); print(p); s.close(); break
     except OSError:
         p += 1
     finally:

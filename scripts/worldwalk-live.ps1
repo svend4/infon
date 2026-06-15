@@ -23,7 +23,7 @@ if (-not (Test-Path (Join-Path $repo $py))) { Write-Error "adapter not found: $p
 function Find-FreePort([int]$p) {
   for ($i = 0; $i -lt 60; $i++) {
     try {
-      $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $p)
+      $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $p)
       $l.Start(); $l.Stop(); return $p
     } catch { $p++ }
   }
