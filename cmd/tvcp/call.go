@@ -751,11 +751,8 @@ func runCall() {
 				}
 
 				// Display message (will appear in terminal output)
-				sender := textMsg.Sender
-				if sender == "" {
-					sender = "Remote"
-				}
-				fmt.Printf("\n💬 [%s] %s: %s\n", textMsg.FormatTime(), sender, textMsg.Message)
+				sender, message := chatLine(textMsg)
+				fmt.Printf("\n💬 [%s] %s: %s\n", textMsg.FormatTime(), sender, message)
 			}
 
 			// Show stats
@@ -804,7 +801,7 @@ func renderSplitScreen(camera device.Camera, remoteFrame *terminal.Frame, localW
 			block := remoteFrame.Blocks[y][x]
 			fmt.Print(block.Fg.FgString())
 			fmt.Print(block.Bg.BgString())
-			fmt.Printf("%c", block.Glyph)
+			fmt.Printf("%c", terminal.SanitizeGlyph(block.Glyph))
 		}
 		fmt.Print(color.Reset)
 		fmt.Println()
@@ -823,7 +820,7 @@ func renderSplitScreen(camera device.Camera, remoteFrame *terminal.Frame, localW
 				block := localFrame.Blocks[y][x]
 				fmt.Print(block.Fg.FgString())
 				fmt.Print(block.Bg.BgString())
-				fmt.Printf("%c", block.Glyph)
+				fmt.Printf("%c", terminal.SanitizeGlyph(block.Glyph))
 			}
 			fmt.Print(color.Reset)
 			fmt.Println()

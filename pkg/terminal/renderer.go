@@ -76,7 +76,7 @@ func (f *Frame) Render() string {
 			}
 			needsReset = true
 
-			buf.WriteRune(block.Glyph)
+			buf.WriteRune(SanitizeGlyph(block.Glyph))
 		}
 		buf.WriteString(color.Reset)
 		buf.WriteRune('\n')

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/svend4/infon/internal/network"
+	"github.com/svend4/infon/pkg/terminal"
 )
 
 func runChat() {
@@ -78,11 +79,8 @@ func runChat() {
 					continue
 				}
 
-				sender := textMsg.Sender
-				if sender == "" {
-					sender = "Remote"
-				}
-				fmt.Printf("\r💬 [%s] %s: %s\n> ", textMsg.FormatTime(), sender, textMsg.Message)
+				sender, message := chatLine(textMsg)
+				fmt.Printf("\r💬 [%s] %s: %s\n> ", textMsg.FormatTime(), sender, message)
 			}
 		}
 	}()
@@ -126,4 +124,16 @@ func runChat() {
 	// Wait for interrupt
 	<-sigChan
 	fmt.Println("\n\n👋 Chat ended")
+}
+
+// chatLine returns the sender and text of a received chat message, ready to
+// print. Both come from the remote peer, so control characters are removed to
+// keep it from injecting terminal escape sequences; an empty sender is shown
+// as "Remote".
+func chatLine(m *network.TextMessage) (sender, message string) {
+	sender = terminal.SanitizeText(m.Sender)
+	if sender == "" {
+		sender = "Remote"
+	}
+	return sender, terminal.SanitizeText(m.Message)
 }

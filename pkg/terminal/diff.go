@@ -70,7 +70,7 @@ func (d *DiffRenderer) Render(f *Frame) string {
 					lastBg = b.Bg
 				}
 				first = false
-				buf.WriteRune(b.Glyph)
+				buf.WriteRune(SanitizeGlyph(b.Glyph))
 				x++
 			}
 			buf.WriteString(color.Reset)

@@ -181,7 +181,7 @@ func receiveScreen(port int) error {
 
 			switch packet.Type {
 			case network.PacketTypeHandshake:
-				fmt.Printf("✅ Connected to: %s\n\n", string(packet.Payload))
+				fmt.Printf("✅ Connected to: %s\n\n", terminal.SanitizeText(string(packet.Payload)))
 
 			case network.PacketTypeScreen:
 				// Parse fragment header
@@ -258,7 +258,7 @@ func displayScreenFrame(frame *terminal.Frame) {
 				block.Bg.R, block.Bg.G, block.Bg.B)
 
 			// Print character
-			fmt.Print(string(block.Glyph))
+			fmt.Print(string(terminal.SanitizeGlyph(block.Glyph)))
 		}
 		fmt.Print("\033[0m\n")
 	}

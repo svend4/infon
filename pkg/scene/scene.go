@@ -47,11 +47,46 @@ func rgb(p *[3]int, def color.RGB) color.RGB {
 	return color.NewRGB(uint8(p[0]), uint8(p[1]), uint8(p[2]))
 }
 
+// firstRune returns the first rune of s (def if s is empty), with control
+// characters from the model replaced by a space so they never reach the frame.
 func firstRune(s string, def rune) rune {
 	for _, r := range s {
-		return r
+		return terminal.SanitizeGlyph(r)
 	}
 	return def
+}
+
+// gradEnds fills in a missing gradient endpoint ("from"/"to" are optional in
+// the JSON) with the other one, or black when both are missing.
+func gradEnds(from, to *[3]int) (*[3]int, *[3]int) {
+	if from == nil {
+		from = to
+	}
+	if to == nil {
+		to = from
+	}
+	if from == nil {
+		from, to = &[3]int{}, &[3]int{}
+	}
+	return from, to
+}
+
+// satAdd returns a+b, saturating at the int range instead of wrapping.
+func satAdd(a, b int) int {
+	s := a + b
+	if b > 0 && s < a {
+		return math.MaxInt
+	}
+	if b < 0 && s > a {
+		return math.MinInt
+	}
+	return s
+}
+
+// clip intersects the run [start, start+n) with [0, limit), so an op only
+// visits cells on the canvas however large (or negative) its size is.
+func clip(start, n, limit int) (lo, hi int) {
+	return max(start, 0), min(satAdd(start, n), limit)
 }
 
 func lerp(a, b *[3]int, t float64) color.RGB {
@@ -82,39 +117,49 @@ func Apply(f *terminal.Frame, sc *Scene) {
 			f.Fill(firstRune(op.Glyph, ' '), fg, rgb(op.Bg, black))
 		case "rect":
 			g := firstRune(op.Glyph, ' ')
-			for yy := op.Y; yy < op.Y+op.H; yy++ {
-				for xx := op.X; xx < op.X+op.W; xx++ {
+			x0, x1 := clip(op.X, op.W, f.Width)
+			y0, y1 := clip(op.Y, op.H, f.Height)
+			for yy := y0; yy < y1; yy++ {
+				for xx := x0; xx < x1; xx++ {
 					f.SetBlock(xx, yy, g, fg, keepBg(f, xx, yy, op.Bg, black))
 				}
 			}
 		case "vgradient":
 			g := firstRune(op.Glyph, ' ')
-			for i := 0; i < op.H; i++ {
+			from, to := gradEnds(op.From, op.To)
+			x0, x1 := clip(op.X, op.W, f.Width)
+			y0, y1 := clip(op.Y, op.H, f.Height)
+			for yy := y0; yy < y1; yy++ {
+				i := yy - op.Y
 				t := 0.0
 				if op.H > 1 {
 					t = float64(i) / float64(op.H-1)
 				}
-				c := lerp(op.From, op.To, t)
-				for xx := op.X; xx < op.X+op.W; xx++ {
-					f.SetBlock(xx, op.Y+i, g, c, c)
+				c := lerp(from, to, t)
+				for xx := x0; xx < x1; xx++ {
+					f.SetBlock(xx, yy, g, c, c)
 				}
 			}
 		case "hgradient":
 			g := firstRune(op.Glyph, '█')
-			for i := 0; i < op.W; i++ {
+			from, to := gradEnds(op.From, op.To)
+			x0, x1 := clip(op.X, op.W, f.Width)
+			y0, y1 := clip(op.Y, op.H, f.Height)
+			for xx := x0; xx < x1; xx++ {
+				i := xx - op.X
 				t := 0.0
 				if op.W > 1 {
 					t = float64(i) / float64(op.W-1)
 				}
-				c := lerp(op.From, op.To, t)
-				for yy := op.Y; yy < op.Y+op.H; yy++ {
-					f.SetBlock(op.X+i, yy, g, c, keepBg(f, op.X+i, yy, op.Bg, black))
+				c := lerp(from, to, t)
+				for yy := y0; yy < y1; yy++ {
+					f.SetBlock(xx, yy, g, c, keepBg(f, xx, yy, op.Bg, black))
 				}
 			}
 		case "text":
 			x := op.X
 			for _, ch := range op.S {
-				f.SetBlock(x, op.Y, ch, fg, keepBg(f, x, op.Y, op.Bg, black))
+				f.SetBlock(x, op.Y, terminal.SanitizeGlyph(ch), fg, keepBg(f, x, op.Y, op.Bg, black))
 				x++
 			}
 		case "box":
@@ -122,12 +167,20 @@ func Apply(f *terminal.Frame, sc *Scene) {
 		case "quad":
 			f.DrawQuadrant(op.X, op.Y, op.TL, op.TR, op.BL, op.BR, fg, rgb(op.Bg, black))
 		case "disc":
+			if op.R < 0 {
+				break
+			}
 			g := firstRune(op.Glyph, '█')
-			for dy := -op.R; dy <= op.R; dy++ {
-				for dx := -2 * op.R; dx <= 2*op.R; dx++ {
-					fx := float64(dx) * 0.5
-					if fx*fx+float64(dy*dy) <= float64(op.R*op.R) {
-						xx, yy := op.CX+dx, op.CY+dy
+			// Bounding box |dx| <= 2R, |dy| <= R, clipped to the canvas.
+			d := satAdd(op.R, op.R)
+			x0, x1 := max(satAdd(op.CX, -d), 0), min(satAdd(op.CX, d), f.Width-1)
+			y0, y1 := max(satAdd(op.CY, -op.R), 0), min(satAdd(op.CY, op.R), f.Height-1)
+			r := float64(op.R)
+			for yy := y0; yy <= y1; yy++ {
+				for xx := x0; xx <= x1; xx++ {
+					fx := (float64(xx) - float64(op.CX)) * 0.5
+					fy := float64(yy) - float64(op.CY)
+					if fx*fx+fy*fy <= r*r {
 						f.SetBlock(xx, yy, g, fg, keepBg(f, xx, yy, op.Bg, black))
 					}
 				}
