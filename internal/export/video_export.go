@@ -110,11 +110,15 @@ func (ve *VideoExporter) Export(options ExportOptions) error {
 		return fmt.Errorf("failed to render frames: %w", err)
 	}
 
-	// Step 2: Export audio to WAV
-	fmt.Println("🔊 Exporting audio...")
-	audioPath := filepath.Join(tempDir, "audio.wav")
-	if err := ve.exportAudio(audioPath); err != nil {
-		return fmt.Errorf("failed to export audio: %w", err)
+	// Step 2: Export audio to WAV. Skipped when there are no samples: an
+	// empty audio input with -shortest makes FFmpeg encode no video frames.
+	audioPath := ""
+	if ve.hasAudio() {
+		fmt.Println("🔊 Exporting audio...")
+		audioPath = filepath.Join(tempDir, "audio.wav")
+		if err := ve.exportAudio(audioPath); err != nil {
+			return fmt.Errorf("failed to export audio: %w", err)
+		}
 	}
 
 	// Step 3: Encode video with FFmpeg
@@ -298,22 +302,53 @@ func (ve *VideoExporter) writeInt16(file *os.File, val int16) {
 	_, _ = file.Write(buf)
 }
 
+// hasAudio reports whether the recording contains any audio samples
+func (ve *VideoExporter) hasAudio() bool {
+	for _, audio := range ve.recording.Audio {
+		if len(audio.Samples) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // encodeVideo encodes video using FFmpeg
 func (ve *VideoExporter) encodeVideo(options ExportOptions, audioPath string) error {
+	// Execute FFmpeg
+	cmd := exec.Command("ffmpeg", ve.ffmpegArgs(options, audioPath)...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("FFmpeg encoding failed: %w", err)
+	}
+
+	return nil
+}
+
+// ffmpegArgs builds the FFmpeg arguments. An empty audioPath means the
+// video has no audio track.
+func (ve *VideoExporter) ffmpegArgs(options ExportOptions, audioPath string) []string {
 	inputPattern := filepath.Join(ve.tempDir, "frame_%06d.png")
 
 	// Build FFmpeg command
 	args := []string{
 		"-framerate", fmt.Sprintf("%d", ve.fps),
 		"-i", inputPattern,
-		"-i", audioPath,
+	}
+	if audioPath != "" {
+		args = append(args,
+			"-i", audioPath,
+			"-c:a", options.AudioCodec,
+			"-shortest", // Match shortest stream duration
+		)
+	}
+	args = append(args,
 		"-c:v", options.VideoCodec,
-		"-c:a", options.AudioCodec,
 		"-preset", options.Preset,
 		"-pix_fmt", "yuv420p",
-		"-shortest", // Match shortest stream duration
 		"-y", // Overwrite output
-	}
+	)
 
 	// Add quality settings
 	if options.Format == FormatMP4 {
@@ -324,18 +359,7 @@ func (ve *VideoExporter) encodeVideo(options ExportOptions, audioPath string) er
 		args = append(args, "-b:v", fmt.Sprintf("%dK", bitrate))
 	}
 
-	args = append(args, options.OutputPath)
-
-	// Execute FFmpeg
-	cmd := exec.Command("ffmpeg", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("FFmpeg encoding failed: %w", err)
-	}
-
-	return nil
+	return append(args, options.OutputPath)
 }
 
 // GetExportInfo returns information about the export

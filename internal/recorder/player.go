@@ -111,9 +111,19 @@ func (p *Player) Stop() {
 
 // readRecording reads a recording from file
 func readRecording(file *os.File) (*Recording, error) {
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat recording: %w", err)
+	}
+
+	// Read through a reader limited to the file size, so its N is the number
+	// of bytes left. Every length in the file is checked against N before it
+	// is allocated, so a forged count cannot force a huge allocation.
+	r := &io.LimitedReader{R: file, N: info.Size()}
+
 	// Read header
 	header := make([]byte, 34)
-	if _, err := io.ReadFull(file, header); err != nil {
+	if _, err := io.ReadFull(r, header); err != nil {
 		return nil, fmt.Errorf("failed to read header: %w", err)
 	}
 
@@ -137,6 +147,12 @@ func readRecording(file *os.File) (*Recording, error) {
 		AudioChunks: binary.BigEndian.Uint32(header[30:34]),
 	}
 
+	// Every frame and audio entry starts with a 12-byte header
+	if (uint64(metadata.FrameCount)+uint64(metadata.AudioChunks))*12 > uint64(r.N) {
+		return nil, fmt.Errorf("invalid recording file: %d frames and %d audio chunks do not fit in %d bytes",
+			metadata.FrameCount, metadata.AudioChunks, r.N)
+	}
+
 	recording := &Recording{
 		Metadata: metadata,
 		Frames:   make([]RecordedFrame, 0, metadata.FrameCount),
@@ -146,19 +162,25 @@ func readRecording(file *os.File) (*Recording, error) {
 	// Read video frames
 	for i := 0; i < int(metadata.FrameCount); i++ {
 		entry := make([]byte, 12)
-		if _, err := io.ReadFull(file, entry); err != nil {
+		if _, err := io.ReadFull(r, entry); err != nil {
 			return nil, fmt.Errorf("failed to read frame %d header: %w", i, err)
 		}
 
 		timestamp := binary.BigEndian.Uint64(entry[0:8])
 		dataLen := binary.BigEndian.Uint32(entry[8:12])
+		if int64(dataLen) > r.N {
+			return nil, fmt.Errorf("invalid recording file: frame %d length %d exceeds remaining %d bytes", i, dataLen, r.N)
+		}
 
 		frameData := make([]byte, dataLen)
-		if _, err := io.ReadFull(file, frameData); err != nil {
+		if _, err := io.ReadFull(r, frameData); err != nil {
 			return nil, fmt.Errorf("failed to read frame %d data: %w", i, err)
 		}
 
 		frame := deserializeFrame(frameData)
+		if frame == nil {
+			return nil, fmt.Errorf("invalid recording file: malformed frame %d", i)
+		}
 
 		recording.Frames = append(recording.Frames, RecordedFrame{
 			Timestamp: timestamp,
@@ -169,15 +191,19 @@ func readRecording(file *os.File) (*Recording, error) {
 	// Read audio chunks
 	for i := 0; i < int(metadata.AudioChunks); i++ {
 		entry := make([]byte, 12)
-		if _, err := io.ReadFull(file, entry); err != nil {
+		if _, err := io.ReadFull(r, entry); err != nil {
 			return nil, fmt.Errorf("failed to read audio %d header: %w", i, err)
 		}
 
 		timestamp := binary.BigEndian.Uint64(entry[0:8])
 		sampleCount := binary.BigEndian.Uint32(entry[8:12])
+		sampleBytes := int64(sampleCount) * 2
+		if sampleBytes > r.N {
+			return nil, fmt.Errorf("invalid recording file: audio %d length %d exceeds remaining %d bytes", i, sampleBytes, r.N)
+		}
 
-		sampleData := make([]byte, sampleCount*2)
-		if _, err := io.ReadFull(file, sampleData); err != nil {
+		sampleData := make([]byte, sampleBytes)
+		if _, err := io.ReadFull(r, sampleData); err != nil {
 			return nil, fmt.Errorf("failed to read audio %d samples: %w", i, err)
 		}
 
@@ -195,14 +221,24 @@ func readRecording(file *os.File) (*Recording, error) {
 	return recording, nil
 }
 
-// deserializeFrame converts bytes back to terminal.Frame
+// deserializeFrame converts bytes back to terminal.Frame. It returns nil if
+// the data does not hold exactly the blocks its dimensions declare.
 func deserializeFrame(data []byte) *terminal.Frame {
 	if len(data) < 4 {
-		return terminal.NewFrame(0, 0)
+		return nil
 	}
 
 	width := int(binary.BigEndian.Uint16(data[0:2]))
 	height := int(binary.BigEndian.Uint16(data[2:4]))
+
+	// Check the length before allocating the frame (10 bytes per block)
+	if uint64(len(data)-4) != uint64(width)*uint64(height)*10 {
+		return nil
+	}
+	if width == 0 || height == 0 {
+		// No blocks; do not allocate rows for a zero-area frame
+		return terminal.NewFrame(0, 0)
+	}
 
 	frame := terminal.NewFrame(width, height)
 	offset := 4

@@ -183,7 +183,7 @@ func (r *Recorder) writeRecording() error {
 	// - Samples: N * 2 bytes
 
 	// Write header
-	header := make([]byte, 32)
+	header := make([]byte, 34)
 	binary.BigEndian.PutUint32(header[0:4], MagicHeader)
 	binary.BigEndian.PutUint16(header[4:6], r.metadata.Version)
 	binary.BigEndian.PutUint64(header[6:14], uint64(r.metadata.StartTime.Unix()))
@@ -196,7 +196,7 @@ func (r *Recorder) writeRecording() error {
 	binary.BigEndian.PutUint32(header[26:30], r.metadata.FrameCount)
 	binary.BigEndian.PutUint32(header[30:34], r.metadata.AudioChunks)
 
-	if _, err := r.file.Write(header[:34]); err != nil {
+	if _, err := r.file.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 
