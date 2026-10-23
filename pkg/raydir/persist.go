@@ -40,6 +40,11 @@ func DecodeWorld(data []byte) ([]Region, error) {
 		return nil, errWorldFile
 	}
 	n := int(binary.BigEndian.Uint32(data[4:8]))
+	// Each entry is at least a length prefix and a region header (4+28 bytes), so a
+	// count the file can't hold is malformed — and must not size the allocation.
+	if n < 0 || n > (len(data)-8)/(4+28) {
+		return nil, errWorldFile
+	}
 	off := 8
 	out := make([]Region, 0, n)
 	for i := 0; i < n; i++ {

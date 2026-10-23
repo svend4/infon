@@ -97,6 +97,11 @@ func DecodeRecording(data []byte) ([]RecEvent, error) {
 		return nil, errRecording
 	}
 	n := int(binary.BigEndian.Uint32(data[4:8]))
+	// Each event is at least its 9-byte header, so a count the data can't hold is
+	// malformed — and must not size the allocation.
+	if n < 0 || n > (len(data)-8)/9 {
+		return nil, errRecording
+	}
 	off := 8
 	out := make([]RecEvent, 0, n)
 	for i := 0; i < n; i++ {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/svend4/infon/pkg/brain"
 	"github.com/svend4/infon/pkg/raytrace"
+	"github.com/svend4/infon/pkg/terminal"
 )
 
 // landmark.go names places and draws a map. Each authored region can have a name
@@ -24,10 +25,12 @@ type Landmark struct {
 // Landmarks returns the world's named regions (in application order).
 func (w *World) Landmarks() []Landmark { return append([]Landmark(nil), w.landmarks...) }
 
-// regionName is a region's place name: the director's, or a default by index.
+// regionName is a region's place name: the director's, or a default by index. The
+// name comes from a peer or a model and is printed to the terminal (Minimap), so its
+// control characters, which a terminal would run as escape sequences, are dropped.
 func regionName(spec brain.SceneSpec, index int) string {
-	if strings.TrimSpace(spec.Name) != "" {
-		return spec.Name
+	if name := terminal.SanitizeText(spec.Name); strings.TrimSpace(name) != "" {
+		return name
 	}
 	return fmt.Sprintf("Region %d", index)
 }

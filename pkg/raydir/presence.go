@@ -88,6 +88,9 @@ func DecodePresenceSet(b []byte) (PresenceSet, error) {
 		return nil, errors.New("raydir: presence set too short")
 	}
 	n := int(binary.BigEndian.Uint16(b[0:]))
+	if n > (len(b)-2)/46 { // each presence is at least 46 bytes; checked before the count sizes the map
+		return nil, errors.New("raydir: truncated presence set")
+	}
 	off := 2
 	s := make(PresenceSet, n)
 	for i := 0; i < n; i++ {

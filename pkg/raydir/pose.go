@@ -66,6 +66,9 @@ func DecodePoseSet(b []byte) (PoseSet, error) {
 		return nil, errors.New("raydir: pose set too short")
 	}
 	n := int(binary.BigEndian.Uint16(b[0:]))
+	if n > (len(b)-2)/44 { // checked before the count sizes the map
+		return nil, errors.New("raydir: truncated pose set")
+	}
 	off := 2
 	s := make(PoseSet, n)
 	for i := 0; i < n; i++ {

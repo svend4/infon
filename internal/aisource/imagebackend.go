@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/jpeg" // register JPEG decoder
 	_ "image/png"  // register PNG decoder
 	"io"
@@ -150,11 +151,57 @@ func (b *ImageBackend) Generate(ctx context.Context, prompt string, width, heigh
 	if err != nil {
 		return nil, err
 	}
-	img, _, err := image.Decode(bytes.NewReader(raw))
+	img, err := decodeImage(raw)
 	if err != nil {
 		return nil, fmt.Errorf("image api: decode: %w", err)
 	}
 	return img, nil
+}
+
+// maxDecodeBytes bounds the memory decoding one API image may allocate (64 MiB:
+// 4096x4096 at 8-bit RGBA, 2048x2048 at 16-bit RGBA, about 1800x1800 for a JPEG,
+// all far beyond what a generation or restoration model returns). The 64 MiB body
+// cap bounds the bytes, not the pixels: a PNG or JPEG of a few hundred bytes can
+// declare tens of thousands of pixels a side, and image.Decode allocates the whole
+// buffer before reading any pixel data. Counting pixels alone is not enough either,
+// because a 16-bit RGBA pixel takes 8 bytes.
+const maxDecodeBytes = 64 << 20
+
+// decodeBytesPerPixel is how many bytes image.Decode allocates per pixel for an
+// image of the given format and color model.
+func decodeBytesPerPixel(format string, m color.Model) int64 {
+	if format == "jpeg" {
+		// A progressive JPEG keeps 4 bytes of coefficients per pixel for each of up
+		// to 4 components on top of the decoded image.
+		return 20
+	}
+	switch m {
+	case color.GrayModel, color.AlphaModel:
+		return 1
+	case color.Gray16Model, color.Alpha16Model:
+		return 2
+	case color.RGBAModel, color.NRGBAModel:
+		return 4
+	}
+	if _, ok := m.(color.Palette); ok {
+		return 1
+	}
+	return 8 // 16-bit RGBA, and the conservative default for anything else
+}
+
+// decodeImage decodes PNG/JPEG bytes, refusing an image whose declared size would
+// take more than maxDecodeBytes to decode before any pixel buffer is allocated.
+func decodeImage(raw []byte) (image.Image, error) {
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 ||
+		int64(cfg.Width)*int64(cfg.Height) > maxDecodeBytes/decodeBytesPerPixel(format, cfg.ColorModel) {
+		return nil, fmt.Errorf("%dx%d %s image exceeds the %d MiB decode limit", cfg.Width, cfg.Height, format, maxDecodeBytes>>20)
+	}
+	img, _, err := image.Decode(bytes.NewReader(raw))
+	return img, err
 }
 
 // extractImageBytes returns raw image bytes from the response, handling three

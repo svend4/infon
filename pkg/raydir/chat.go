@@ -1,5 +1,7 @@
 package raydir
 
+import "github.com/svend4/infon/pkg/terminal"
+
 // ChatLog is a small ring buffer of recent chat lines shown alongside the shared
 // world, so walkers can talk while they explore together. (Voice uses the same
 // relay path with audio packets; this is the text channel.)
@@ -16,9 +18,11 @@ func NewChatLog(max int) *ChatLog {
 	return &ChatLog{max: max}
 }
 
-// Add appends "sender: message", dropping the oldest line past the cap.
+// Add appends "sender: message", dropping the oldest line past the cap. Both come
+// from peers or a model and are printed to the terminal, so control characters are
+// dropped.
 func (c *ChatLog) Add(sender, message string) {
-	c.lines = append(c.lines, sender+": "+message)
+	c.lines = append(c.lines, terminal.SanitizeText(sender)+": "+terminal.SanitizeText(message))
 	if len(c.lines) > c.max {
 		c.lines = append([]string(nil), c.lines[len(c.lines)-c.max:]...)
 	}

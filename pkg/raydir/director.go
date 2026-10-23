@@ -80,19 +80,28 @@ func VectorFromPrompt(prompt string) SceneVector {
 // SceneSpec authors a rayscene whose every parameter is bent by the six floats — the
 // Go twin of yijing_brain.scene_from_vector, rounded identically so Go and the model
 // produce the same world from the same vector.
+//
+// Every product that feeds an addition is wrapped in float64(): the Go spec lets the
+// compiler fuse x*y+z into one multiply-add (it does on arm64, ppc64le, s390x),
+// which rounds once where Python rounds twice and can land an ulp away — enough to
+// flip a 3-decimal tie (x 1.056 on arm64 vs Python's 1.055 at scale 0.074). An
+// explicit conversion forces the product to be rounded, as Python does.
 func (v SceneVector) SceneSpec() brain.SceneSpec {
 	fog, warm, dens, sun, scale, glow := v[AxFog], v[AxWarm], v[AxDensity], v[AxSun], v[AxScale], v[AxGlow]
 	day := sun
-	cool := [3]float64{0.28 + 0.16*day, 0.44 + 0.18*day, 0.68 + 0.28*day}
-	warmc := [3]float64{0.12 + 0.7*day, 0.10 + 0.32*day, 0.07 + 0.16*day}
+	cool := [3]float64{0.28 + float64(0.16*day), 0.44 + float64(0.18*day), 0.68 + float64(0.28*day)}
+	warmc := [3]float64{0.12 + float64(0.7*day), 0.10 + float64(0.32*day), 0.07 + float64(0.16*day)}
 	top := lerp3(cool, warmc, warm)
 	var bot [3]float64
 	for i := range bot {
 		bot[i] = math.Min(1, top[i]+0.2)
 	}
 	g := (top[0] + top[1] + top[2]) / 3
-	top = lerp3(top, [3]float64{g, g, g}, fog*0.65) // fog desaturates toward grey
-	bot = lerp3(bot, [3]float64{g + 0.05, g + 0.05, g + 0.05}, fog*0.65)
+	// The blend weight is converted so it is rounded before lerp3, once inlined,
+	// computes 1-t: left as fog*0.65 the compiler may fuse it into 1-fog*0.65.
+	fogT := float64(fog * 0.65)
+	top = lerp3(top, [3]float64{g, g, g}, fogT) // fog desaturates toward grey
+	bot = lerp3(bot, [3]float64{g + 0.05, g + 0.05, g + 0.05}, fogT)
 	ground := lerp3([3]float64{0.30, 0.34, 0.30}, [3]float64{0.50, 0.42, 0.32}, warm)
 
 	objs := []brain.ObjSpec{{Kind: "plane", Color: round3v(clamp01v(ground))}}
@@ -104,14 +113,14 @@ func (v SceneVector) SceneSpec() brain.SceneSpec {
 		// 0.5000000000000001 in libm), enough to flip a 3-decimal tie below; rounding
 		// them to 12 decimals first makes both sides compute the same ring.
 		cosA, sinA := roundDec(math.Cos(ang), 12), roundDec(math.Sin(ang), 12)
-		r := round3(0.4 + scale*0.8)
+		r := round3(0.4 + float64(scale*0.8))
 		o := brain.ObjSpec{
 			Kind:  "sphere",
-			X:     round3(cosA * (2.0 + 1.5*scale)), // a ring centred well ahead (z=6)
+			X:     round3(cosA * (2.0 + float64(1.5*scale))), // a ring centred well ahead (z=6)
 			Y:     r,
-			Z:     round3(6 + sinA*(1.8+1.4*scale)),
+			Z:     round3(6 + float64(sinA*(1.8+float64(1.4*scale)))),
 			R:     r,
-			Rough: round3(0.2 + 0.5*(1-glow)),
+			Rough: round3(0.2 + float64(0.5*(1-glow))),
 		}
 		off := -0.1
 		if i%2 != 0 {
@@ -128,13 +137,13 @@ func (v SceneVector) SceneSpec() brain.SceneSpec {
 		}
 		objs = append(objs, o)
 	}
-	sunY := round3(5 + sun*4)
-	sunK := round3(6 + 9*day) // 6..15: present at night, bright by day (avoids exposure crush)
+	sunY := round3(5 + float64(sun*4))
+	sunK := round3(6 + float64(9*day)) // 6..15: present at night, bright by day (avoids exposure crush)
 	objs = append(objs, brain.ObjSpec{X: 0, Y: sunY, Z: -1, R: 0.7, Emit: [3]float64{sunK, sunK, round3(sunK * 0.95)}})
 
 	return brain.SceneSpec{
 		Objects: objs,
-		Light:   [3]float64{6, round3(4 + 8*sun), -4},
+		Light:   [3]float64{6, round3(4 + float64(8*sun)), -4},
 		SkyTop:  round3v(clamp01v(top)),
 		SkyBot:  round3v(clamp01v(bot)),
 		Name:    fmt.Sprintf("Q6 vector (hex %06b)", v.Hexagram().Number()),
@@ -299,8 +308,14 @@ func roundDec(x float64, prec int) float64 {
 	return f
 }
 
+// lerp3 blends a toward b by t. Both products are converted explicitly so they are
+// rounded before the add rather than fused into a multiply-add (see SceneSpec).
 func lerp3(a, b [3]float64, t float64) [3]float64 {
-	return [3]float64{a[0]*(1-t) + b[0]*t, a[1]*(1-t) + b[1]*t, a[2]*(1-t) + b[2]*t}
+	return [3]float64{
+		float64(a[0]*(1-t)) + float64(b[0]*t),
+		float64(a[1]*(1-t)) + float64(b[1]*t),
+		float64(a[2]*(1-t)) + float64(b[2]*t),
+	}
 }
 
 func clamp01v(a [3]float64) [3]float64 {

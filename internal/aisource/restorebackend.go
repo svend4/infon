@@ -153,6 +153,5 @@ func (b *RestoreBackend) restore(ctx context.Context, img image.Image) (image.Im
 			return nil, err
 		}
 	}
-	out, _, err := image.Decode(bytes.NewReader(raw))
-	return out, err
+	return decodeImage(raw)
 }
