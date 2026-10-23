@@ -213,7 +213,6 @@ func (s *Scene) radiance(r Ray, maxDepth int, rg *rng, mode int) Vec3 {
 	var out Vec3
 	specularPrev := true // the camera ray counts as a specular connection
 	var prevPdfB float64
-	nEmit := len(s.emit) + len(s.emitTris)
 	tm := r.Time // shutter time, constant along the whole path (motion blur)
 pathLoop:
 	for d := 0; d < maxDepth; d++ {
@@ -261,19 +260,21 @@ pathLoop:
 		}
 		// Emission reaching the eye along this path (BSDF-sampling side).
 		if h.Mat.Emit.LenSq() > 0 {
-			switch {
-			case mode == 0 || specularPrev:
+			if mode == 0 || specularPrev {
 				out = out.Add(throughput.Mul(h.Mat.Emit))
-			case mode == 2 && nEmit > 0:
-				if area, wsel, okE := s.emitterAreaW(h.P); okE && wsel > 0 {
-					if cosL := -h.N.Dot(r.Dir); cosL > geomEps {
-						pdfL := wsel / area * h.T * h.T / cosL
-						w := prevPdfB * prevPdfB / (prevPdfB*prevPdfB + pdfL*pdfL)
-						out = out.Add(throughput.Mul(h.Mat.Emit).Scale(w))
-					}
+			} else if area, wsel, okE := s.emitterAreaW(h.P); !okE {
+				// Not in the light-sampling set (e.g. a MovingSphere, Plane, SDF or
+				// an instanced sphere): NEE never samples it, so this BSDF hit is
+				// its only estimator and counts in full.
+				out = out.Add(throughput.Mul(h.Mat.Emit))
+			} else if mode == 2 && wsel > 0 {
+				if cosL := -h.N.Dot(r.Dir); cosL > geomEps {
+					pdfL := wsel / area * h.T * h.T / cosL
+					w := prevPdfB * prevPdfB / (prevPdfB*prevPdfB + pdfL*pdfL)
+					out = out.Add(throughput.Mul(h.Mat.Emit).Scale(w))
 				}
-				// mode 1 (NEE only): the emitter is already counted via NEE.
 			}
+			// mode 1 (NEE only): a light-sampled emitter is already counted via NEE.
 		}
 
 		switch {
@@ -360,8 +361,16 @@ pathLoop:
 				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: wi, Time: tm}
 				specularPrev = true
 			} else {
-				throughput = throughput.Mul(alb.Scale((1 - m) / (1 - pSpec)))
-				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: cosineSample(h.N, rg), Time: tm}
+				// Diffuse lobe (weight (1-m)/(1-pSpec)): next-event estimation and
+				// the cosine pdf for MIS, exactly as for a Lambertian surface.
+				dalb := alb.Scale((1 - m) / (1 - pSpec))
+				if mode >= 1 {
+					out = s.directLight(out, throughput, h, dalb, rg, mode, tm)
+				}
+				dir := cosineSample(h.N, rg)
+				prevPdfB = math.Max(0, h.N.Dot(dir)) / math.Pi
+				throughput = throughput.Mul(dalb)
+				r = Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: dir, Time: tm}
 				specularPrev = false
 			}
 		case h.Mat.Metal > 0:
@@ -417,14 +426,7 @@ pathLoop:
 		default:
 			alb := h.albedo()
 			if mode >= 1 {
-				if s.RISCandidates > 1 && mode == 1 {
-					out = out.Add(throughput.Mul(s.sampleEmittersRIS(h, alb, rg, tm, s.RISCandidates)))
-				} else {
-					out = out.Add(throughput.Mul(s.sampleEmitters(h, alb, rg, mode == 2, tm)))
-				}
-				if s.Env != nil {
-					out = out.Add(throughput.Mul(s.sampleEnv(h, alb, rg, tm)))
-				}
+				out = s.directLight(out, throughput, h, alb, rg, mode, tm)
 			}
 			if s.Caustics != nil {
 				out = out.Add(throughput.Mul(s.Caustics.Estimate(h.P, h.N, alb)))
@@ -446,6 +448,21 @@ pathLoop:
 				throughput = throughput.Scale(1 / p)
 			}
 		}
+	}
+	return out
+}
+
+// directLight is next-event estimation at a diffuse vertex of albedo alb: it adds
+// the emitter (plain, RIS or MIS-weighted) and environment contributions, scaled
+// by throughput, to out. Shared by the Lambertian and Principled-diffuse lobes.
+func (s *Scene) directLight(out, throughput Vec3, h Hit, alb Vec3, rg *rng, mode int, tm float64) Vec3 {
+	if s.RISCandidates > 1 && mode == 1 {
+		out = out.Add(throughput.Mul(s.sampleEmittersRIS(h, alb, rg, tm, s.RISCandidates)))
+	} else {
+		out = out.Add(throughput.Mul(s.sampleEmitters(h, alb, rg, mode == 2, tm)))
+	}
+	if s.Env != nil {
+		out = out.Add(throughput.Mul(s.sampleEnv(h, alb, rg, tm)))
 	}
 	return out
 }
