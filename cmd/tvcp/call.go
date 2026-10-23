@@ -207,7 +207,7 @@ func runCall() {
 		cameras, err := device.ListCameras()
 		if err == nil && len(cameras) > 0 {
 			// Real camera available
-			realCamera, err := device.NewCamera(0) // Use first camera
+			realCamera, err := device.NewCamera(cameras[0].ID) // Use first camera
 			if err == nil {
 				camera = realCamera
 				fmt.Println("📹 Using real camera:", cameras[0].Name)

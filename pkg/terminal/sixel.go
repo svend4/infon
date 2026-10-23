@@ -156,20 +156,47 @@ func quantize(img image.Image, maxColors int) ([][3]uint8, []int) {
 		}
 	}
 
-	// Stable palette: sort bucket keys, assign indices, compute average colors.
+	avg := func(k int) [3]uint8 {
+		a := buckets[k]
+		return [3]uint8{uint8(a.r / a.n), uint8(a.g / a.n), uint8(a.bl / a.n)}
+	}
+
 	keys := make([]int, 0, len(buckets))
 	for k := range buckets {
 		keys = append(keys, k)
 	}
+
+	// There can be more buckets than maxColors (up to 64 at 2 bits/channel):
+	// keep the most populated ones; the rest map to the nearest kept color below.
+	var dropped []int
+	if len(keys) > maxColors {
+		sort.Slice(keys, func(i, j int) bool {
+			if ni, nj := buckets[keys[i]].n, buckets[keys[j]].n; ni != nj {
+				return ni > nj
+			}
+			return keys[i] < keys[j]
+		})
+		keys, dropped = keys[:maxColors], keys[maxColors:]
+	}
+
+	// Stable palette: sort bucket keys, assign indices, compute average colors.
 	sort.Ints(keys)
-	keyToIndex := make(map[int]int, len(keys))
+	keyToIndex := make(map[int]int, len(keys)+len(dropped))
 	pal := make([][3]uint8, 0, len(keys))
 	for i, k := range keys {
 		keyToIndex[k] = i
-		a := buckets[k]
-		pal = append(pal, [3]uint8{
-			uint8(a.r / a.n), uint8(a.g / a.n), uint8(a.bl / a.n),
-		})
+		pal = append(pal, avg(k))
+	}
+	for _, k := range dropped {
+		c := avg(k)
+		best, bestDist := 0, -1
+		for i, p := range pal {
+			dr, dg, db := int(c[0])-int(p[0]), int(c[1])-int(p[1]), int(c[2])-int(p[2])
+			if d := dr*dr + dg*dg + db*db; bestDist < 0 || d < bestDist {
+				best, bestDist = i, d
+			}
+		}
+		keyToIndex[k] = best
 	}
 
 	idx := make([]int, w*h)

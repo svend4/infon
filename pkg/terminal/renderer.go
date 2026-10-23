@@ -117,16 +117,13 @@ func (f *Frame) Fill(glyph rune, fg, bg color.RGB) {
 	}
 }
 
-// DrawText draws text at the given position
+// DrawText draws text at the given position, one rune per column, clipped to
+// the frame
 func (f *Frame) DrawText(x, y int, text string, fg, bg color.RGB) {
-	for i, ch := range text {
-		if x+i < f.Width && y < f.Height {
-			f.Blocks[y][x+i] = Block{
-				Glyph: ch,
-				Fg:    fg,
-				Bg:    bg,
-			}
-		}
+	col := x
+	for _, ch := range text {
+		f.SetBlock(col, y, ch, fg, bg)
+		col++
 	}
 }
 

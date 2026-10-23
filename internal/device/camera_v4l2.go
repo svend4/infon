@@ -9,6 +9,8 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -53,6 +55,9 @@ const (
 	VIDIOC_DQBUF     = iocRead | iocWrite | unsafe.Sizeof(v4l2Buffer{})<<iocSizeShift | iocTypeV4L2 | 17
 	VIDIOC_STREAMON  = iocWrite | unsafe.Sizeof(int32(0))<<iocSizeShift | iocTypeV4L2 | 18
 	VIDIOC_STREAMOFF = iocWrite | unsafe.Sizeof(int32(0))<<iocSizeShift | iocTypeV4L2 | 19
+
+	V4L2_CAP_VIDEO_CAPTURE = 0x00000001
+	V4L2_CAP_DEVICE_CAPS   = 0x80000000
 
 	V4L2_BUF_TYPE_VIDEO_CAPTURE = 1
 	V4L2_MEMORY_MMAP           = 1
@@ -149,7 +154,7 @@ func (c *V4L2Camera) Open() error {
 	// Query capabilities
 	var cap v4l2Capability
 	if err := c.ioctl(VIDIOC_QUERYCAP, unsafe.Pointer(&cap)); err != nil {
-		_ = syscall.Close(c.fd)
+		c.release()
 		return fmt.Errorf("failed to query capabilities: %w", err)
 	}
 
@@ -159,7 +164,7 @@ func (c *V4L2Camera) Open() error {
 
 	// Get current format
 	if err := c.ioctl(VIDIOC_G_FMT, unsafe.Pointer(&v4l2Fmt)); err != nil {
-		_ = syscall.Close(c.fd)
+		c.release()
 		return fmt.Errorf("failed to get format: %w", err)
 	}
 
@@ -171,7 +176,7 @@ func (c *V4L2Camera) Open() error {
 	pix.field = V4L2_FIELD_NONE
 
 	if err := c.ioctl(VIDIOC_S_FMT, unsafe.Pointer(&v4l2Fmt)); err != nil {
-		_ = syscall.Close(c.fd)
+		c.release()
 		return fmt.Errorf("failed to set format: %w", err)
 	}
 
@@ -184,7 +189,7 @@ func (c *V4L2Camera) Open() error {
 	req.memory = V4L2_MEMORY_MMAP
 
 	if err := c.ioctl(VIDIOC_REQBUFS, unsafe.Pointer(&req)); err != nil {
-		_ = syscall.Close(c.fd)
+		c.release()
 		return fmt.Errorf("failed to request buffers: %w", err)
 	}
 
@@ -261,18 +266,25 @@ func (c *V4L2Camera) Read() (image.Image, error) {
 	return img, nil
 }
 
-// Close closes the camera
+// Close closes the camera. It also releases what a failed Open had acquired:
+// Open's error paths call it before isOpen is set.
 func (c *V4L2Camera) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.isOpen {
-		return nil
+
+	if c.isOpen {
+		// Stop streaming
+		bufType := uint32(V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		_ = c.ioctl(VIDIOC_STREAMOFF, unsafe.Pointer(&bufType))
 	}
 
-	// Stop streaming
-	bufType := uint32(V4L2_BUF_TYPE_VIDEO_CAPTURE)
-	_ = c.ioctl(VIDIOC_STREAMOFF, unsafe.Pointer(&bufType))
+	c.release()
+	c.isOpen = false
+	return nil
+}
 
+// release unmaps the buffers and closes the device, if held.
+func (c *V4L2Camera) release() {
 	// Unmap buffers
 	for _, buf := range c.buffers {
 		if buf != nil {
@@ -286,9 +298,6 @@ func (c *V4L2Camera) Close() error {
 		_ = syscall.Close(c.fd)
 		c.fd = -1
 	}
-
-	c.isOpen = false
-	return nil
 }
 
 // IsOpen returns whether the camera is open
@@ -401,33 +410,90 @@ func clamp(val int) int {
 
 // ListV4L2Cameras lists available V4L2 camera devices
 func ListV4L2Cameras() ([]string, error) {
-	var cameras []string
-
-	// Check /dev/video* devices
-	matches, err := filepath.Glob("/dev/video*")
+	nodes, err := scanV4L2Nodes()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, device := range matches {
-		// Try to open device to verify it's a valid camera
-		fd, err := syscall.Open(device, syscall.O_RDONLY, 0)
-		if err != nil {
+	var cameras []string
+	for _, n := range nodes {
+		cameras = append(cameras, fmt.Sprintf("%s: %s", n.path, n.card))
+	}
+	return cameras, nil
+}
+
+// v4l2Node is a /dev/videoN node that can capture video.
+type v4l2Node struct {
+	path string
+	num  int // N in /dev/videoN: NewCamera(N) opens this node
+	card string
+}
+
+// scanV4L2Nodes finds the video capture nodes among /dev/video*.
+func scanV4L2Nodes() ([]v4l2Node, error) {
+	matches, err := filepath.Glob("/dev/video*")
+	if err != nil {
+		return nil, err
+	}
+	return probeV4L2Nodes(matches, queryV4L2Cap), nil
+}
+
+// probeV4L2Nodes keeps the paths that are /dev/videoN capture nodes, ordered by
+// N (the glob is lexical: video10 sorts before video2). query returns a node's
+// capabilities, or false if it cannot be opened or is not a V4L2 device.
+func probeV4L2Nodes(paths []string, query func(device string) (v4l2Capability, bool)) []v4l2Node {
+	var nodes []v4l2Node
+	for _, device := range paths {
+		num, ok := videoNodeNumber(device)
+		if !ok {
 			continue
 		}
-
-		var cap v4l2Capability
-		_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), VIDIOC_QUERYCAP, uintptr(unsafe.Pointer(&cap)))
-		_ = syscall.Close(fd)
-
-		if errno == 0 {
-			// Device is a valid V4L2 device
-			cardName := strings.TrimRight(string(cap.card[:]), "\x00")
-			cameras = append(cameras, fmt.Sprintf("%s: %s", device, cardName))
+		cap, ok := query(device)
+		if !ok || !cap.isVideoCapture() {
+			continue
 		}
+		nodes = append(nodes, v4l2Node{
+			path: device,
+			num:  num,
+			card: strings.TrimRight(string(cap.card[:]), "\x00"),
+		})
 	}
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].num < nodes[j].num })
+	return nodes
+}
 
-	return cameras, nil
+// queryV4L2Cap opens a device to verify it is a V4L2 device and returns its
+// capabilities.
+func queryV4L2Cap(device string) (v4l2Capability, bool) {
+	var cap v4l2Capability
+	fd, err := syscall.Open(device, syscall.O_RDONLY, 0)
+	if err != nil {
+		return cap, false
+	}
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), VIDIOC_QUERYCAP, uintptr(unsafe.Pointer(&cap)))
+	_ = syscall.Close(fd)
+	return cap, errno == 0
+}
+
+// isVideoCapture reports whether the node can capture single-planar video, the
+// only buffer type V4L2Camera uses. A UVC webcam also has a metadata node that
+// answers QUERYCAP but cannot capture.
+func (cap *v4l2Capability) isVideoCapture() bool {
+	caps := cap.capabilities
+	if caps&V4L2_CAP_DEVICE_CAPS != 0 {
+		caps = cap.device_caps
+	}
+	return caps&V4L2_CAP_VIDEO_CAPTURE != 0
+}
+
+// videoNodeNumber returns N for a path of the form /dev/videoN.
+func videoNodeNumber(path string) (int, bool) {
+	digits, ok := strings.CutPrefix(filepath.Base(path), "video")
+	if !ok || digits == "" || strings.Trim(digits, "0123456789") != "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(digits)
+	return n, err == nil
 }
 
 // GetDefaultV4L2Camera returns the first available camera device

@@ -111,12 +111,23 @@ func (ss *ScreenShare) Start() error {
 	return nil
 }
 
-// readOutput reads and processes command output
+// readOutput reads and processes command output until the pipe closes. A line
+// longer than the reader's buffer is shown truncated and the rest of it is
+// skipped; bufio.Scanner would stop reading there instead, and the command would
+// then block on a full pipe.
 func (ss *ScreenShare) readOutput(reader io.Reader) {
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		ss.processLine(line)
+	br := bufio.NewReaderSize(reader, 64*1024)
+	for {
+		line, isPrefix, err := br.ReadLine()
+		if err != nil {
+			return
+		}
+		ss.processLine(string(line))
+		for isPrefix {
+			if _, isPrefix, err = br.ReadLine(); err != nil {
+				return
+			}
+		}
 	}
 }
 
