@@ -261,7 +261,35 @@ func (gc *GroupCall) ActivePeerCount() int {
 	return len(gc.GetActivePeers())
 }
 
-// CleanupInactivePeers removes peers that haven't sent packets recently
+// PingInactive sends a keep-alive to every peer that has gone quiet. Media goes
+// only to active peers (BroadcastPacket), so without this two peers that each
+// stopped hearing the other — one started late, or the link dropped for more
+// than the activity window — would never send to each other again. Any packet
+// from a peer marks it active, so the call resumes as soon as either side hears
+// the other. Returns how many peers were pinged.
+func (gc *GroupCall) PingInactive() int {
+	gc.peersMutex.RLock()
+	defer gc.peersMutex.RUnlock()
+
+	pinged := 0
+	for _, peer := range gc.peers {
+		if peer.IsActive() {
+			continue
+		}
+		_ = gc.transport.SendPacket(&network.Packet{
+			Type:      network.PacketTypeKeepAlive,
+			Sequence:  gc.transport.NextSequence(),
+			Timestamp: uint64(time.Now().UnixMilli()),
+		}, peer.Address)
+		pinged++
+	}
+	return pinged
+}
+
+// CleanupInactivePeers removes peers that haven't sent packets recently. A
+// group whose membership is fixed up front (as `tvcp group` is) should not use
+// it: a removed peer's later packets are no longer recognised, so it can never
+// rejoin. Use PingInactive to keep such peers reachable instead.
 func (gc *GroupCall) CleanupInactivePeers() {
 	gc.peersMutex.Lock()
 	defer gc.peersMutex.Unlock()

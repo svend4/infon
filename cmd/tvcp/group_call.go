@@ -331,16 +331,21 @@ func runGroupCall(peers []string, localPort string) error {
 		}
 	}()
 
-	// Cleanup goroutine
+	// Liveness goroutine. Membership is fixed by the command line, so a quiet peer
+	// is kept, not evicted: media goes only to active peers, and every quiet one
+	// gets a keep-alive. Evicting quiet peers meant that a participant who started
+	// more than 10 s after the others was dropped before its first packet arrived
+	// and then ignored, so the call never connected; and after an outage longer
+	// than 10 s both sides had dropped each other for good.
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
 
 		for range ticker.C {
 			if !groupCall.IsRunning() {
 				break
 			}
-			groupCall.CleanupInactivePeers()
+			groupCall.PingInactive()
 		}
 	}()
 
