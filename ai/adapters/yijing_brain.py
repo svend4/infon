@@ -170,13 +170,17 @@ def scene_from_vector(v):
     n = 2 + int(round(dens * 8))               # 2..10 forms
     for i in range(n):
         ang = (i / max(1, n)) * 2 * math.pi
+        # libm's cos/sin and Go's can differ by one ulp (cos(pi/3) is 0.5000000000000001
+        # here, exactly 0.5 in Go), enough to flip a 3-decimal tie below; rounding them
+        # to 12 decimals first keeps both sides byte-identical (mirrors raydir).
+        cos_a, sin_a = round(math.cos(ang), 12), round(math.sin(ang), 12)
         r = round(0.4 + scale * 0.8, 3)
         # a ring centred well ahead, sized so it never encloses the camera (z=-1)
         o = {
             "kind": "sphere",
-            "x": round(math.cos(ang) * (2.0 + 1.5 * scale), 3),
+            "x": round(cos_a * (2.0 + 1.5 * scale), 3),
             "y": r,
-            "z": round(6 + math.sin(ang) * (1.8 + 1.4 * scale), 3),
+            "z": round(6 + sin_a * (1.8 + 1.4 * scale), 3),
             "r": r,
             "color": [round(_clamp01(base[k] + (0.1 if i % 2 else -0.1)), 3) for k in range(3)],
             "rough": round(0.2 + 0.5 * (1 - glow), 3),

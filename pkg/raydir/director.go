@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strconv"
 
 	"github.com/svend4/infon/pkg/brain"
 )
@@ -96,15 +97,19 @@ func (v SceneVector) SceneSpec() brain.SceneSpec {
 
 	objs := []brain.ObjSpec{{Kind: "plane", Color: round3v(clamp01v(ground))}}
 	base := lerp3([3]float64{0.40, 0.60, 0.90}, [3]float64{0.92, 0.45, 0.25}, warm)
-	n := 2 + int(math.Round(dens*8)) // 2..10 forms
+	n := 2 + int(math.RoundToEven(dens*8)) // 2..10 forms; ties to even like Python round()
 	for i := 0; i < n; i++ {
 		ang := float64(i) / float64(n) * 2 * math.Pi
+		// Go's Cos/Sin and libm's can differ by one ulp (cos(pi/3) is exactly 0.5 here,
+		// 0.5000000000000001 in libm), enough to flip a 3-decimal tie below; rounding
+		// them to 12 decimals first makes both sides compute the same ring.
+		cosA, sinA := roundDec(math.Cos(ang), 12), roundDec(math.Sin(ang), 12)
 		r := round3(0.4 + scale*0.8)
 		o := brain.ObjSpec{
 			Kind:  "sphere",
-			X:     round3(math.Cos(ang) * (2.0 + 1.5*scale)), // a ring centred well ahead (z=6)
+			X:     round3(cosA * (2.0 + 1.5*scale)), // a ring centred well ahead (z=6)
 			Y:     r,
-			Z:     round3(6 + math.Sin(ang)*(1.8+1.4*scale)),
+			Z:     round3(6 + sinA*(1.8+1.4*scale)),
 			R:     r,
 			Rough: round3(0.2 + 0.5*(1-glow)),
 		}
@@ -281,7 +286,18 @@ func (d *LearningDirector) Engagement() float64 { return d.best }
 
 // --- small numeric helpers (kept local to the director/reader) ---
 
-func round3(x float64) float64 { return math.Round(x*1000) / 1000 }
+// round3 rounds to three decimals exactly as Python's round(x, 3) does: correctly
+// rounded on the exact binary value, ties to even (strconv's 'f' formatting). The
+// previous math.Round(x*1000)/1000 rounded ties away from zero after an inexact
+// multiply, so Go and yijing_brain.scene_from_vector disagreed on ~2% of vectors
+// (e.g. 2.0105 -> 2.011 in Go vs 2.01 in Python).
+func round3(x float64) float64 { return roundDec(x, 3) }
+
+// roundDec rounds x to prec decimals the way Python's round(x, prec) does.
+func roundDec(x float64, prec int) float64 {
+	f, _ := strconv.ParseFloat(strconv.FormatFloat(x, 'f', prec, 64), 64)
+	return f
+}
 
 func lerp3(a, b [3]float64, t float64) [3]float64 {
 	return [3]float64{a[0]*(1-t) + b[0]*t, a[1]*(1-t) + b[1]*t, a[2]*(1-t) + b[2]*t}

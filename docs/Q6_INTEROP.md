@@ -58,7 +58,20 @@ sides compute the **same world from the same vector, byte for byte**:
 | scene/image → vector (inverse) | `ReadScene` / `ReadImage` | — |
 
 Verified byte-identical (the JSON `SceneSpec` matches field for field), so an offline
-Go author and the pro2 director agree on the world a prompt or a vector makes.
+Go author and the pro2 director agree on the world a prompt or a vector makes. The
+contract that makes this hold, on both sides:
+
+- every emitted float is rounded to 3 decimals with Python's `round` semantics —
+  correctly rounded on the exact binary value, ties to even (Go: `strconv`, not
+  `math.Round(x*1000)/1000`, which rounds ties away from zero after an inexact multiply);
+- the form count `2 + round(density*8)` also rounds ties to even (`math.RoundToEven`);
+- `cos`/`sin` of the ring angle are rounded to 12 decimals before use, because Go's
+  `math.Cos` and libm can differ by one ulp (`cos(π/3)` is exactly 0.5 in Go), which is
+  enough to flip a 3-decimal tie.
+
+`pkg/raydir/director_parity_test.go` pins Go to values produced by the Python adapter;
+a sweep of ~41k vectors (hash-derived prompts, 1/1000 grids, random) matched field for
+field under these rules.
 `cmd/raypipe` runs the whole chain — prompt → vector → `SceneSpec` → the exact UDP
 wire bytes (`Region.Encode`) → render — and prints how little crosses the wire vs a
 frame of pixels.

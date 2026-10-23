@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 The **ray/Q6/alife platform** — meaning ⇄ world, end to end. See
 [`docs/CONCEPT_MAP.md`](docs/CONCEPT_MAP.md) for the conceptual map and reuse matrix.
 
+### 🔧 Fixed
+
+- `SceneVector.SceneSpec()` now really is byte-identical to the Python director's
+  `scene_from_vector`: Go rounded 3-decimal ties away from zero after an inexact
+  `x*1000` and the form count with `math.Round`, while Python rounds ties to even on the
+  exact value, so ~2% of arbitrary vectors (and every exact `density*8 = n.5`) produced a
+  different world. Both sides also pre-round `cos`/`sin` to 12 decimals, since Go's
+  `math.Cos` and libm differ by one ulp on ties such as `cos(π/3)`. Pinned by
+  `pkg/raydir/director_parity_test.go` (see `docs/Q6_INTEROP.md`).
+
 ### 🌐 The meaning bridge (Q6)
 
 - `SceneVector` (six continuous Q6 floats) ⇄ hexagram ⇄ a ray-traced world, with the
