@@ -27,6 +27,7 @@ type ScreenShare struct {
 	mutex      sync.RWMutex
 	running    bool
 	frameChan  chan *terminal.Frame
+	done       chan struct{} // closed by Stop; nil until the first Start
 	command    string
 	scrollback int // Number of lines in scrollback buffer
 }
@@ -93,12 +94,19 @@ func (ss *ScreenShare) Start() error {
 
 	ss.running = true
 
+	// The previous session's generator owns (and closes) its channel, so a
+	// restarted session gets a fresh one.
+	if ss.done != nil {
+		ss.frameChan = make(chan *terminal.Frame, 10)
+	}
+	ss.done = make(chan struct{})
+
 	// Start output readers
 	go ss.readOutput(ss.stdout)
 	go ss.readOutput(ss.stderr)
 
 	// Start frame generator
-	go ss.generateFrames()
+	go ss.generateFrames(ss.frameChan, ss.done)
 
 	return nil
 }
@@ -134,23 +142,27 @@ func (ss *ScreenShare) processLine(line string) {
 	}
 }
 
-// generateFrames creates video frames from terminal buffer
-func (ss *ScreenShare) generateFrames() {
+// generateFrames creates video frames from terminal buffer until done is
+// closed. It is the only sender on out and closes it when it returns.
+func (ss *ScreenShare) generateFrames(out chan<- *terminal.Frame, done <-chan struct{}) {
+	defer close(out)
+
 	ticker := time.NewTicker(time.Second / 15) // 15 FPS
 	defer ticker.Stop()
 
-	for range ticker.C {
-		ss.mutex.RLock()
-		if !ss.running {
-			ss.mutex.RUnlock()
-			break
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
 		}
 
+		ss.mutex.RLock()
 		frame := ss.captureFrame()
 		ss.mutex.RUnlock()
 
 		select {
-		case ss.frameChan <- frame:
+		case out <- frame:
 		default:
 			// Drop frame if channel full
 		}
@@ -183,8 +195,11 @@ func (ss *ScreenShare) captureFrame() *terminal.Frame {
 	return frame
 }
 
-// GetFrameChannel returns the frame channel
+// GetFrameChannel returns the current session's frame channel. It is closed
+// shortly after Stop; call it again after a restart.
 func (ss *ScreenShare) GetFrameChannel() <-chan *terminal.Frame {
+	ss.mutex.RLock()
+	defer ss.mutex.RUnlock()
 	return ss.frameChan
 }
 
@@ -204,7 +219,9 @@ func (ss *ScreenShare) Stop() error {
 		_ = ss.cmd.Process.Kill()
 	}
 
-	close(ss.frameChan)
+	// Signal the frame generator; it closes frameChan itself, so nothing can
+	// send on a closed channel.
+	close(ss.done)
 
 	return nil
 }

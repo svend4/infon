@@ -26,17 +26,28 @@ type V4L2Camera struct {
 	pixelFormat uint32
 }
 
-// V4L2 ioctl constants
+// ioctl request encoding (asm-generic layout used by amd64, arm64, 386, arm,
+// riscv64, ...): dir<<30 | size<<16 | type<<8 | nr, as built by the kernel's
+// _IOR/_IOW/_IOWR macros.
 const (
-	VIDIOC_QUERYCAP  = 0x80685600
-	VIDIOC_S_FMT     = 0xc0d05605
-	VIDIOC_G_FMT     = 0xc0d05604
-	VIDIOC_REQBUFS   = 0xc0145608
-	VIDIOC_QUERYBUF  = 0xc0445609
-	VIDIOC_QBUF      = 0xc044560f
-	VIDIOC_DQBUF     = 0xc0445611
-	VIDIOC_STREAMON  = 0x40045612
-	VIDIOC_STREAMOFF = 0x40045613
+	iocWrite     = 1 << 30
+	iocRead      = 2 << 30
+	iocSizeShift = 16
+	iocTypeV4L2  = 'V' << 8
+)
+
+// V4L2 ioctl constants. The size field is taken from the Go struct passed with
+// each request, so the numbers follow the struct layouts on 32- and 64-bit.
+const (
+	VIDIOC_QUERYCAP  = iocRead | unsafe.Sizeof(v4l2Capability{})<<iocSizeShift | iocTypeV4L2 | 0
+	VIDIOC_S_FMT     = iocRead | iocWrite | unsafe.Sizeof(v4l2Format{})<<iocSizeShift | iocTypeV4L2 | 5
+	VIDIOC_G_FMT     = iocRead | iocWrite | unsafe.Sizeof(v4l2Format{})<<iocSizeShift | iocTypeV4L2 | 4
+	VIDIOC_REQBUFS   = iocRead | iocWrite | unsafe.Sizeof(v4l2RequestBuffers{})<<iocSizeShift | iocTypeV4L2 | 8
+	VIDIOC_QUERYBUF  = iocRead | iocWrite | unsafe.Sizeof(v4l2Buffer{})<<iocSizeShift | iocTypeV4L2 | 9
+	VIDIOC_QBUF      = iocRead | iocWrite | unsafe.Sizeof(v4l2Buffer{})<<iocSizeShift | iocTypeV4L2 | 15
+	VIDIOC_DQBUF     = iocRead | iocWrite | unsafe.Sizeof(v4l2Buffer{})<<iocSizeShift | iocTypeV4L2 | 17
+	VIDIOC_STREAMON  = iocWrite | unsafe.Sizeof(int32(0))<<iocSizeShift | iocTypeV4L2 | 18
+	VIDIOC_STREAMOFF = iocWrite | unsafe.Sizeof(int32(0))<<iocSizeShift | iocTypeV4L2 | 19
 
 	V4L2_BUF_TYPE_VIDEO_CAPTURE = 1
 	V4L2_MEMORY_MMAP           = 1
@@ -58,9 +69,12 @@ type v4l2Capability struct {
 	reserved     [3]uint32
 }
 
-// v4l2_format structure
+// v4l2_format structure. The fmt union contains pointers (v4l2_window), so it
+// is pointer-aligned: offset 8 and 208 bytes in total on 64-bit, offset 4 and
+// 204 bytes on 32-bit.
 type v4l2Format struct {
 	typ  uint32
+	_    [0]uintptr // align the fmt union like the C compiler does
 	data [200]byte
 }
 
@@ -95,9 +109,11 @@ type v4l2Buffer struct {
 	timecode  [4]uint32
 	sequence  uint32
 	memory    uint32
-	offset    uint32
+	_         [0]uintptr                          // the m union is pointer-aligned...
+	offset    uint32                              // m.offset
+	_         [unsafe.Sizeof(uintptr(0)) - 4]byte // ...and pointer-sized
 	length    uint32
-	_         [2]uint32
+	_         [2]uint32 // reserved2, request_fd
 }
 
 // NewV4L2Camera creates a new V4L2 camera instance

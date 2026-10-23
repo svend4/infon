@@ -56,10 +56,24 @@ func frame(inner [][]string) [][]string {
 	return g
 }
 
+// rectangular reports whether every row of g is as long as the first one.
+// Rotation, orientation and border stripping are only defined for such grids.
+func rectangular(g [][]string) bool {
+	for _, row := range g {
+		if len(row) != len(g[0]) {
+			return false
+		}
+	}
+	return true
+}
+
 func rotateCW(g [][]string) [][]string {
 	h := len(g)
 	if h == 0 {
 		return g
+	}
+	if !rectangular(g) {
+		return nil
 	}
 	w := len(g[0])
 	out := make([][]string, w)
@@ -73,6 +87,8 @@ func rotateCW(g [][]string) [][]string {
 }
 
 // RotateCW returns the grid turned k quarter-turns clockwise (k may be any int).
+// A non-rectangular grid has no defined rotation: unless k is a multiple of 4
+// (which returns g as is), it yields nil.
 func RotateCW(g [][]string, k int) [][]string {
 	k = ((k % 4) + 4) % 4
 	out := g
@@ -84,7 +100,7 @@ func RotateCW(g [][]string, k int) [][]string {
 
 func cornersCanonical(g [][]string) bool {
 	h := len(g)
-	if h < 2 {
+	if h < 2 || !rectangular(g) {
 		return false
 	}
 	w := len(g[0])
@@ -111,6 +127,9 @@ func Orient(g [][]string) (int, bool) {
 // DecodeFramed auto-rotates a framed glyph-QR using its finder corners, strips
 // the border, and decodes the (RS-corrected) payload.
 func DecodeFramed(g [][]string) ([]byte, error) {
+	if !rectangular(g) {
+		return nil, errors.New("glyphqr: grid is not rectangular")
+	}
 	k, ok := Orient(g)
 	if !ok {
 		return nil, errors.New("glyphqr: no finder pattern (cannot orient)")
@@ -130,7 +149,7 @@ func strip(g [][]string) [][]string {
 	if h > 0 {
 		w = len(g[0])
 	}
-	if h < 3 || w < 3 {
+	if h < 3 || w < 3 || !rectangular(g) {
 		return g
 	}
 	out := make([][]string, h-2)
