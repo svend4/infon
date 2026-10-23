@@ -22,6 +22,42 @@ The **ray/Q6/alife platform** — meaning ⇄ world, end to end. See
   different world. Both sides also pre-round `cos`/`sin` to 12 decimals, since Go's
   `math.Cos` and libm differ by one ulp on ties such as `cos(π/3)`. Pinned by
   `pkg/raydir/director_parity_test.go` (see `docs/Q6_INTEROP.md`).
+- **Calls.** Remote audio was never played (the jitter buffer waited for a
+  sequence number audio never uses) and any speech made the loss detector report
+  ~90% loss, flooding NACKs and throttling FPS to the floor; both now follow the
+  sender's single sequence counter. Calling a Yggdrasil contact dialled a
+  different IPv6 address. The preview no longer reads the camera a second time,
+  hang-up stops capture and playback before closing the devices, and a
+  mistyped `--option` is an error instead of being ignored.
+- **Audio processing.** The noise suppressor treated sustained speech as noise
+  and attenuated it below the VAD threshold, the echo canceller diverged to NaN
+  within one frame, AGC clipped loud onsets, the FFT filter lost phase and
+  returned silence for 10 ms frames, and ALSA capture never started (each read
+  was below the kernel's start threshold).
+- **Group calls.** Ctrl+C hung forever, the video grid crashed on a concurrent
+  map write, and a participant who started more than 10 s after the others was
+  evicted and ignored; quiet peers are now kept and sent keep-alives.
+- **Recording and export.** `--record` crashed at hang-up (32-byte buffer for
+  the 34-byte header), the recorder raced with the capture goroutines, and a
+  recording without audio exported as an empty video.
+- **Robustness against malformed input.** Fragment, P-frame, I-frame, NACK,
+  AAC/VP8/Opus, TURN, SFU join, recording-file and draw-DSL parsing now
+  validate lengths, counts and dimensions before indexing or allocating.
+  Control characters from peers or models (chat text, frame glyphs, draw-DSL
+  text) are filtered before reaching the terminal.
+- **Shared world.** Regions too large for one packet were silently never
+  delivered (zero arrays are now omitted on the wire and oversize regions are
+  trimmed, keeping their lights), the host answered region acks from any
+  address with its whole world, and the world grew without bound.
+- **Renderer.** Principled diffuse surfaces and emitters outside the
+  light-sampling set lost their direct light in NEE/MIS modes, SDF surfaces
+  self-intersected, and the mesh BVH degenerated to O(n²) on coincident
+  triangles.
+- **Other.** The V4L2 camera used 32-bit ioctl numbers and struct layouts that
+  do not match 64-bit kernels, screen sharing panicked on stop, STUN dropped
+  IPv6 relay addresses and could not parse candidates, the A/V synchroniser
+  stalled on a far-future timestamp, the SFU raced on its participant map, and
+  glyph-QR decoding panicked on ragged grids.
 
 ### 🌐 The meaning bridge (Q6)
 
