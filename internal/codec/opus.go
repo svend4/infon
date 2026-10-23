@@ -51,7 +51,7 @@ func NewOpusCodec(config CodecConfig) (Codec, error) {
 		sampleRate: config.SampleRate,
 		channels:   config.Channels,
 		bitrate:    config.Bitrate,
-		frameSize:  960, // 20ms at 48kHz (typical Opus frame)
+		frameSize:  config.SampleRate * 20 / 1000, // 20ms frame (960 samples at 48kHz), as in SetSampleRate
 	}
 
 	return codec, nil
@@ -69,6 +69,14 @@ func (o *OpusCodec) Encode(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("no samples to encode")
 	}
 
+	// The frame count is sent in one byte; more frames would wrap and the
+	// packet would decode to the wrong length.
+	frameCount := (sampleCount + o.frameSize - 1) / o.frameSize
+	if frameCount > 255 {
+		o.recordError()
+		return nil, fmt.Errorf("too many samples for one Opus packet: %d frames (max 255)", frameCount)
+	}
+
 	// Encode using simplified Opus-like compression
 	buf := &bytes.Buffer{}
 
@@ -77,7 +85,6 @@ func (o *OpusCodec) Encode(data []byte) ([]byte, error) {
 	buf.WriteByte(tocByte)
 
 	// Write frame count
-	frameCount := (sampleCount + o.frameSize - 1) / o.frameSize
 	buf.WriteByte(byte(frameCount))
 
 	// Compress audio data

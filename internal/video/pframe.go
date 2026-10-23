@@ -1,6 +1,8 @@
 package video
 
 import (
+	"math"
+
 	"github.com/svend4/infon/pkg/color"
 	"github.com/svend4/infon/pkg/terminal"
 )
@@ -53,8 +55,10 @@ func NewPFrameEncoder(iFrameInterval int) *PFrameEncoder {
 func (enc *PFrameEncoder) Encode(frame *terminal.Frame) *EncodedFrame {
 	enc.frameCount++
 
-	// Force I-frame every N frames or if no previous frame
-	if enc.lastFrame == nil || enc.frameCount >= enc.iFrameInterval {
+	// Force I-frame every N frames, if no previous frame, or if the frame size
+	// changed (a delta cannot describe a resize)
+	if enc.lastFrame == nil || enc.frameCount >= enc.iFrameInterval ||
+		enc.lastFrame.Width != frame.Width || enc.lastFrame.Height != frame.Height {
 		enc.frameCount = 0
 		enc.lastFrame = copyFrame(frame)
 		return &EncodedFrame{
@@ -68,9 +72,10 @@ func (enc *PFrameEncoder) Encode(frame *terminal.Frame) *EncodedFrame {
 	// Calculate delta (P-frame)
 	deltaBlocks := calculateDelta(enc.lastFrame, frame)
 
-	// If delta is too large (>50% blocks changed), send I-frame instead
+	// If delta is too large (>50% blocks changed), or has more blocks than the
+	// 2-byte P-frame delta count can carry, send I-frame instead
 	totalBlocks := frame.Width * frame.Height
-	if len(deltaBlocks) > totalBlocks/2 {
+	if len(deltaBlocks) > totalBlocks/2 || len(deltaBlocks) > math.MaxUint16 {
 		enc.frameCount = 0
 		enc.lastFrame = copyFrame(frame)
 		return &EncodedFrame{
