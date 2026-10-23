@@ -192,6 +192,10 @@ func (v *VP8Codec) compressFrame(yuv []byte, isKeyframe bool) []byte {
 }
 
 func (v *VP8Codec) decompressFrame(compressed []byte, output []byte, isKeyframe bool) error {
+	if len(compressed) == 0 {
+		return fmt.Errorf("no frame data to decode")
+	}
+
 	expectedSize := v.width * v.height * 3 / 2
 	ratio := expectedSize / len(compressed)
 

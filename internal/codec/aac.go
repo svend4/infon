@@ -60,14 +60,20 @@ func (a *AACCodec) Encode(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("no data to encode")
 	}
 
+	// Compress audio data
+	compressed := a.compressAudio(data)
+
+	// ADTS frame length is a 13-bit field covering header + payload
+	if len(compressed)+7 > 0x1FFF {
+		a.recordError()
+		return nil, fmt.Errorf("AAC frame too large for ADTS header: %d bytes", len(compressed)+7)
+	}
+
 	buf := &bytes.Buffer{}
 
 	// Write ADTS header (Audio Data Transport Stream)
-	adtsHeader := a.generateADTSHeader(len(data))
+	adtsHeader := a.generateADTSHeader(len(compressed))
 	buf.Write(adtsHeader)
-
-	// Compress audio data
-	compressed := a.compressAudio(data)
 	buf.Write(compressed)
 
 	encoded := buf.Bytes()
@@ -94,6 +100,11 @@ func (a *AACCodec) Decode(data []byte) ([]byte, error) {
 
 	// Get frame length from ADTS header
 	frameLength := a.getADTSFrameLength(data)
+
+	if frameLength < 7 {
+		a.recordError()
+		return nil, fmt.Errorf("invalid ADTS frame length: %d", frameLength)
+	}
 
 	if len(data) < frameLength {
 		a.recordError()

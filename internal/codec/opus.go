@@ -233,6 +233,14 @@ func (o *OpusCodec) compressAudio(pcm []byte) []byte {
 func (o *OpusCodec) decompressAudio(compressed []byte, output []byte) error {
 	// Simplified audio decompression
 
+	if len(compressed) == 0 {
+		// Fill with silence
+		for i := range output {
+			output[i] = 0
+		}
+		return nil
+	}
+
 	ratio := len(output) / len(compressed)
 
 	if ratio < 1 {
