@@ -9,6 +9,7 @@ import (
 // put back and kept at the head of its buffer forever: that makes every frame
 // of the other stream look late, so the other stream is dropped indefinitely.
 func TestAVSync_ImplausibleAudioPTSDoesNotStallVideo(t *testing.T) {
+	advance := fakeClock(t)
 	avs := NewAVSynchronizer()
 
 	hour := int64(time.Hour / time.Microsecond)
@@ -20,7 +21,7 @@ func TestAVSync_ImplausibleAudioPTSDoesNotStallVideo(t *testing.T) {
 			t.Fatalf("AddVideoFrame: %v", err)
 		}
 	}
-	time.Sleep(120 * time.Millisecond) // past both jitter buffer target delays
+	advance(120 * time.Millisecond) // past both jitter buffer target delays
 
 	played := 0
 	for i := 0; i < 3; i++ {
@@ -42,6 +43,7 @@ func TestAVSync_ImplausibleAudioPTSDoesNotStallVideo(t *testing.T) {
 }
 
 func TestAVSync_ImplausibleVideoPTSDoesNotStallAudio(t *testing.T) {
+	advance := fakeClock(t)
 	avs := NewAVSynchronizer()
 
 	hour := int64(time.Hour / time.Microsecond)
@@ -53,7 +55,7 @@ func TestAVSync_ImplausibleVideoPTSDoesNotStallAudio(t *testing.T) {
 			t.Fatalf("AddAudioFrame: %v", err)
 		}
 	}
-	time.Sleep(120 * time.Millisecond)
+	advance(120 * time.Millisecond)
 
 	played := 0
 	for i := 0; i < 3; i++ {
@@ -76,11 +78,12 @@ func TestAVSync_ImplausibleVideoPTSDoesNotStallAudio(t *testing.T) {
 
 // A modest lead within the plausible range still waits for the other stream.
 func TestAVSync_PlausibleLeadStillWaits(t *testing.T) {
+	advance := fakeClock(t)
 	avs := NewAVSynchronizer()
 
 	_ = avs.AddAudioFrame([]byte("a"), int64(300*time.Millisecond/time.Microsecond), 1)
 	_ = avs.AddVideoFrame([]byte("v"), 0, 1)
-	time.Sleep(120 * time.Millisecond)
+	advance(120 * time.Millisecond)
 
 	if f, err := avs.GetNextAudioFrame(); err == nil || f != nil {
 		t.Fatalf("GetNextAudioFrame = %v, %v; want wait error", f, err)
