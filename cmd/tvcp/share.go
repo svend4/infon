@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -301,7 +302,11 @@ func handleShareCommand(args []string) error {
 func handleReceiveScreenCommand(args []string) error {
 	port := 5000
 	if len(args) > 0 {
-		_, _ = fmt.Sscanf(args[0], "%d", &port)
+		p, err := strconv.Atoi(args[0])
+		if err != nil || p < 1 || p > 65535 {
+			return fmt.Errorf("invalid port %q", args[0])
+		}
+		port = p
 	}
 
 	return receiveScreen(port)

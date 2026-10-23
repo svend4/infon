@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -87,7 +88,16 @@ func runCall() {
 			}
 		} else if !strings.HasPrefix(arg, "--") {
 			positionalArgs = append(positionalArgs, arg)
+		} else {
+			// A mistyped option (say --recrod) used to be dropped silently, so
+			// the call went ahead unrecorded while the user thought otherwise.
+			fmt.Fprintf(os.Stderr, "Error: unknown option %s\n", arg)
+			os.Exit(1)
 		}
+	}
+	// --output names the recording, so it implies --record (as --ray-spp implies --ray).
+	if outputFile != "" {
+		enableRecording = true
 	}
 
 	if len(positionalArgs) < 1 {
@@ -298,6 +308,19 @@ func runCall() {
 	// Channel for audio packets from jitter buffer
 	audioPlaybackChan := make(chan *network.AudioPacket, 10)
 
+	// done stops the capture, encode and playback goroutines at hang-up; the main
+	// loop waits for them (wg) before printing stats, stopping the recorder and
+	// letting the deferred device Close calls run, so no goroutine is still
+	// reading the camera or writing the speaker while it is being closed.
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// localPreview is the sender's latest local frame. The split-screen preview
+	// renders it instead of reading the camera a second time from the receive
+	// loop, which split the camera's frames between two readers and blocked the
+	// receive loop on the capture device.
+	var localPreview atomic.Pointer[terminal.Frame]
+
 	// Terminal dimensions for split-screen
 	// Top half: remote video (40 cols × 12 rows)
 	// Bottom half: local video (40 cols × 12 rows)
@@ -308,24 +331,38 @@ func runCall() {
 	fmt.Print(color.ClearScreen)
 
 	// Goroutine to pull packets from jitter buffer
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		defer close(audioPlaybackChan)                  // ends the playback goroutine
 		ticker := time.NewTicker(10 * time.Millisecond) // Check every 10ms
 		defer ticker.Stop()
 
-		for range ticker.C {
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
 			// Try to get next packet from jitter buffer
 			if packet := audioJitterBuffer.Get(); packet != nil {
 				// Decode audio packet
 				audioPacket, err := network.DecodeAudioPacket(packet.Payload)
 				if err == nil {
-					audioPlaybackChan <- audioPacket
+					select {
+					case audioPlaybackChan <- audioPacket:
+					case <-done:
+						return
+					}
 				}
 			}
 		}
 	}()
 
 	// Goroutine to play audio from jitter buffer
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for audioPacket := range audioPlaybackChan {
 			if len(audioPacket.Samples) > 0 && audioSink != nil {
 				_, _ = audioSink.Write(audioPacket.Samples)
@@ -352,10 +389,17 @@ func runCall() {
 	pframeEncoder := video.NewPFrameEncoder(30)
 
 	// Goroutine for sending (local video)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		lastFrameTime := time.Now()
 
 		for {
+			select {
+			case <-done:
+				return
+			default:
+			}
 			// Get current FPS from quality controller
 			currentFPS := qualityController.GetCurrentFPS()
 			frameInterval := time.Duration(1000.0/float64(currentFPS)) * time.Millisecond
@@ -375,6 +419,7 @@ func runCall() {
 
 			// Encode to terminal frame
 			frame := babe.ImageToFrame(img, localWidth, localHeight)
+			localPreview.Store(frame)
 
 			// Record frame if recording
 			if rec != nil && rec.IsRecording() {
@@ -436,7 +481,9 @@ func runCall() {
 
 	// Goroutine for sending audio (skipped when there is no capture device)
 	if audioSource != nil {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			// 20ms audio chunks (good balance between latency and efficiency)
 			samplesPerChunk := audioFormat.SampleRate / 50 // 50 chunks per second = 20ms each
 			buffer := make([]int16, samplesPerChunk)
@@ -444,7 +491,12 @@ func runCall() {
 			ticker := time.NewTicker(20 * time.Millisecond)
 			defer ticker.Stop()
 
-			for range ticker.C {
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+				}
 				// Read audio samples
 				n, err := audioSource.Read(buffer)
 				if err != nil || n == 0 {
@@ -550,6 +602,18 @@ func runCall() {
 	for {
 		select {
 		case <-sigChan:
+			// Stop capture/playback first so the stats are final, the recorder is
+			// stopped after its last write, and the deferred Close calls run on idle
+			// devices. A device read stuck in the kernel must not hang Ctrl+C, so
+			// give up waiting after a short grace period.
+			close(done)
+			stopped := make(chan struct{})
+			go func() { wg.Wait(); close(stopped) }()
+			select {
+			case <-stopped:
+			case <-time.After(2 * time.Second):
+			}
+
 			elapsed := time.Since(startTime)
 			mu.Lock()
 			sc, rc := sendCount, recvCount
@@ -728,7 +792,7 @@ func runCall() {
 							remoteFrame := pframeDecoder.Decode(encodedFrame)
 
 							// Render split-screen: remote on top, local on bottom
-							renderSplitScreen(camera, remoteFrame, localWidth, localHeight, remoteWidth, remoteHeight)
+							renderSplitScreen(localPreview.Load(), remoteFrame, localWidth, localHeight, remoteWidth, remoteHeight)
 
 							mu.Lock()
 							recvCount++
@@ -790,7 +854,9 @@ func runCall() {
 }
 
 // renderSplitScreen renders remote video on top, local video preview on bottom
-func renderSplitScreen(camera device.Camera, remoteFrame *terminal.Frame, localW, localH, remoteW, remoteH int) {
+// renderSplitScreen draws the remote frame above the local preview. localFrame is
+// the sender's latest frame and is nil until the first one is captured.
+func renderSplitScreen(localFrame *terminal.Frame, remoteFrame *terminal.Frame, localW, localH, remoteW, remoteH int) {
 	// Clear screen
 	fmt.Print(color.ClearScreen)
 
@@ -812,9 +878,7 @@ func renderSplitScreen(camera device.Camera, remoteFrame *terminal.Frame, localW
 
 	// Render local preview (bottom half)
 	fmt.Println("Local:")
-	img, _ := camera.Read()
-	if img != nil {
-		localFrame := babe.ImageToFrame(img, localW, localH)
+	if localFrame != nil {
 		for y := 0; y < localFrame.Height; y++ {
 			for x := 0; x < localFrame.Width; x++ {
 				block := localFrame.Blocks[y][x]

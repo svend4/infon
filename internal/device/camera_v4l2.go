@@ -10,12 +10,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
 
 // V4L2Camera implements Camera interface using Video4Linux2
+//
+// Read, Close and IsOpen are serialised by mu, so a Close at hang-up cannot unmap
+// the buffers while a Read is between DQBUF and QBUF.
 type V4L2Camera struct {
+	mu         sync.Mutex
 	devicePath string
 	width      int
 	height     int
@@ -225,6 +230,8 @@ func (c *V4L2Camera) Open() error {
 
 // Read captures a frame from the camera
 func (c *V4L2Camera) Read() (image.Image, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if !c.isOpen {
 		return nil, errors.New("camera not open")
 	}
@@ -236,6 +243,11 @@ func (c *V4L2Camera) Read() (image.Image, error) {
 
 	if err := c.ioctl(VIDIOC_DQBUF, unsafe.Pointer(&buf)); err != nil {
 		return nil, fmt.Errorf("failed to dequeue buffer: %w", err)
+	}
+
+	if int(buf.index) >= len(c.buffers) || int(buf.bytesused) > len(c.buffers[buf.index]) {
+		_ = c.ioctl(VIDIOC_QBUF, unsafe.Pointer(&buf))
+		return nil, fmt.Errorf("driver returned buffer %d (%d bytes) outside the mapped buffers", buf.index, buf.bytesused)
 	}
 
 	// Convert buffer to image
@@ -251,6 +263,8 @@ func (c *V4L2Camera) Read() (image.Image, error) {
 
 // Close closes the camera
 func (c *V4L2Camera) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if !c.isOpen {
 		return nil
 	}
@@ -279,6 +293,8 @@ func (c *V4L2Camera) Close() error {
 
 // IsOpen returns whether the camera is open
 func (c *V4L2Camera) IsOpen() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.isOpen
 }
 
