@@ -119,12 +119,20 @@ func runCall() {
 
 	// Try to resolve from contacts if it's a name (no colons or brackets)
 	remoteAddr := nameOrAddr
+	resolvedFromContact := false
 	if !strings.Contains(nameOrAddr, ":") && !strings.Contains(nameOrAddr, "[") {
 		// Looks like a contact name, try to resolve
 		cb, err := contacts.GetDefaultContactBook()
 		if err == nil {
 			if resolvedAddr, err := cb.Resolve(nameOrAddr); err == nil {
-				remoteAddr = resolvedAddr + ":5000" // Default port
+				// Contacts are stored as bare Yggdrasil IPv6 addresses. Use
+				// net.JoinHostPort, which brackets IPv6 correctly: string-appending
+				// ":5000" gave "200:abc::1:5000", which the normalisation below then
+				// wrapped as "[200:abc::1:5000]:5000" — a syntactically valid but
+				// different address (the "::" absorbs the extra group), so the call
+				// silently dialled the wrong host. resolvedPort marks it already final.
+				remoteAddr = net.JoinHostPort(resolvedAddr, "5000")
+				resolvedFromContact = true
 				fmt.Printf("📇 Resolved '%s' to %s\n", nameOrAddr, resolvedAddr)
 
 				// Update last seen (ignore error as it's not critical)
@@ -133,8 +141,11 @@ func runCall() {
 		}
 	}
 
-	// Add default port if not specified
-	if !strings.Contains(remoteAddr, "]:") && strings.Count(remoteAddr, ":") == 0 {
+	// Add default port if not specified (skipped when the contact book already
+	// produced a host:port via net.JoinHostPort).
+	if resolvedFromContact {
+		// already host:port, leave it
+	} else if !strings.Contains(remoteAddr, "]:") && strings.Count(remoteAddr, ":") == 0 {
 		// No port specified for IPv4/hostname
 		remoteAddr = remoteAddr + ":5000"
 	} else if strings.HasPrefix(remoteAddr, "[") && !strings.Contains(remoteAddr, "]:") {
