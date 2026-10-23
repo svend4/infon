@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/svend4/infon/internal/network"
@@ -12,15 +13,15 @@ import (
 
 // PeerConnection represents a connection to a single peer in the group
 type PeerConnection struct {
-	ID            string            // Peer identifier (hostname or address)
-	Address       *net.UDPAddr      // Peer's UDP address
-	LastSeen      time.Time         // Last packet received time
-	VideoFrame    *terminal.Frame   // Latest video frame from peer
-	AudioBuffer   []int16           // Latest audio samples
-	FrameCount    uint64            // Frames received
-	AudioCount    uint64            // Audio packets received
-	Stats         *PeerStats        // Connection statistics
-	mutex         sync.RWMutex
+	ID          string          // Peer identifier (hostname or address)
+	Address     *net.UDPAddr    // Peer's UDP address
+	LastSeen    time.Time       // Last packet received time
+	VideoFrame  *terminal.Frame // Latest video frame from peer
+	AudioBuffer []int16         // Latest audio samples
+	FrameCount  uint64          // Frames received
+	AudioCount  uint64          // Audio packets received
+	Stats       *PeerStats      // Connection statistics
+	mutex       sync.RWMutex
 }
 
 // PeerStats tracks statistics for a peer connection
@@ -88,12 +89,11 @@ func (pc *PeerConnection) GetAudioBuffer() []int16 {
 
 // GroupCall manages a multi-peer video call
 type GroupCall struct {
-	peers       map[string]*PeerConnection // Map of peer ID to connection
-	transport   *network.Transport          // Network transport
-	localPort   string                      // Local port
-	peersMutex  sync.RWMutex
-	running     bool
-	stopChan    chan bool
+	peers      map[string]*PeerConnection // Map of peer ID to connection
+	transport  *network.Transport         // Network transport
+	localPort  string                     // Local port
+	peersMutex sync.RWMutex
+	running    atomic.Bool
 }
 
 // NewGroupCall creates a new group call manager
@@ -107,7 +107,6 @@ func NewGroupCall(localPort string) (*GroupCall, error) {
 		peers:     make(map[string]*PeerConnection),
 		transport: transport,
 		localPort: localPort,
-		stopChan:  make(chan bool),
 	}, nil
 }
 
@@ -215,14 +214,18 @@ func (gc *GroupCall) SendToPeer(peerID string, packet *network.Packet) error {
 
 // Start starts the group call
 func (gc *GroupCall) Start() error {
-	gc.running = true
+	gc.running.Store(true)
 	return nil
 }
 
-// Stop stops the group call
+// Stop stops the group call. It is safe to call more than once. The goroutines
+// started for the call poll IsRunning (not a channel), so Stop only has to flip the
+// flag, send LEAVE to the peers and close the transport — the previous unbuffered
+// stopChan send had no receiver and blocked Stop forever, hanging Ctrl+C.
 func (gc *GroupCall) Stop() error {
-	gc.running = false
-	gc.stopChan <- true
+	if !gc.running.Swap(false) {
+		return nil // already stopped
+	}
 
 	// Send leave message to all peers
 	for _, peer := range gc.GetAllPeers() {
@@ -238,7 +241,7 @@ func (gc *GroupCall) Stop() error {
 
 // IsRunning returns whether the group call is running
 func (gc *GroupCall) IsRunning() bool {
-	return gc.running
+	return gc.running.Load()
 }
 
 // GetTransport returns the network transport

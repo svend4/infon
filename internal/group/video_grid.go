@@ -3,6 +3,7 @@ package group
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/svend4/infon/pkg/color"
@@ -27,10 +28,16 @@ const (
 	Layout3x3
 )
 
-// VideoGrid manages multiple video feeds in a grid layout
+// VideoGrid manages multiple video feeds in a grid layout.
+//
+// frames and peerNames are written by the packet-receive goroutine (SetFrame /
+// SetPeerName / RemovePeer) and read by the display goroutine (Render / PeerCount),
+// so every access goes through mu; without it a SetFrame landing during Render's map
+// iteration aborted the process with "concurrent map iteration and map write".
 type VideoGrid struct {
 	width     int
 	height    int
+	mu        sync.RWMutex
 	layout    GridLayout
 	frames    map[string]*terminal.Frame // Map of peer ID to video frame
 	peerNames map[string]string          // Map of peer ID to display name
@@ -49,16 +56,22 @@ func NewVideoGrid(width, height int) *VideoGrid {
 
 // SetFrame sets a video frame for a peer
 func (vg *VideoGrid) SetFrame(peerID string, frame *terminal.Frame) {
+	vg.mu.Lock()
+	defer vg.mu.Unlock()
 	vg.frames[peerID] = frame
 }
 
 // SetPeerName sets a display name for a peer
 func (vg *VideoGrid) SetPeerName(peerID string, name string) {
+	vg.mu.Lock()
+	defer vg.mu.Unlock()
 	vg.peerNames[peerID] = name
 }
 
 // RemovePeer removes a peer's video frame
 func (vg *VideoGrid) RemovePeer(peerID string) {
+	vg.mu.Lock()
+	defer vg.mu.Unlock()
 	delete(vg.frames, peerID)
 	delete(vg.peerNames, peerID)
 }
@@ -118,6 +131,8 @@ func (vg *VideoGrid) getFixedLayout() (rows, cols int) {
 
 // Render renders all video feeds in a grid
 func (vg *VideoGrid) Render() *terminal.Frame {
+	vg.mu.RLock()
+	defer vg.mu.RUnlock()
 	peerCount := len(vg.frames)
 	rows, cols := vg.getOptimalLayout(peerCount)
 
@@ -287,12 +302,16 @@ func (vg *VideoGrid) drawGridLines(output *terminal.Frame, rows, cols, cellWidth
 
 // Clear clears all video frames
 func (vg *VideoGrid) Clear() {
+	vg.mu.Lock()
+	defer vg.mu.Unlock()
 	vg.frames = make(map[string]*terminal.Frame)
 	vg.peerNames = make(map[string]string)
 }
 
 // PeerCount returns the number of peers
 func (vg *VideoGrid) PeerCount() int {
+	vg.mu.RLock()
+	defer vg.mu.RUnlock()
 	return len(vg.frames)
 }
 
