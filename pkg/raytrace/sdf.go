@@ -69,15 +69,37 @@ func (m Marched) Intersect(r Ray, tMin, tMax float64) (Hit, bool) {
 	if k <= 0 {
 		k = 1
 	}
+	// side is +1 while marching outside the surface, -1 inside it, and 0 until the
+	// march has cleared the eps band. A ray entering the bounding sphere starts
+	// outside; one starting within it (a secondary ray spawned shadowEps off this
+	// surface, which eps may exceed) must first leave the band, or it would re-hit
+	// its own origin at t == tMin. A ray that starts inside marches on |d| to the exit.
+	side := 0.0
+	if s0 > tMin*dl {
+		side = 1
+	}
 	s := s0
 	for i := 0; i < steps; i++ {
 		p := r.Origin.Add(ud.Scale(s))
 		d := m.DE(p.Sub(m.Center))
-		if d < eps {
+		if side == 0 {
+			if d >= eps {
+				side = 1
+			} else if d <= -eps {
+				side = -1
+			} else { // still within the band of the surface the ray starts on
+				s += eps
+				if s > s1 {
+					break
+				}
+				continue
+			}
+		}
+		if side*d < eps {
 			n, front := orient(m.normal(p), r.Dir)
 			return Hit{T: s / dl, P: p, N: n, Front: front, Mat: m.Mat}, true
 		}
-		s += d * k
+		s += side * d * k
 		if s > s1 {
 			break
 		}

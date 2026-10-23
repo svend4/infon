@@ -132,11 +132,15 @@ func buildBVH(tris []Triangle) *bvh {
 			lb = lb.union(boxes[sub[i]])
 			left[i] = lb.area() * float64(i+1)
 		}
+		// coincident centroids can't be separated: keep the median split. Otherwise
+		// ties (e.g. zero-area boxes) go to the more balanced split, so the tree never
+		// degenerates into an O(n) chain.
 		leftCount, bestCost := count/2, 1e300
 		rb := emptyAABB()
-		for i := count - 1; i >= 1; i-- {
+		for i := count - 1; i >= 1 && axis(ext, ax) > 0; i-- {
 			rb = rb.union(boxes[sub[i]])
-			if cost := left[i-1] + rb.area()*float64(count-i); cost < bestCost {
+			cost := left[i-1] + rb.area()*float64(count-i)
+			if cost < bestCost || cost == bestCost && max(i, count-i) < max(leftCount, count-leftCount) {
 				bestCost, leftCount = cost, i
 			}
 		}
