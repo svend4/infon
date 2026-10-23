@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/svend4/infon/internal/network"
@@ -45,7 +46,13 @@ type RecordedAudio struct {
 }
 
 // Recorder handles recording of calls
+//
+// It is safe for concurrent use: in a call the video and audio capture
+// goroutines record while the main goroutine stops the recording. mu guards
+// every field, and Stop holds it while writing, so the frame and audio counts
+// written to the header always match the entries written after it.
 type Recorder struct {
+	mu         sync.Mutex
 	file       *os.File
 	startTime  time.Time
 	frames     []RecordedFrame
@@ -89,6 +96,8 @@ func (r *Recorder) Start(filename string) error {
 		return fmt.Errorf("failed to create recording file: %w", err)
 	}
 
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.file = file
 	r.startTime = time.Now()
 	r.metadata.StartTime = r.startTime
@@ -99,6 +108,8 @@ func (r *Recorder) Start(filename string) error {
 
 // RecordFrame records a video frame
 func (r *Recorder) RecordFrame(frame *terminal.Frame) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if !r.recording {
 		return fmt.Errorf("not recording")
 	}
@@ -115,6 +126,8 @@ func (r *Recorder) RecordFrame(frame *terminal.Frame) error {
 
 // RecordAudio records an audio chunk
 func (r *Recorder) RecordAudio(samples []int16) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if !r.recording {
 		return fmt.Errorf("not recording")
 	}
@@ -135,6 +148,8 @@ func (r *Recorder) RecordAudio(samples []int16) error {
 
 // Stop stops recording and saves the file
 func (r *Recorder) Stop() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if !r.recording {
 		return fmt.Errorf("not recording")
 	}
@@ -283,11 +298,15 @@ func serializeFrame(frame *terminal.Frame) []byte {
 
 // IsRecording returns true if currently recording
 func (r *Recorder) IsRecording() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.recording
 }
 
 // GetStats returns current recording statistics
 func (r *Recorder) GetStats() (frameCount, audioCount int, duration time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.recording {
 		duration = time.Since(r.startTime)
 	} else {

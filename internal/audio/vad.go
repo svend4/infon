@@ -2,10 +2,15 @@ package audio
 
 import (
 	"math"
+	"sync"
 )
 
 // VAD (Voice Activity Detection) detects speech in audio
 type VAD struct {
+	// mu guards all fields: in a call Process runs on the audio goroutine while
+	// the main goroutine reads GetStatistics for the status line.
+	mu sync.Mutex
+
 	sampleRate      int
 	energyThreshold float64
 
@@ -49,6 +54,8 @@ func NewVAD(sampleRate int) *VAD {
 
 // Process analyzes audio samples and returns true if speech detected
 func (v *VAD) Process(samples []int16) bool {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.frameCount++
 	v.totalFrames++
 
@@ -137,11 +144,15 @@ func (v *VAD) updateThresholds(energy float64) {
 
 // IsSpeaking returns true if speech is currently detected
 func (v *VAD) IsSpeaking() bool {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	return v.isSpeaking
 }
 
 // GetStatistics returns VAD statistics
 func (v *VAD) GetStatistics() VADStatistics {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	var activityRate float64
 	if v.totalFrames > 0 {
 		activityRate = float64(v.speechTotal) / float64(v.totalFrames) * 100.0
@@ -160,6 +171,8 @@ func (v *VAD) GetStatistics() VADStatistics {
 
 // SetSensitivity adjusts VAD sensitivity (0.0 = less sensitive, 1.0 = more sensitive)
 func (v *VAD) SetSensitivity(sensitivity float64) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	// Clamp to 0.0-1.0
 	if sensitivity < 0.0 {
 		sensitivity = 0.0
@@ -183,6 +196,8 @@ func (v *VAD) SetSensitivity(sensitivity float64) {
 
 // Reset resets VAD state
 func (v *VAD) Reset() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.frameCount = 0
 	v.speechFrames = 0
 	v.silenceFrames = 0
