@@ -63,8 +63,12 @@ the exact `go run ./cmd/…` lines, grouped), see **[docs/COMMANDS.md](docs/COMM
 
 ## ⚡ Key Features
 
-- **🚀 Ultra-low bandwidth:** 382 kbps total (vs 1.8 Mbps for Zoom)
-- **📊 170 MB/hour** traffic (vs 540-1620 MB for Zoom)
+- **🚀 Low bandwidth:** a call carries ~40–600 kbps of video (P-frames, 15 FPS;
+  measured on localhost with the test patterns: 36 kbps for a mostly static scene,
+  588 kbps for one that changes every frame) plus up to 256 kbps of 16 kHz PCM voice,
+  sent only while you speak (VAD) — a few hundred kbps where Zoom needs 1.8 Mbps
+  minimum. `tvcp send` streams full 80×24 frames at ~2.9 Mbps.
+- **📊 ~100–400 MB/hour** for a call (vs 540-1620 MB for Zoom)
 - **🎧 Full audio+video** — 16 kHz voice + 15 FPS video
 - **🔒 P2P mesh networking** via Yggdrasil — no servers, no accounts
 - **🖥️ Headless-first** — perfect for SSH sessions and remote servers
@@ -315,10 +319,10 @@ TVCP is in early development. Contributions are welcome!
 
 | Feature | Zoom | WebRTC | TVCP |
 |---------|------|--------|------|
-| Min bandwidth | 1.8 Mbps | 1.5 Mbps | **382 kbps** |
+| Bandwidth | 1.8 Mbps min | 1.5 Mbps min | **~0.3–0.85 Mbps** (video + voice) |
 | Video quality | 720p | 720p | **Terminal (40x30)** |
 | Audio quality | 48 kHz stereo | 48 kHz | **16 kHz mono** |
-| Traffic/hour | 540-1620 MB | 450-900 MB | **170 MB** |
+| Traffic/hour | 540-1620 MB | 450-900 MB | **~100–400 MB** |
 | GUI required | ✓ | ✓ | **✗** |
 | Central server | ✓ | Signaling only | **✗ (P2P)** |
 | Account needed | ✓ | Varies | **✗** |
