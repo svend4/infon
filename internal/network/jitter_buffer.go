@@ -10,15 +10,15 @@ type JitterBuffer struct {
 	mu sync.Mutex
 
 	// Buffer configuration
-	maxSize       int           // Maximum buffer size
-	minDelay      time.Duration // Minimum buffering delay
-	maxDelay      time.Duration // Maximum buffering delay
-	currentDelay  time.Duration // Current adaptive delay
+	maxSize      int           // Maximum buffer size
+	minDelay     time.Duration // Minimum buffering delay
+	maxDelay     time.Duration // Maximum buffering delay
+	currentDelay time.Duration // Current adaptive delay
 
 	// Packet storage
-	buffer        map[uint32]*BufferedPacket
-	nextExpected  uint32        // Next sequence to output
-	lastOutput    time.Time     // Last packet output time
+	buffer       map[uint32]*BufferedPacket
+	nextExpected uint32    // Next sequence to output
+	lastOutput   time.Time // Last packet output time
 
 	// Statistics
 	totalBuffered uint64
@@ -79,17 +79,26 @@ func (jb *JitterBuffer) Add(packet *Packet) bool {
 }
 
 // Get retrieves the next packet if available and buffering delay has passed
-// Returns nil if no packet is ready
+// Returns nil if no packet is ready.
+//
+// It outputs the lowest buffered sequence at or above nextExpected rather than
+// requiring exactly nextExpected. Callers feed it packets whose sequence comes from
+// a counter shared with video/text/NACK, so audio sequence numbers are monotonic but
+// not contiguous; keying strictly on nextExpected (which started at 0, a sequence
+// never produced for audio) meant Get never returned anything and remote audio was
+// silent. Skipping to the lowest available sequence also means a genuinely lost
+// packet no longer stalls playback forever — the buffer advances past it.
 func (jb *JitterBuffer) Get() *Packet {
 	jb.mu.Lock()
 	defer jb.mu.Unlock()
 
-	// Check if next expected packet is in buffer
-	buffered, exists := jb.buffer[jb.nextExpected]
-	if !exists {
+	// Find the lowest buffered sequence >= nextExpected.
+	seq, ok := jb.lowestSeq()
+	if !ok {
 		jb.underruns++
 		return nil
 	}
+	buffered := jb.buffer[seq]
 
 	// Check if buffering delay has passed
 	delay := time.Since(buffered.ArrivalTime)
@@ -98,9 +107,9 @@ func (jb *JitterBuffer) Get() *Packet {
 		return nil
 	}
 
-	// Remove from buffer and advance
-	delete(jb.buffer, jb.nextExpected)
-	jb.nextExpected++
+	// Remove from buffer and advance past this sequence
+	delete(jb.buffer, seq)
+	jb.nextExpected = seq + 1
 	jb.lastOutput = time.Now()
 	jb.totalOutput++
 
@@ -110,13 +119,28 @@ func (jb *JitterBuffer) Get() *Packet {
 	return buffered.Packet
 }
 
-// Peek returns the next expected sequence number without removing it
+// Peek returns the next sequence number that Get would output, without removing it.
 func (jb *JitterBuffer) Peek() (uint32, bool) {
 	jb.mu.Lock()
 	defer jb.mu.Unlock()
 
-	_, exists := jb.buffer[jb.nextExpected]
-	return jb.nextExpected, exists
+	return jb.lowestSeq()
+}
+
+// lowestSeq returns the smallest buffered sequence at or above nextExpected. Caller
+// must hold jb.mu.
+func (jb *JitterBuffer) lowestSeq() (uint32, bool) {
+	found := false
+	var min uint32
+	for seq := range jb.buffer {
+		if seq < jb.nextExpected {
+			continue
+		}
+		if !found || seq < min {
+			min, found = seq, true
+		}
+	}
+	return min, found
 }
 
 // Size returns current buffer size

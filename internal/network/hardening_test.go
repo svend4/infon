@@ -70,3 +70,34 @@ func TestAssembleFrameRejectsAbsurdDimensions(t *testing.T) {
 		t.Fatal("expected error for out-of-bound frame dimensions, got nil")
 	}
 }
+
+func TestJitterBufferToleratesSequenceGaps(t *testing.T) {
+	// Audio sequence numbers are drawn from a counter shared with video/text, so they
+	// arrive monotonic but not contiguous and never start at 0. The buffer must still
+	// hand them out in order rather than stalling on the missing nextExpected==0.
+	jb := NewJitterBuffer(50)
+	jb.minDelay = 0     // let adaptDelay settle to 0 so the test can drain in a tight loop
+	jb.currentDelay = 0 // output as soon as present
+	for _, seq := range []uint32{7, 9, 10, 13} {
+		if !jb.Add(&Packet{Sequence: seq}) {
+			t.Fatalf("Add(%d) rejected", seq)
+		}
+	}
+	var got []uint32
+	for {
+		p := jb.Get()
+		if p == nil {
+			break
+		}
+		got = append(got, p.Sequence)
+	}
+	want := []uint32{7, 9, 10, 13}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}

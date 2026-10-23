@@ -639,20 +639,22 @@ func runCall() {
 				continue
 			}
 
-			// Track packet for loss detection
-			if packet.Type == network.PacketTypeFrame {
-				isNew := lossDetector.OnPacketReceived(packet.Sequence)
-				if !isNew {
-					// Duplicate packet, skip
-					continue
-				}
-
-				// Check for lost packets and send NACK
-				lostPackets := lossDetector.GetLostPackets()
-				if len(lostPackets) > 0 {
-					nackPacket := network.CreateNACKPacket(lostPackets, transport.NextSequence())
-					_ = transport.SendPacket(nackPacket, udpAddr)
-				}
+			// Track every packet for loss detection. The peer draws one sequence
+			// counter for video, audio, text and NACK, so feeding the detector only
+			// video sequences made every audio/text/NACK packet look like a gap: the
+			// detector's expectedSeq then stuck, each later frame re-reported the whole
+			// range as lost, and the call showed ~90% loss with a NACK storm that
+			// throttled FPS to the floor. Retransmission requests stay keyed on the
+			// shared sequence, which is what the sender stored.
+			isNew := lossDetector.OnPacketReceived(packet.Sequence)
+			if !isNew {
+				// Duplicate packet, skip
+				continue
+			}
+			lostPackets := lossDetector.GetLostPackets()
+			if len(lostPackets) > 0 {
+				nackPacket := network.CreateNACKPacket(lostPackets, transport.NextSequence())
+				_ = transport.SendPacket(nackPacket, udpAddr)
 			}
 
 			switch packet.Type {
