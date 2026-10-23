@@ -11,6 +11,10 @@ The **ray/Q6/alife platform** — meaning ⇄ world, end to end. See
 
 ### 🔧 Fixed
 
+- `tvcp call` no longer refuses to start on a host without a sound card: when
+  ALSA capture or playback cannot be opened it warns and continues video-only
+  (new `--no-audio` flag forces that). Headless hosts — SSH sessions, servers,
+  containers — were previously unable to call at all.
 - `SceneVector.SceneSpec()` now really is byte-identical to the Python director's
   `scene_from_vector`: Go rounded 3-decimal ties away from zero after an inexact
   `x*1000` and the form count with `math.Round`, while Python rounds ties to even on the

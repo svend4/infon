@@ -33,6 +33,7 @@ func runCall() {
 		fmt.Fprintln(os.Stderr, "  --output <file>       Output file for recording (default: auto-generated)")
 		fmt.Fprintln(os.Stderr, "  --ray                 Send a live CPU ray-traced 3-D world instead of the camera")
 		fmt.Fprintln(os.Stderr, "  --ray-spp <n>         Ray-tracer samples per pixel axis (default 1; higher = cleaner, slower)")
+		fmt.Fprintln(os.Stderr, "  --no-audio            Video-only call (skip microphone and speaker)")
 		fmt.Fprintln(os.Stderr, "\nThis starts a two-way video call with text chat.")
 		fmt.Fprintln(os.Stderr, "Type messages and press Enter to send text during the call.")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
@@ -49,6 +50,7 @@ func runCall() {
 	var enableRecording bool
 	var outputFile string
 	var useRay bool
+	var noAudio bool
 	raySPP := 1
 	args := os.Args[2:]
 	var positionalArgs []string
@@ -67,6 +69,8 @@ func runCall() {
 			}
 		} else if arg == "--ray" {
 			useRay = true
+		} else if arg == "--no-audio" {
+			noAudio = true
 		} else if arg == "--ray-spp" {
 			if i+1 < len(args) {
 				n, err := strconv.Atoi(args[i+1])
@@ -202,33 +206,40 @@ func runCall() {
 	}
 	defer func() { _ = camera.Close() }()
 
-	// Create audio source for local microphone
+	// Audio: microphone capture and speaker playback. Headless hosts (SSH
+	// sessions, servers, containers) often have no sound card at all; rather than
+	// refusing to start, the call then runs video-only, as it does with --no-audio.
 	audioFormat := audio.DefaultFormat()
-	audioSource, err := audio.NewDefaultCapture()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating audio source: %v\n", err)
-		os.Exit(1)
+	var audioSource audio.AudioCapture
+	var audioSink audio.AudioPlayback
+	if !noAudio {
+		src, err := audio.NewDefaultCapture()
+		if err == nil {
+			err = src.Open()
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "⚠ Audio capture unavailable, continuing video-only: %v\n", err)
+		} else {
+			audioSource = src
+			defer func() { _ = audioSource.Close() }()
+		}
+		sink, err := audio.NewDefaultPlayback()
+		if err == nil {
+			err = sink.Open()
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "⚠ Audio playback unavailable, remote audio will be dropped: %v\n", err)
+		} else {
+			audioSink = sink
+			defer func() { _ = audioSink.Close() }()
+		}
 	}
-	if err := audioSource.Open(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening audio source: %v\n", err)
-		os.Exit(1)
+	if audioSource == nil && audioSink == nil {
+		fmt.Println("Audio: disabled (video-only call)")
+	} else {
+		fmt.Printf("Audio: %d Hz, %d channels, %d-bit\n",
+			audioFormat.SampleRate, audioFormat.Channels, audioFormat.BitDepth)
 	}
-	defer func() { _ = audioSource.Close() }()
-
-	// Create audio sink for remote audio playback
-	audioSink, err := audio.NewDefaultPlayback()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating audio sink: %v\n", err)
-		os.Exit(1)
-	}
-	if err := audioSink.Open(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening audio sink: %v\n", err)
-		os.Exit(1)
-	}
-	defer func() { _ = audioSink.Close() }()
-
-	fmt.Printf("Audio: %d Hz, %d channels, %d-bit\n",
-		audioFormat.SampleRate, audioFormat.Channels, audioFormat.BitDepth)
 
 	// Send handshake
 	fmt.Println("Sending handshake...")
@@ -305,7 +316,7 @@ func runCall() {
 	// Goroutine to play audio from jitter buffer
 	go func() {
 		for audioPacket := range audioPlaybackChan {
-			if len(audioPacket.Samples) > 0 {
+			if len(audioPacket.Samples) > 0 && audioSink != nil {
 				_, _ = audioSink.Write(audioPacket.Samples)
 
 				mu.Lock()
@@ -412,68 +423,70 @@ func runCall() {
 	echoCanceller.SetStepSize(0.01) // Conservative adaptation
 	_ = echoCanceller               // Prepared for future use
 
-	// Goroutine for sending audio
-	go func() {
-		// 20ms audio chunks (good balance between latency and efficiency)
-		samplesPerChunk := audioFormat.SampleRate / 50 // 50 chunks per second = 20ms each
-		buffer := make([]int16, samplesPerChunk)
+	// Goroutine for sending audio (skipped when there is no capture device)
+	if audioSource != nil {
+		go func() {
+			// 20ms audio chunks (good balance between latency and efficiency)
+			samplesPerChunk := audioFormat.SampleRate / 50 // 50 chunks per second = 20ms each
+			buffer := make([]int16, samplesPerChunk)
 
-		ticker := time.NewTicker(20 * time.Millisecond)
-		defer ticker.Stop()
+			ticker := time.NewTicker(20 * time.Millisecond)
+			defer ticker.Stop()
 
-		for range ticker.C {
-			// Read audio samples
-			n, err := audioSource.Read(buffer)
-			if err != nil || n == 0 {
-				continue
+			for range ticker.C {
+				// Read audio samples
+				n, err := audioSource.Read(buffer)
+				if err != nil || n == 0 {
+					continue
+				}
+
+				// Apply noise suppression
+				enhanced, _ := noiseSuppressor.Process(buffer[:n])
+
+				// Record audio if recording (record original, not enhanced)
+				if rec != nil && rec.IsRecording() {
+					_ = rec.RecordAudio(buffer[:n])
+				}
+
+				// Voice Activity Detection - only send if speech detected
+				isSpeaking := vad.Process(enhanced)
+				if !isSpeaking {
+					// Skip sending during silence to save bandwidth
+					continue
+				}
+
+				// Create audio packet with enhanced audio
+				audioPacket := &network.AudioPacket{
+					Timestamp:  uint64(time.Now().UnixMilli()),
+					SampleRate: uint16(audioFormat.SampleRate),
+					Channels:   uint8(audioFormat.Channels),
+					Codec:      network.AudioCodecPCM,
+					Samples:    enhanced,
+				}
+
+				// Encode audio packet
+				audioData, err := network.EncodeAudioPacket(audioPacket)
+				if err != nil {
+					continue
+				}
+
+				// Send as network packet
+				packet := &network.Packet{
+					Type:      network.PacketTypeAudio,
+					Sequence:  transport.NextSequence(),
+					Timestamp: audioPacket.Timestamp,
+					Payload:   audioData,
+				}
+
+				_ = transport.SendPacket(packet, udpAddr)
+				retransmitter.OnPacketSent(packet, udpAddr)
+
+				mu.Lock()
+				audioSendCount++
+				mu.Unlock()
 			}
-
-			// Apply noise suppression
-			enhanced, _ := noiseSuppressor.Process(buffer[:n])
-
-			// Record audio if recording (record original, not enhanced)
-			if rec != nil && rec.IsRecording() {
-				_ = rec.RecordAudio(buffer[:n])
-			}
-
-			// Voice Activity Detection - only send if speech detected
-			isSpeaking := vad.Process(enhanced)
-			if !isSpeaking {
-				// Skip sending during silence to save bandwidth
-				continue
-			}
-
-			// Create audio packet with enhanced audio
-			audioPacket := &network.AudioPacket{
-				Timestamp:  uint64(time.Now().UnixMilli()),
-				SampleRate: uint16(audioFormat.SampleRate),
-				Channels:   uint8(audioFormat.Channels),
-				Codec:      network.AudioCodecPCM,
-				Samples:    enhanced,
-			}
-
-			// Encode audio packet
-			audioData, err := network.EncodeAudioPacket(audioPacket)
-			if err != nil {
-				continue
-			}
-
-			// Send as network packet
-			packet := &network.Packet{
-				Type:      network.PacketTypeAudio,
-				Sequence:  transport.NextSequence(),
-				Timestamp: audioPacket.Timestamp,
-				Payload:   audioData,
-			}
-
-			_ = transport.SendPacket(packet, udpAddr)
-			retransmitter.OnPacketSent(packet, udpAddr)
-
-			mu.Lock()
-			audioSendCount++
-			mu.Unlock()
-		}
-	}()
+		}()
+	}
 
 	// Channel for user text messages
 	textMsgChan := make(chan string, 10)
