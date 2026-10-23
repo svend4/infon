@@ -58,6 +58,36 @@ The **ray/Q6/alife platform** — meaning ⇄ world, end to end. See
   IPv6 relay addresses and could not parse candidates, the A/V synchroniser
   stalled on a far-future timestamp, the SFU raced on its participant map, and
   glyph-QR decoding panicked on ragged grids.
+- **arm64 parity.** On arm64, ppc64le and s390x the compiler fused
+  `SceneSpec`'s multiply-adds, so about 0.6% of vectors built a different world
+  than the Python director. Products are now rounded explicitly; under qemu,
+  arm64 matches amd64 on all 36,144 scanned vectors.
+- **Network trust.** `tvcp call` drops packets from anyone but the dialled peer
+  and names each unexpected sender once. STUN and TURN responses must come from
+  the server and carry the request's transaction ID (TURN IDs are now random),
+  and SFU participants stay bound to the address they joined from.
+- **More malformed input.** Worlds, recordings, pose and presence sets,
+  delta-stream animations, AI image responses, video frame headers, brain HTTP
+  requests and replies, and sketch shapes are checked before allocating; names
+  and chat from the shared world are sanitised.
+- **Codecs and sync.** The H.264/VP8 stand-ins round-trip exactly, are
+  race-free and escape start codes; Opus and P-frame encoders no longer overflow
+  their count fields. The A/V synchroniser drops late and duplicate frames
+  without losing the stream, and its drift estimate is no longer always zero.
+- **Audio.** The VAD learns steady noise instead of calling it speech, the echo
+  cancellers survive a short or missing reference, and ALSA playback passes
+  frames rather than samples.
+- **Renderer.** Caustics are no longer dimmed by the number of lights, direct
+  light is attenuated by participating media, fog is lit by every light, empty
+  environment maps no longer crash, and concurrent renders of one scene no
+  longer race.
+- **Devices and storage.** `tvcp group` runs without a camera or sound card,
+  V4L2 releases its resources when opening fails, camera IDs follow the node
+  number, recordings stream to disk, contact saves are atomic, CSV export
+  quotes fields, and null entries in contacts or history no longer crash.
+- **Small fixes.** Packet-loss underflow in the quality monitor, the glyph-QR
+  capacity check, the UNO reshuffle, fleet weight overflow, and the protocol
+  schema now covers every advertised game.
 
 ### 🌐 The meaning bridge (Q6)
 
