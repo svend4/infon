@@ -9,17 +9,23 @@ import (
 
 // FrameFragment represents a fragment of a frame
 type FrameFragment struct {
-	FrameID      uint32 // Unique frame ID
-	FragmentID   uint16 // Fragment number (0-based)
-	TotalFrags   uint16 // Total number of fragments
-	Width        uint16 // Frame width
-	Height       uint16 // Frame height
-	StartBlock   uint16 // Starting block index
-	BlockCount   uint16 // Number of blocks in this fragment
-	Blocks       []byte // Block data
+	FrameID    uint32 // Unique frame ID
+	FragmentID uint16 // Fragment number (0-based)
+	TotalFrags uint16 // Total number of fragments
+	Width      uint16 // Frame width
+	Height     uint16 // Frame height
+	StartBlock uint16 // Starting block index
+	BlockCount uint16 // Number of blocks in this fragment
+	Blocks     []byte // Block data
 }
 
 const (
+	// MaxFrameDim bounds a frame's width/height parsed from an untrusted fragment,
+	// and MaxAssembledSize bounds the total bytes a P-frame may reassemble to; both
+	// guard against a forged header driving a huge allocation.
+	MaxFrameDim      = 1024
+	MaxAssembledSize = 16 << 20 // 16 MiB
+
 	// FragmentHeaderSize is the size of fragment header
 	FragmentHeaderSize = 4 + 2 + 2 + 2 + 2 + 2 + 2 // 16 bytes
 
@@ -29,6 +35,32 @@ const (
 	// BlocksPerFragment is approximately how many blocks fit in one fragment
 	BlocksPerFragment = MaxFragmentPayload / BlockDataSize // ~124 blocks
 )
+
+// MaxFragsPerFrame bounds how many fragments one frame may claim. Real frames need a
+// handful; a forged totalFrags otherwise sizes a slice of up to 65535 entries per
+// packet. 512 fragments * ~1371 payload bytes covers any legitimate frame.
+const MaxFragsPerFrame = 512
+
+// ParseFragmentHeader reads the 8-byte fragment header (frameID, fragID, totalFrags)
+// that call/receive/group/screen reassembly all share, and validates it against an
+// existing buffer length. ok is false when the fragment must be dropped: payload too
+// short, totalFrags zero or absurd, fragID out of range, or a totalFrags that
+// disagrees with the slice already allocated for this frameID (haveLen >= 0).
+func ParseFragmentHeader(payload []byte, haveLen int) (frameID uint32, fragID, totalFrags uint16, ok bool) {
+	if len(payload) < 8 {
+		return 0, 0, 0, false
+	}
+	frameID = uint32(payload[0])<<24 | uint32(payload[1])<<16 | uint32(payload[2])<<8 | uint32(payload[3])
+	fragID = uint16(payload[4])<<8 | uint16(payload[5])
+	totalFrags = uint16(payload[6])<<8 | uint16(payload[7])
+	if totalFrags == 0 || totalFrags > MaxFragsPerFrame || fragID >= totalFrags {
+		return 0, 0, 0, false
+	}
+	if haveLen >= 0 && haveLen != int(totalFrags) {
+		return 0, 0, 0, false
+	}
+	return frameID, fragID, totalFrags, true
+}
 
 // FragmentFrame splits a frame into multiple fragments that fit in UDP packets
 func FragmentFrame(frame *terminal.Frame, frameID uint32) ([][]byte, error) {
@@ -101,6 +133,11 @@ func AssembleFrame(fragments [][]byte) (*terminal.Frame, error) {
 	firstFrag := fragments[0]
 	width := int(getUint16(firstFrag[8:10]))
 	height := int(getUint16(firstFrag[10:12]))
+	// Dimensions come straight off the wire; refuse absurd sizes before allocating
+	// (a 40x12 terminal frame is tiny, so this bound is generous).
+	if width <= 0 || height <= 0 || width > MaxFrameDim || height > MaxFrameDim {
+		return nil, fmt.Errorf("invalid frame dimensions %dx%d", width, height)
+	}
 
 	// Create frame
 	frame := terminal.NewFrame(width, height)
@@ -210,14 +247,21 @@ func AssembleData(fragments [][]byte) ([]byte, error) {
 		return nil, fmt.Errorf("no fragments provided")
 	}
 
-	// Calculate total size
+	// Calculate total size, validating each declared chunk length against the bytes
+	// actually present so a forged length field cannot drive an over-large slice.
 	totalSize := 0
 	for _, fragData := range fragments {
 		if len(fragData) < 10 {
 			return nil, fmt.Errorf("invalid fragment header")
 		}
 		chunkLen := int(getUint16(fragData[8:10]))
+		if 10+chunkLen > len(fragData) {
+			return nil, fmt.Errorf("fragment chunk length %d exceeds payload %d", chunkLen, len(fragData)-10)
+		}
 		totalSize += chunkLen
+		if totalSize > MaxAssembledSize {
+			return nil, fmt.Errorf("assembled data exceeds %d bytes", MaxAssembledSize)
+		}
 	}
 
 	// Assemble data

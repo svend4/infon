@@ -681,10 +681,13 @@ func runCall() {
 					continue
 				}
 
-				frameID := uint32(packet.Payload[0])<<24 | uint32(packet.Payload[1])<<16 |
-					uint32(packet.Payload[2])<<8 | uint32(packet.Payload[3])
-				fragID := uint16(packet.Payload[4])<<8 | uint16(packet.Payload[5])
-				totalFrags := uint16(packet.Payload[6])<<8 | uint16(packet.Payload[7])
+				frameID, fragID, totalFrags, ok := network.ParseFragmentHeader(packet.Payload, -1)
+				if !ok {
+					continue
+				}
+				if buf := fragmentBuffer[frameID]; buf != nil && len(buf) != int(totalFrags) {
+					continue
+				}
 
 				// Store fragment
 				if fragmentBuffer[frameID] == nil {

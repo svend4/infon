@@ -27,18 +27,18 @@ type DeltaBlock struct {
 
 // EncodedFrame represents an encoded frame (I-frame or P-frame)
 type EncodedFrame struct {
-	Type        FrameType     // I-frame or P-frame
-	Width       int           // Frame width (I-frames only)
-	Height      int           // Frame height (I-frames only)
+	Type        FrameType       // I-frame or P-frame
+	Width       int             // Frame width (I-frames only)
+	Height      int             // Frame height (I-frames only)
 	IFrameData  *terminal.Frame // Full frame data (I-frames only)
-	DeltaBlocks []DeltaBlock   // Changed blocks (P-frames only)
+	DeltaBlocks []DeltaBlock    // Changed blocks (P-frames only)
 }
 
 // PFrameEncoder handles P-frame encoding
 type PFrameEncoder struct {
-	lastFrame *terminal.Frame // Previous frame for delta calculation
-	iFrameInterval int        // Send I-frame every N frames
-	frameCount     int        // Frames since last I-frame
+	lastFrame      *terminal.Frame // Previous frame for delta calculation
+	iFrameInterval int             // Send I-frame every N frames
+	frameCount     int             // Frames since last I-frame
 }
 
 // NewPFrameEncoder creates a new P-frame encoder
@@ -259,6 +259,12 @@ func SerializeEncodedFrame(encoded *EncodedFrame) []byte {
 }
 
 // DeserializeEncodedFrame deserializes an encoded frame from bytes
+// maxFrameDim/blockWireSize bound an I-frame decoded from untrusted bytes.
+const (
+	maxFrameDim   = 1024
+	blockWireSize = 10
+)
+
 func DeserializeEncodedFrame(data []byte) *EncodedFrame {
 	if len(data) < 1 {
 		return nil
@@ -274,6 +280,14 @@ func DeserializeEncodedFrame(data []byte) *EncodedFrame {
 
 		width := int(uint16(data[1])<<8 | uint16(data[2]))
 		height := int(uint16(data[3])<<8 | uint16(data[4]))
+		// Guard the dimensions from the wire: reject non-positive or absurd sizes, and
+		// require the payload to actually hold width*height blocks before allocating.
+		if width <= 0 || height <= 0 || width > maxFrameDim || height > maxFrameDim {
+			return nil
+		}
+		if 5+width*height*blockWireSize > len(data) {
+			return nil
+		}
 
 		frame := terminal.NewFrame(width, height)
 		offset := 5

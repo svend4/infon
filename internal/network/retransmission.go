@@ -31,19 +31,19 @@ type RetransmissionManager struct {
 
 // SentPacketInfo stores information about a sent packet
 type SentPacketInfo struct {
-	Packet      *Packet
-	RemoteAddr  *net.UDPAddr
-	SentTime    time.Time
-	RetryCount  int
-	LastRetry   time.Time
+	Packet     *Packet
+	RemoteAddr *net.UDPAddr
+	SentTime   time.Time
+	RetryCount int
+	LastRetry  time.Time
 }
 
 // NewRetransmissionManager creates a new retransmission manager
 func NewRetransmissionManager() *RetransmissionManager {
 	return &RetransmissionManager{
 		sentPackets:   make(map[uint32]*SentPacketInfo),
-		maxBufferSize: 200,              // Buffer last 200 packets
-		maxRetries:    3,                // Retry up to 3 times
+		maxBufferSize: 200,                    // Buffer last 200 packets
+		maxRetries:    3,                      // Retry up to 3 times
 		retryTimeout:  200 * time.Millisecond, // 200ms timeout
 	}
 }
@@ -197,13 +197,15 @@ func ParseNACKPayload(payload []byte) ([]uint32, error) {
 		return nil, fmt.Errorf("NACK payload too short")
 	}
 
-	count := binary.BigEndian.Uint16(payload[0:2])
-	if len(payload) < int(2+count*4) {
+	count := int(binary.BigEndian.Uint16(payload[0:2]))
+	// Arithmetic in int: 2+count*4 in uint16 would wrap for count >= 16384 and let
+	// the length check pass for a payload far too short, slicing out of range below.
+	if len(payload) < 2+count*4 {
 		return nil, fmt.Errorf("invalid NACK payload size")
 	}
 
 	sequences := make([]uint32, count)
-	for i := uint16(0); i < count; i++ {
+	for i := 0; i < count; i++ {
 		offset := 2 + i*4
 		sequences[i] = binary.BigEndian.Uint32(payload[offset : offset+4])
 	}
