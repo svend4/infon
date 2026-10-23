@@ -606,6 +606,22 @@ func (tc *TURNClient) parseXorAddress(data []byte, txID [12]byte) (*net.UDPAddr,
 
 		ip = make(net.IP, 4)
 		binary.BigEndian.PutUint32(ip, actualIP)
+	} else if family == 0x02 { // IPv6
+		if len(data) < 20 {
+			return nil, fmt.Errorf("invalid IPv6 XOR address length")
+		}
+
+		// XOR with magic cookie + transaction ID
+		xorKey := make([]byte, 16)
+		binary.BigEndian.PutUint32(xorKey[0:4], MagicCookie)
+		copy(xorKey[4:16], txID[:])
+
+		ip = make(net.IP, 16)
+		for i := 0; i < 16; i++ {
+			ip[i] = data[4+i] ^ xorKey[i]
+		}
+	} else {
+		return nil, fmt.Errorf("unsupported address family: %d", family)
 	}
 
 	return &net.UDPAddr{

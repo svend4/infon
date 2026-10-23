@@ -497,6 +497,9 @@ func (ia *ICEAgent) calculatePairPriority(local, remote *ICECandidate) uint64 {
 
 func (ia *ICEAgent) generateFoundation(candType ICECandidateType, ip net.IP) string {
 	// Simplified foundation: just use type + first octet of IP
+	if len(ip) == 0 {
+		return string(candType)
+	}
 	return fmt.Sprintf("%s-%d", candType, ip[0])
 }
 
@@ -523,11 +526,10 @@ func ParseCandidate(sdp string) (*ICECandidate, error) {
 	var priority uint32
 	var ip string
 	var port int
-	var typ string
 	var candType string
 
 	_, err := fmt.Sscanf(sdp, "candidate:%s %d %s %d %s %d typ %s",
-		&foundation, &component, &transport, &priority, &ip, &port, &typ, &candType)
+		&foundation, &component, &transport, &priority, &ip, &port, &candType)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse candidate: %w", err)
