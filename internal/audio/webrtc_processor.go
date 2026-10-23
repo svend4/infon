@@ -249,7 +249,8 @@ type AEC3 struct {
 	// Adaptive filter coefficients
 	filterLength  int
 	filterCoeffs  []float64
-	stepSize      float64
+	stepSize      float64 // NLMS step size (mu), stable for 0 < mu < 2
+	delta         float64 // NLMS regularization
 	echoEstimate  []float64
 
 	// Echo detection
@@ -267,7 +268,8 @@ func NewAEC3(sampleRate, channels int) *AEC3 {
 		renderBuffer:  make([]int16, sampleRate/10),
 		filterLength:  filterLength,
 		filterCoeffs:  make([]float64, filterLength),
-		stepSize:      0.01,
+		stepSize:      0.5,
+		delta:         0.01,
 		echoEstimate:  make([]float64, filterLength),
 		echoThreshold: 0.1,
 	}
@@ -294,38 +296,42 @@ func (a *AEC3) ProcessCapture(capture, render []int16) ([]int16, bool) {
 	echoDetected := false
 
 	for i := 0; i < len(capture); i++ {
-		// Estimate echo using adaptive filter
-		var echoEst float64
+		// Estimate echo using adaptive filter. Samples are normalized to
+		// [-1, 1] so the step size does not depend on the signal level.
+		var echoEst, inputPower float64
 		for j := 0; j < a.filterLength && j < len(render); j++ {
-			if i-j >= 0 {
-				echoEst += a.filterCoeffs[j] * float64(render[i-j])
+			if i-j >= 0 && i-j < len(render) {
+				x := float64(render[i-j]) / 32768.0
+				echoEst += a.filterCoeffs[j] * x
+				inputPower += x * x
 			}
 		}
 
 		// Remove echo from capture
-		errorSignal := float64(capture[i]) - echoEst
+		errorSignal := float64(capture[i])/32768.0 - echoEst
 
-		// Update filter coefficients using LMS algorithm
-		if len(render) > 0 {
-			for j := 0; j < a.filterLength && j < len(render); j++ {
-				if i-j >= 0 {
-					a.filterCoeffs[j] += a.stepSize * errorSignal * float64(render[i-j])
-				}
+		// Update filter coefficients using NLMS:
+		// w(n+1) = w(n) + (mu / (delta + ||x||^2)) * e(n) * x(n)
+		normalizedStepSize := a.stepSize / (a.delta + inputPower)
+		for j := 0; j < a.filterLength && j < len(render); j++ {
+			if i-j >= 0 && i-j < len(render) {
+				a.filterCoeffs[j] += normalizedStepSize * errorSignal * float64(render[i-j]) / 32768.0
 			}
 		}
 
-		// Check if echo was significant
-		if math.Abs(echoEst) > a.echoThreshold*float64(math.MaxInt16) {
+		// Check if echo was significant (threshold is a fraction of full scale)
+		if math.Abs(echoEst) > a.echoThreshold {
 			echoDetected = true
 		}
 
 		// Clamp output
-		if errorSignal > math.MaxInt16 {
+		outSample := errorSignal * 32768.0
+		if outSample > math.MaxInt16 {
 			output[i] = math.MaxInt16
-		} else if errorSignal < math.MinInt16 {
+		} else if outSample < math.MinInt16 {
 			output[i] = math.MinInt16
 		} else {
-			output[i] = int16(errorSignal)
+			output[i] = int16(outSample)
 		}
 	}
 
@@ -344,6 +350,32 @@ func (a *AEC3) Reset() {
 		a.renderBuffer[i] = 0
 	}
 	a.writePos = 0
+}
+
+const (
+	// noiseFloorRisePerSecond is the maximum factor by which the noise
+	// floor (mean energy) may grow per second while frames are louder than
+	// the noise threshold (about 6 dB/s).
+	noiseFloorRisePerSecond = 4.0
+	// minNoiseFloor keeps the noise floor positive after digital silence.
+	minNoiseFloor = 1.0
+)
+
+// frameDurationSeconds returns the duration of an interleaved frame.
+func frameDurationSeconds(samples, sampleRate, channels int) float64 {
+	if sampleRate <= 0 || channels <= 0 {
+		return 0
+	}
+	return float64(samples) / float64(sampleRate*channels)
+}
+
+// smoothingCoeff converts a time constant tau (seconds) into the one-pole
+// smoothing coefficient for a frame of duration dt (seconds).
+func smoothingCoeff(dt, tau float64) float64 {
+	if tau <= 0 {
+		return 1
+	}
+	return 1 - math.Exp(-dt/tau)
 }
 
 // NoiseSuppressor - Spectral noise suppression
@@ -395,12 +427,26 @@ func (ns *NoiseSuppressor) Process(audio []int16) ([]int16, bool) {
 	}
 	energy /= float64(len(audio))
 
-	// Update noise estimate
-	ns.noiseFloor = ns.smoothing*ns.noiseFloor + (1-ns.smoothing)*energy
+	// Update noise estimate from low-energy frames only (minimum tracking):
+	// follow quieter frames immediately, smooth frames classified as noise,
+	// and let the floor creep up only slowly during louder frames so that
+	// sustained speech is not absorbed into the noise estimate.
+	thresholdFactor := float64(ns.level + 1)
+	if energy < ns.noiseFloor {
+		ns.noiseFloor = energy
+	} else if energy < ns.noiseFloor*thresholdFactor {
+		ns.noiseFloor = ns.smoothing*ns.noiseFloor + (1-ns.smoothing)*energy
+	} else {
+		dt := frameDurationSeconds(len(audio), ns.sampleRate, ns.channels)
+		ns.noiseFloor *= math.Pow(noiseFloorRisePerSecond, dt)
+	}
+	if ns.noiseFloor < minNoiseFloor {
+		ns.noiseFloor = minNoiseFloor
+	}
 
 	// Apply suppression based on level
 	suppressionFactor := 1.0
-	if energy < ns.noiseFloor*float64(ns.level+1) {
+	if energy < ns.noiseFloor*thresholdFactor {
 		suppressionFactor = 0.5 / float64(ns.level+1)
 		noiseReduced = true
 	}
@@ -448,8 +494,8 @@ type AutomaticGainControl struct {
 	currentGain   float64 // Current gain multiplier
 	maxGain       float64 // Maximum gain multiplier
 	minGain       float64 // Minimum gain multiplier
-	attackTime    float64 // Attack time constant
-	releaseTime   float64 // Release time constant
+	attackTime    float64 // Attack time constant in seconds
+	releaseTime   float64 // Release time constant in seconds
 
 	// Peak detection
 	peakLevel float64
@@ -486,11 +532,13 @@ func (agc *AutomaticGainControl) Process(audio []int16) []int16 {
 		}
 	}
 
-	// Update peak level with attack/release
+	// Update peak level with attack/release. The time constants are in
+	// seconds and are converted to per-frame smoothing coefficients.
+	dt := frameDurationSeconds(len(audio), agc.sampleRate, agc.channels)
 	if peak > agc.peakLevel {
-		agc.peakLevel = agc.peakLevel + agc.attackTime*(peak-agc.peakLevel)
+		agc.peakLevel = agc.peakLevel + smoothingCoeff(dt, agc.attackTime)*(peak-agc.peakLevel)
 	} else {
-		agc.peakLevel = agc.peakLevel + agc.releaseTime*(peak-agc.peakLevel)
+		agc.peakLevel = agc.peakLevel + smoothingCoeff(dt, agc.releaseTime)*(peak-agc.peakLevel)
 	}
 
 	// Calculate required gain
