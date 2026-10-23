@@ -50,6 +50,23 @@ func (pc *PeerConnection) UpdateLastSeen() {
 	pc.LastSeen = time.Now()
 }
 
+// LastSeenTime returns when a packet was last received from the peer. Read it
+// through this (not the LastSeen field) while the receive goroutine may be
+// calling UpdateLastSeen.
+func (pc *PeerConnection) LastSeenTime() time.Time {
+	pc.mutex.RLock()
+	defer pc.mutex.RUnlock()
+	return pc.LastSeen
+}
+
+// Counts returns how many video frames and audio packets were received from the
+// peer, read under the same lock SetVideoFrame and SetAudioBuffer update them with.
+func (pc *PeerConnection) Counts() (frames, audio uint64) {
+	pc.mutex.RLock()
+	defer pc.mutex.RUnlock()
+	return pc.FrameCount, pc.AudioCount
+}
+
 // IsActive checks if peer is still active (received packet in last 10 seconds)
 func (pc *PeerConnection) IsActive() bool {
 	pc.mutex.RLock()

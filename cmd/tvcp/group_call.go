@@ -49,40 +49,25 @@ func runGroupCall(peers []string, localPort string) error {
 
 	fmt.Println()
 
-	// Initialize camera (device ID 0 = default)
-	cam, err := device.NewCamera(0)
+	// Camera, microphone and speaker. mic and speaker are nil when there is no
+	// usable sound card; the call then runs without that direction of audio.
+	cam, mic, speaker, err := openGroupDevices()
 	if err != nil {
-		return fmt.Errorf("failed to create camera: %w", err)
-	}
-	if err := cam.SetResolution(640, 480); err != nil {
-		return fmt.Errorf("failed to set camera resolution: %w", err)
-	}
-	if err := cam.Open(); err != nil {
-		return fmt.Errorf("failed to open camera: %w", err)
+		return err
 	}
 	defer func() { _ = cam.Close() }()
-
-	// Initialize audio using default capture/playback
-	mic, err := audio.NewDefaultCapture()
-	if err != nil {
-		return fmt.Errorf("failed to initialize microphone: %w", err)
+	if mic != nil {
+		defer func() { _ = mic.Close() }()
 	}
-	if err := mic.Open(); err != nil {
-		return fmt.Errorf("failed to open microphone: %w", err)
+	if speaker != nil {
+		defer func() { _ = speaker.Close() }()
 	}
-	defer func() { _ = mic.Close() }()
-
-	speaker, err := audio.NewDefaultPlayback()
-	if err != nil {
-		return fmt.Errorf("failed to initialize speaker: %w", err)
-	}
-	if err := speaker.Open(); err != nil {
-		return fmt.Errorf("failed to open speaker: %w", err)
-	}
-	defer func() { _ = speaker.Close() }()
 
 	// Get audio format for mixer
-	audioFormat := mic.GetFormat()
+	audioFormat := audio.DefaultFormat()
+	if mic != nil {
+		audioFormat = mic.GetFormat()
+	}
 
 	// Initialize audio mixer
 	audioMixer := group.NewAudioMixer(audioFormat.SampleRate, 320)
@@ -159,8 +144,11 @@ func runGroupCall(peers []string, localPort string) error {
 		}
 	}()
 
-	// Audio sending goroutine
+	// Audio sending goroutine (skipped when there is no microphone)
 	go func() {
+		if mic == nil {
+			return
+		}
 		// Audio buffer for reading (20ms at 16kHz = 320 samples)
 		audioBuffer := make([]int16, 320)
 
@@ -287,8 +275,11 @@ func runGroupCall(peers []string, localPort string) error {
 		}
 	}()
 
-	// Audio playback goroutine
+	// Audio playback goroutine (skipped when there is no speaker)
 	go func() {
+		if speaker == nil {
+			return
+		}
 		ticker := time.NewTicker(20 * time.Millisecond) // 20ms chunks
 		defer ticker.Stop()
 
@@ -354,6 +345,64 @@ func runGroupCall(peers []string, localPort string) error {
 	fmt.Println("\n\n👋 Leaving group call...")
 
 	return nil
+}
+
+// The device constructors openGroupDevices uses; tests replace them so they never
+// open the real camera or sound card of the machine they run on.
+var (
+	groupListCameras = device.ListCameras
+	groupNewCamera   = device.NewCamera
+	groupNewCapture  = audio.NewDefaultCapture
+	groupNewPlayback = audio.NewDefaultPlayback
+)
+
+// openGroupDevices opens the camera, microphone and speaker for a group call.
+// Like `tvcp call`, it falls back to a test camera when no real camera can be
+// opened, and returns a nil mic or speaker (with a warning) when audio is
+// unavailable, so the call also runs on headless hosts with no camera or sound
+// card. The camera is opened first, so an error leaves nothing open.
+func openGroupDevices() (cam device.Camera, mic audio.AudioCapture, speaker audio.AudioPlayback, err error) {
+	if cameras, err := groupListCameras(); err == nil && len(cameras) > 0 {
+		webcam, err := groupNewCamera(0) // device ID 0 = default
+		if err == nil {
+			err = webcam.SetResolution(640, 480)
+		}
+		if err == nil {
+			err = webcam.Open()
+		}
+		if err == nil {
+			cam = webcam
+			fmt.Println("📹 Using real camera:", cameras[0].Name)
+		} else {
+			fmt.Fprintf(os.Stderr, "⚠️  Camera unavailable, using test camera: %v\n", err)
+		}
+	}
+	if cam == nil {
+		test := device.NewTestCamera(640, 480, 15, "bounce")
+		if err := test.Open(); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to open camera: %w", err)
+		}
+		cam = test
+		fmt.Println("📹 Using test camera (no real camera detected)")
+	}
+
+	if src, err := groupNewCapture(); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Microphone unavailable, not sending audio: %v\n", err)
+	} else if err := src.Open(); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Microphone unavailable, not sending audio: %v\n", err)
+	} else {
+		mic = src
+	}
+
+	if sink, err := groupNewPlayback(); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Speaker unavailable, remote audio will be dropped: %v\n", err)
+	} else if err := sink.Open(); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Speaker unavailable, remote audio will be dropped: %v\n", err)
+	} else {
+		speaker = sink
+	}
+
+	return cam, mic, speaker, nil
 }
 
 func handleGroupCallCommand(args []string) error {

@@ -2,6 +2,7 @@ package group
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -78,6 +79,8 @@ func (vg *VideoGrid) RemovePeer(peerID string) {
 
 // SetLayout sets the grid layout
 func (vg *VideoGrid) SetLayout(layout GridLayout) {
+	vg.mu.Lock()
+	defer vg.mu.Unlock()
 	vg.layout = layout
 }
 
@@ -148,6 +151,7 @@ func (vg *VideoGrid) Render() *terminal.Frame {
 	for id := range vg.frames {
 		peerIDs = append(peerIDs, id)
 	}
+	sort.Strings(peerIDs) // map order is random per range; keep each peer in its cell
 
 	// Render each peer's video in a cell
 	idx := 0
@@ -323,16 +327,19 @@ func (vg *VideoGrid) RenderStats(peers []*PeerConnection) string {
 	sb.WriteString("─────────────────────────────\n")
 
 	for i, peer := range peers {
+		// The receive goroutine updates these concurrently: read them through the
+		// locked accessors, not the fields.
+		frames, audio := peer.Counts()
 		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, peer.ID))
 		sb.WriteString(fmt.Sprintf("   📹 Frames: %d | 🎤 Audio: %d\n",
-			peer.FrameCount, peer.AudioCount))
+			frames, audio))
 
 		active := "✅"
 		if !peer.IsActive() {
 			active = "❌"
 		}
 		sb.WriteString(fmt.Sprintf("   Status: %s | Last seen: %s ago\n",
-			active, formatTimeSince(peer.LastSeen)))
+			active, formatTimeSince(peer.LastSeenTime())))
 		sb.WriteString("\n")
 	}
 

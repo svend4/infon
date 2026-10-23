@@ -598,6 +598,7 @@ func runCall() {
 
 	// Main loop for receiving (remote video + audio)
 	lastStatsTime := time.Now()
+	var strangers foreignSources
 
 	for {
 		select {
@@ -706,10 +707,22 @@ func runCall() {
 
 		default:
 			// Receive packet
-			packet, _, err := transport.ReceivePacket()
+			packet, src, err := transport.ReceivePacket()
 			if err != nil {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					continue
+				}
+				continue
+			}
+			// Only the dialled peer is in this call. Without this check any host
+			// that can reach the port could inject video, audio, chat and NACKs,
+			// and its sequence numbers would corrupt the loss detector.
+			// Say so, though: a peer behind NAT or with several addresses can send
+			// from somewhere other than the address dialled, and the call would
+			// otherwise just show nothing.
+			if !sameUDPAddr(src, udpAddr) {
+				if msg := strangers.report(src, udpAddr); msg != "" {
+					fmt.Fprintln(os.Stderr, msg)
 				}
 				continue
 			}
@@ -851,6 +864,40 @@ func runCall() {
 			}
 		}
 	}
+}
+
+// sameUDPAddr reports whether a and b are the same IP and port. net.IP.Equal
+// treats an IPv4 address and its IPv4-mapped IPv6 form as equal, which is how a
+// dual-stack socket reports IPv4 senders.
+func sameUDPAddr(a, b *net.UDPAddr) bool {
+	return a != nil && b != nil && a.Port == b.Port && a.IP.Equal(b.IP)
+}
+
+// maxForeignReports bounds how many distinct unexpected senders a call names.
+const maxForeignReports = 8
+
+// foreignSources tracks the senders the call has ignored, so each is reported
+// once and a flood from many addresses cannot fill memory or the screen.
+type foreignSources struct {
+	seen map[string]bool
+}
+
+// report returns the warning to print for a packet from src, which is not the
+// peer: one line the first time each sender is seen, a last line once the cap
+// is reached, and "" otherwise.
+func (f *foreignSources) report(src, peer *net.UDPAddr) string {
+	key := src.String()
+	if f.seen[key] || len(f.seen) > maxForeignReports {
+		return ""
+	}
+	if f.seen == nil {
+		f.seen = make(map[string]bool)
+	}
+	f.seen[key] = true
+	if len(f.seen) > maxForeignReports {
+		return "⚠️  Ignoring packets from further unexpected senders without reporting them"
+	}
+	return fmt.Sprintf("⚠️  Ignoring packets from %v: this call is with %v", src, peer)
 }
 
 // renderSplitScreen renders remote video on top, local video preview on bottom
