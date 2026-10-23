@@ -63,7 +63,7 @@ func (v *VAD) Process(samples []int16) bool {
 	energy := v.calculateEnergy(samples)
 
 	// Update adaptive thresholds
-	v.updateThresholds(energy)
+	v.updateThresholds(energy, frameDurationSeconds(len(samples), v.sampleRate, 1))
 
 	// Determine if this frame contains speech
 	hasSpeech := energy > v.energyThreshold
@@ -113,8 +113,14 @@ func (v *VAD) calculateEnergy(samples []int16) float64 {
 	return rms
 }
 
-// updateThresholds adapts thresholds based on observed energy levels
-func (v *VAD) updateThresholds(energy float64) {
+// vadNoiseFloorRisePerSecond is the factor by which the VAD noise floor (an
+// RMS level) may grow per second while frames are well above it (about
+// 3 dB/s).
+const vadNoiseFloorRisePerSecond = math.Sqrt2
+
+// updateThresholds adapts thresholds based on observed energy levels;
+// frameSeconds is the duration of the frame the energy was measured on
+func (v *VAD) updateThresholds(energy, frameSeconds float64) {
 	// Update min/max energy
 	if energy < v.minEnergy {
 		v.minEnergy = energy
@@ -123,14 +129,30 @@ func (v *VAD) updateThresholds(energy float64) {
 		v.maxEnergy = energy
 	}
 
-	// Adaptive noise floor (slowly tracks minimum energy)
+	// Adaptive noise floor (minimum tracking): follow quieter frames at
+	// once, smooth frames close to the floor, and let the floor creep up
+	// slowly during louder frames. Steady background noise louder than
+	// twice the floor (fan, HVAC, high mic gain) is then still learned
+	// instead of being reported as speech forever, while speech, which
+	// keeps dipping below the floor between words, is not absorbed into it.
 	alpha := 0.01 // Smoothing factor
-	if energy < v.noiseFloor*2.0 {
+	if energy < v.noiseFloor {
+		v.noiseFloor = energy
+	} else if energy < v.noiseFloor*2.0 {
 		v.noiseFloor = v.noiseFloor*(1.0-alpha) + energy*alpha
+	} else {
+		v.noiseFloor *= math.Pow(vadNoiseFloorRisePerSecond, frameSeconds)
 	}
 
 	// Adaptive threshold (noise floor + margin)
 	margin := 3.0 // 3x noise floor
+
+	// Keep the floor where it still sets the clamped threshold below, so
+	// that it can rise again after digital silence.
+	if v.noiseFloor < 100.0/margin {
+		v.noiseFloor = 100.0 / margin
+	}
+
 	v.energyThreshold = v.noiseFloor * margin
 
 	// Clamp threshold to reasonable range

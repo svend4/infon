@@ -93,8 +93,10 @@ func NewWebRTCAudioProcessor(config ProcessorConfig) (*WebRTCAudioProcessor, err
 
 // ProcessCapture processes captured microphone audio
 // Returns processed audio and whether speech was detected
+// renderAudio is the speaker audio for this frame; pass it either here or
+// through ProcessRender beforehand, not both (see AEC3.ProcessCapture)
 func (p *WebRTCAudioProcessor) ProcessCapture(input []int16, renderAudio []int16) ([]int16, bool, error) {
-	if !p.enabled {
+	if !p.isEnabled() {
 		return input, true, nil
 	}
 
@@ -154,7 +156,7 @@ func (p *WebRTCAudioProcessor) ProcessCapture(input []int16, renderAudio []int16
 
 // ProcessRender processes speaker audio for AEC reference
 func (p *WebRTCAudioProcessor) ProcessRender(audio []int16) error {
-	if !p.enabled {
+	if !p.isEnabled() {
 		return nil
 	}
 
@@ -164,6 +166,14 @@ func (p *WebRTCAudioProcessor) ProcessRender(audio []int16) error {
 	}
 
 	return nil
+}
+
+// isEnabled reports whether processing is enabled; Enable and Disable may
+// run on another goroutine than the audio processing.
+func (p *WebRTCAudioProcessor) isEnabled() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.enabled
 }
 
 // Enable enables audio processing
@@ -279,32 +289,56 @@ func NewAEC3(sampleRate, channels int) *AEC3 {
 func (a *AEC3) ProcessRender(audio []int16) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.storeRender(audio)
+}
 
-	// Store render audio in circular buffer
+// storeRender appends render audio to the circular render history.
+// The caller must hold a.mu.
+func (a *AEC3) storeRender(audio []int16) {
 	for _, sample := range audio {
 		a.renderBuffer[a.writePos] = sample
 		a.writePos = (a.writePos + 1) % a.bufferSize
 	}
 }
 
-// ProcessCapture processes microphone input and removes echo
+// renderAt returns the render sample lag samples before the newest one,
+// normalized to [-1, 1], or 0 when it is older than the render history.
+// The caller must hold a.mu.
+func (a *AEC3) renderAt(lag int) float64 {
+	if lag >= a.bufferSize {
+		return 0
+	}
+	return float64(a.renderBuffer[(a.writePos-1-lag+a.bufferSize)%a.bufferSize]) / 32768.0
+}
+
+// ProcessCapture processes microphone input and removes echo.
+// render is the speaker audio played during this capture frame. If it is not
+// empty it is added to the render history first, as ProcessRender does, so
+// pass it either here or through ProcessRender beforehand, not both. The echo
+// is estimated from the render history, the newest len(capture) render
+// samples lining up with the capture frame, so echo paths that reach back
+// into earlier frames are cancelled too.
 func (a *AEC3) ProcessCapture(capture, render []int16) ([]int16, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	a.storeRender(render)
 
 	output := make([]int16, len(capture))
 	echoDetected := false
 
 	for i := 0; i < len(capture); i++ {
+		// Capture sample i lines up with the render sample this many
+		// samples before the newest one.
+		base := len(capture) - 1 - i
+
 		// Estimate echo using adaptive filter. Samples are normalized to
 		// [-1, 1] so the step size does not depend on the signal level.
 		var echoEst, inputPower float64
-		for j := 0; j < a.filterLength && j < len(render); j++ {
-			if i-j >= 0 && i-j < len(render) {
-				x := float64(render[i-j]) / 32768.0
-				echoEst += a.filterCoeffs[j] * x
-				inputPower += x * x
-			}
+		for j := 0; j < a.filterLength; j++ {
+			x := a.renderAt(base + j)
+			echoEst += a.filterCoeffs[j] * x
+			inputPower += x * x
 		}
 
 		// Remove echo from capture
@@ -313,10 +347,8 @@ func (a *AEC3) ProcessCapture(capture, render []int16) ([]int16, bool) {
 		// Update filter coefficients using NLMS:
 		// w(n+1) = w(n) + (mu / (delta + ||x||^2)) * e(n) * x(n)
 		normalizedStepSize := a.stepSize / (a.delta + inputPower)
-		for j := 0; j < a.filterLength && j < len(render); j++ {
-			if i-j >= 0 && i-j < len(render) {
-				a.filterCoeffs[j] += normalizedStepSize * errorSignal * float64(render[i-j]) / 32768.0
-			}
+		for j := 0; j < a.filterLength; j++ {
+			a.filterCoeffs[j] += normalizedStepSize * errorSignal * a.renderAt(base+j)
 		}
 
 		// Check if echo was significant (threshold is a fraction of full scale)
@@ -410,12 +442,12 @@ func NewNoiseSuppressor(sampleRate, channels int) *NoiseSuppressor {
 
 // Process applies noise suppression
 func (ns *NoiseSuppressor) Process(audio []int16) ([]int16, bool) {
+	ns.mu.Lock()
+	defer ns.mu.Unlock()
+
 	if ns.level == 0 {
 		return audio, false
 	}
-
-	ns.mu.Lock()
-	defer ns.mu.Unlock()
 
 	output := make([]int16, len(audio))
 	noiseReduced := false

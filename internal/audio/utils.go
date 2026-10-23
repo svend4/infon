@@ -5,15 +5,25 @@ import (
 	"math"
 )
 
+// maxResampledSamples bounds the output of ConvertSampleRate (about three
+// hours of 48 kHz stereo); longer outputs only come from absurd rate ratios.
+const maxResampledSamples = 1 << 30
+
 // ConvertSampleRate converts audio samples from one sample rate to another
-// using simple linear interpolation
+// using simple linear interpolation. Invalid (non-positive) rates, and rate
+// ratios whose output would exceed maxResampledSamples, return the samples
+// unchanged, as for equal rates.
 func ConvertSampleRate(samples []int16, fromRate, toRate int) []int16 {
-	if fromRate == toRate {
+	if fromRate == toRate || fromRate <= 0 || toRate <= 0 {
 		return samples
 	}
 
 	ratio := float64(fromRate) / float64(toRate)
-	newLength := int(float64(len(samples)) / ratio)
+	length := float64(len(samples)) / ratio
+	if length > maxResampledSamples {
+		return samples
+	}
+	newLength := int(length)
 	result := make([]int16, newLength)
 
 	for i := range result {

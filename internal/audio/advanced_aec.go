@@ -185,8 +185,9 @@ func (nlms *NLMSProcessor) Process(capture, reference []float64) ([]float64, boo
 	echoDetected := false
 
 	for i := 0; i < len(capture); i++ {
-		// Add reference to circular buffer
-		nlms.inputBuffer[nlms.bufferPos] = reference[i]
+		// Add reference to circular buffer; a reference shorter than the
+		// capture is treated as silence
+		nlms.inputBuffer[nlms.bufferPos] = sampleOrZero(reference, i)
 		nlms.bufferPos = (nlms.bufferPos + 1) % nlms.filterLength
 
 		// Calculate echo estimate (y = w^T * x)
@@ -302,8 +303,9 @@ func (rls *RLSProcessor) Process(capture, reference []float64) ([]float64, bool)
 	echoDetected := false
 
 	for i := 0; i < len(capture); i++ {
-		// Add reference to circular buffer
-		rls.inputBuffer[rls.bufferPos] = reference[i]
+		// Add reference to circular buffer; a reference shorter than the
+		// capture is treated as silence
+		rls.inputBuffer[rls.bufferPos] = sampleOrZero(reference, i)
 		rls.bufferPos = (rls.bufferPos + 1) % rls.filterLength
 
 		// Get current input vector x(n)
@@ -414,6 +416,14 @@ func (rls *RLSProcessor) SetForgettingFactor(lambda float64) error {
 }
 
 // Utility functions
+
+// sampleOrZero returns samples[i], or 0 when i is past the end of samples.
+func sampleOrZero(samples []float64, i int) float64 {
+	if i < len(samples) {
+		return samples[i]
+	}
+	return 0
+}
 
 // int16ToFloat64 converts int16 samples to float64
 func int16ToFloat64(input []int16) []float64 {

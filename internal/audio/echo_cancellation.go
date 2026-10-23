@@ -41,7 +41,11 @@ func NewEchoCanceller(sampleRate, frameSize int) *EchoCanceller {
 		filterWeights:   make([]float64, filterLength),
 		referenceBuffer: make([]float64, filterLength),
 		stepSize:        0.01,   // Conservative step size
-		regularization:  1e-6,   // Small regularization
+		// NLMS regularization on the int16 sample scale: 0.01 of a
+		// full-scale sample's power (delta = 0.01 for samples in [-1, 1],
+		// as in AEC3). A near-silent reference then cannot inflate the
+		// step size and drive the weights to the clamp during near-end speech.
+		regularization:  0.01 * 32768 * 32768,
 		initialized:     false,
 		frameCount:      0,
 	}
@@ -90,8 +94,10 @@ func (ec *EchoCanceller) adaptiveFilter(input, reference []float64) []float64 {
 	output := make([]float64, len(input))
 
 	for i := 0; i < len(input); i++ {
-		// Update reference buffer (shift and add new sample)
-		ec.shiftBuffer(reference[i])
+		// Update reference buffer (shift and add new sample). A reference
+		// shorter than the input (no playback yet, jitter-buffer underrun)
+		// is treated as silence.
+		ec.shiftBuffer(sampleOrZero(reference, i))
 
 		// Estimate echo using adaptive filter
 		echoEstimate := ec.estimateEcho()

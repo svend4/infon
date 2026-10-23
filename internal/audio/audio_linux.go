@@ -33,9 +33,15 @@ type ALSACapture struct {
 	pending     []int16
 }
 
+// alsaPlaybackDevice is the part of *alsa.Device that ALSAPlayback uses
+type alsaPlaybackDevice interface {
+	Write(buf []byte, frames int) error
+	Close()
+}
+
 // ALSAPlayback implements AudioPlayback using ALSA
 type ALSAPlayback struct {
-	device *alsa.Device
+	device alsaPlaybackDevice
 	format AudioFormat
 	open   bool
 	mutex  sync.Mutex
@@ -413,19 +419,31 @@ func (a *ALSAPlayback) Write(buffer []int16) (int, error) {
 		return 0, ErrDeviceNotOpen
 	}
 
+	// The device counts frames (one sample per channel), not samples, and
+	// reads frames*channels samples from the buffer
+	channels := a.format.Channels
+	if channels < 1 {
+		channels = 1
+	}
+	frames := len(buffer) / channels
+	if frames == 0 {
+		return 0, nil
+	}
+	samples := frames * channels
+
 	// Convert int16 to bytes (little-endian) using bytes.Buffer
 	var buf bytes.Buffer
-	for _, sample := range buffer {
+	for _, sample := range buffer[:samples] {
 		_ = binary.Write(&buf, binary.LittleEndian, sample)
 	}
 
 	// Write to ALSA device
-	err := a.device.Write(buf.Bytes(), len(buffer))
+	err := a.device.Write(buf.Bytes(), frames)
 	if err != nil {
 		return 0, fmt.Errorf("failed to write to device: %w", err)
 	}
 
-	return len(buffer), nil
+	return samples, nil
 }
 
 func (a *ALSAPlayback) IsOpen() bool {
