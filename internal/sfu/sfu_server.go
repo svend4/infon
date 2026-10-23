@@ -239,71 +239,64 @@ func (s *SFUServer) parsePacket(data []byte, addr *net.UDPAddr) *Packet {
 
 // forwardAudioPacket forwards audio to all participants in room
 func (s *SFUServer) forwardAudioPacket(packet *Packet) {
+	// Skip muted participants
+	s.forwardPacket(packet, func(p *Participant) bool { return p.isMuted })
+}
+
+// forwardVideoPacket forwards video to all participants in room
+func (s *SFUServer) forwardVideoPacket(packet *Packet) {
+	// Skip participants with video paused
+	s.forwardPacket(packet, func(p *Participant) bool { return p.isPaused })
+}
+
+// forwardTarget is a recipient snapshotted under s.mu
+type forwardTarget struct {
+	participant *Participant
+	addr        *net.UDPAddr
+}
+
+// forwardPacket forwards packet to every participant in its room except the
+// sender and those for which skip returns true. Recipients are snapshotted
+// under the read lock so room membership can change (e.g. stale participant
+// cleanup) while packets are being sent.
+func (s *SFUServer) forwardPacket(packet *Packet, skip func(*Participant) bool) {
 	s.mu.RLock()
 	room, exists := s.rooms[packet.RoomID]
-	s.mu.RUnlock()
-
 	if !exists {
+		s.mu.RUnlock()
 		return
 	}
 
-	// Forward to all participants except sender
+	targets := make([]forwardTarget, 0, len(room.participants))
 	for participantID, participant := range room.participants {
 		if participantID == packet.ParticipantID {
 			continue // Don't send back to sender
 		}
 
-		if participant.isMuted {
-			continue // Skip muted participants
+		if skip(participant) {
+			continue
 		}
 
-		s.sendPacket(packet.Data, participant.Addr)
+		targets = append(targets, forwardTarget{participant: participant, addr: participant.Addr})
+	}
+	s.mu.RUnlock()
+
+	for _, target := range targets {
+		s.sendPacket(packet.Data, target.addr)
 
 		// Update statistics
 		s.mu.Lock()
-		participant.bytesSent += uint64(len(packet.Data))
+		target.participant.bytesSent += uint64(len(packet.Data))
 		s.packetsForwarded++
 		s.bytesForwarded += uint64(len(packet.Data))
 		s.mu.Unlock()
 	}
 
 	// Update room statistics
+	s.mu.Lock()
 	room.totalPackets++
 	room.totalBytes += uint64(len(packet.Data))
-}
-
-// forwardVideoPacket forwards video to all participants in room
-func (s *SFUServer) forwardVideoPacket(packet *Packet) {
-	s.mu.RLock()
-	room, exists := s.rooms[packet.RoomID]
-	s.mu.RUnlock()
-
-	if !exists {
-		return
-	}
-
-	// Forward to all participants except sender
-	for participantID, participant := range room.participants {
-		if participantID == packet.ParticipantID {
-			continue
-		}
-
-		if participant.isPaused {
-			continue // Skip participants with video paused
-		}
-
-		s.sendPacket(packet.Data, participant.Addr)
-
-		// Update statistics
-		s.mu.Lock()
-		participant.bytesSent += uint64(len(packet.Data))
-		s.packetsForwarded++
-		s.bytesForwarded += uint64(len(packet.Data))
-		s.mu.Unlock()
-	}
-
-	room.totalPackets++
-	room.totalBytes += uint64(len(packet.Data))
+	s.mu.Unlock()
 }
 
 // handleControlPacket handles control messages
@@ -334,7 +327,7 @@ func (s *SFUServer) handleControlPacket(packet *Packet) {
 // handleJoinRoom handles participant joining
 func (s *SFUServer) handleJoinRoom(packet *Packet) {
 	// Parse join message (format: 0x03 0x01 roomID participantID username)
-	if len(packet.Data) < 10 {
+	if len(packet.Data) < 18 {
 		return
 	}
 

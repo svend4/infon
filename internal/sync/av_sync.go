@@ -37,6 +37,7 @@ type AVSynchronizer struct {
 
 	// Sync settings
 	maxSyncOffset time.Duration // Maximum allowed A/V offset
+	maxWaitOffset time.Duration // Larger offsets are treated as a bogus PTS
 	targetDelay   time.Duration // Target playout delay
 
 	// Statistics
@@ -57,6 +58,7 @@ func NewAVSynchronizer() *AVSynchronizer {
 		audioBuffer:   NewJitterBuffer(100, 50*time.Millisecond),  // 100 frames, 50ms target
 		videoBuffer:   NewJitterBuffer(30, 100*time.Millisecond),  // 30 frames, 100ms target
 		maxSyncOffset: 100 * time.Millisecond,
+		maxWaitOffset: 5 * time.Second,
 		targetDelay:   50 * time.Millisecond,
 		lastSync:      time.Now(),
 		lastDriftCalc: time.Now(),
@@ -123,6 +125,14 @@ func (avs *AVSynchronizer) GetNextAudioFrame() (*Frame, error) {
 		if videoFrame != nil {
 			offset := time.Duration(frame.PTS-videoFrame.PTS) * time.Microsecond
 
+			// If audio is implausibly far ahead, discard it: putting it back
+			// would keep it at the head and make every video frame look late.
+			if offset > avs.maxWaitOffset {
+				avs.droppedAudio++
+				avs.syncCorrections++
+				return nil, fmt.Errorf("audio ahead by %v, discarding", offset)
+			}
+
 			// If audio is too far ahead, wait
 			if offset > avs.maxSyncOffset {
 				_ = avs.audioBuffer.Add(frame) // Put it back
@@ -156,6 +166,14 @@ func (avs *AVSynchronizer) GetNextVideoFrame() (*Frame, error) {
 		audioFrame, _ := avs.audioBuffer.Peek()
 		if audioFrame != nil {
 			offset := time.Duration(frame.PTS-audioFrame.PTS) * time.Microsecond
+
+			// If video is implausibly far ahead, discard it: putting it back
+			// would keep it at the head and make every audio frame look late.
+			if offset > avs.maxWaitOffset {
+				avs.droppedVideo++
+				avs.syncCorrections++
+				return nil, fmt.Errorf("video ahead by %v, discarding", offset)
+			}
 
 			// If video is too far ahead, wait
 			if offset > avs.maxSyncOffset {
