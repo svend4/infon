@@ -29,7 +29,7 @@ TVCP is currently in **pre-alpha** stage. We're building the foundation and welc
 ## 🛠️ Development Setup
 
 ### Prerequisites
-- Go 1.21 or later
+- Go 1.24.7 or later (see `go.mod`)
 - Git
 - Linux, macOS, or Windows
 - Terminal with True Color support (recommended)

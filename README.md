@@ -135,7 +135,7 @@ go build -o bin/tvcp.exe ./cmd/tvcp
 - **Android (Termux):** [TERMUX_ANDROID.md](TERMUX_ANDROID.md) 📱
 
 ### Requirements
-- Go 1.21 or higher
+- Go 1.24.7 or higher (see `go.mod`)
 - **Linux:** ALSA audio (libasound2-dev), V4L2 for cameras
 - **macOS:** CoreAudio (built-in), cameras via future implementation
 - **Windows:** WASAPI (built-in), cameras via future implementation

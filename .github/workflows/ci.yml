@@ -13,7 +13,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ['1.21', '1.22']
 
     steps:
     - name: Checkout code
@@ -22,7 +21,9 @@ jobs:
     - name: Setup Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go-version }}
+        # go.mod pins 1.24.7; a 1.21/1.22 matrix only made setup-go download that
+        # toolchain anyway (GOTOOLCHAIN=auto), so it tested one Go while naming two.
+        go-version-file: go.mod
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -66,7 +67,7 @@ jobs:
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
-      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.22'
+      if: matrix.os == 'ubuntu-latest'
       with:
         file: /tmp/coverage.out
         flags: unittests
