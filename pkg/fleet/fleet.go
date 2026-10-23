@@ -21,7 +21,8 @@ import (
 
 // Signal is one normalised indicator for a unit: Value in [0,1] where higher is
 // more concerning (PERCLOS for a driver, vibration or temperature for a machine).
-// Weight is its relative importance when the signals are fused (defaults to 1).
+// Weight is its relative importance when the signals are fused (defaults to 1,
+// capped at maxWeight).
 type Signal struct {
 	Name   string  `json:"name"`
 	Value  float64 `json:"value"`
@@ -115,10 +116,7 @@ func (e *MonitoringEngine) Assess(r Reading) Assessment {
 	}
 	var sum, wsum, maxVal, worstContrib float64
 	for _, s := range r.Signals {
-		w := s.Weight
-		if w <= 0 {
-			w = 1
-		}
+		w := signalWeight(s.Weight)
 		v := clamp01(s.Value)
 		sum += v * w
 		wsum += w
@@ -192,10 +190,7 @@ func explain(r Reading) string {
 	}
 	items := make([]kv, 0, len(r.Signals))
 	for _, s := range r.Signals {
-		w := s.Weight
-		if w <= 0 {
-			w = 1
-		}
+		w := signalWeight(s.Weight)
 		v := clamp01(s.Value)
 		items = append(items, kv{s.Name, v, v * w})
 	}
@@ -212,8 +207,25 @@ func explain(r Reading) string {
 	return strings.Join(parts, " ")
 }
 
+// maxWeight caps a signal's weight so the weighted sums in Assess cannot
+// overflow to +Inf (Inf/Inf is a NaN severity, which every threshold reads as OK).
+const maxWeight = 1e6
+
+// signalWeight is a signal's effective weight: 1 when unset, non-positive or NaN,
+// and at most maxWeight.
+func signalWeight(w float64) float64 {
+	if !(w > 0) {
+		return 1
+	}
+	if w > maxWeight {
+		return maxWeight
+	}
+	return w
+}
+
+// clamp01 clamps v to [0,1]; NaN counts as 0.
 func clamp01(v float64) float64 {
-	if v < 0 {
+	if !(v >= 0) {
 		return 0
 	}
 	if v > 1 {

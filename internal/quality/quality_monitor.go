@@ -137,11 +137,7 @@ func (qm *QualityMonitor) UpdatePacketLoss(sent, received uint64) {
 
 	qm.packetsSent = sent
 	qm.packetsReceived = received
-
-	if sent > 0 {
-		qm.packetsLost = sent - received
-		qm.lossRate = float64(qm.packetsLost) / float64(sent) * 100.0
-	}
+	qm.updateLoss()
 
 	qm.lastUpdate = time.Now()
 	qm.updateCount++
@@ -156,10 +152,7 @@ func (qm *QualityMonitor) RecordPacketSent() {
 	defer qm.mu.Unlock()
 
 	qm.packetsSent++
-
-	if qm.packetsSent > 0 {
-		qm.lossRate = float64(qm.packetsLost) / float64(qm.packetsSent) * 100.0
-	}
+	qm.updateLoss()
 
 	qm.updateCount++
 	qm.calculateMOS()
@@ -171,14 +164,25 @@ func (qm *QualityMonitor) RecordPacketReceived() {
 	defer qm.mu.Unlock()
 
 	qm.packetsReceived++
-
-	if qm.packetsSent > 0 {
-		qm.packetsLost = qm.packetsSent - qm.packetsReceived
-		qm.lossRate = float64(qm.packetsLost) / float64(qm.packetsSent) * 100.0
-	}
+	qm.updateLoss()
 
 	qm.updateCount++
 	qm.calculateMOS()
+}
+
+// updateLoss recomputes packetsLost and lossRate from the sent and received
+// counters. Received can exceed sent (duplicates, retransmissions, or the
+// receiver counting first); that is no loss, not a wrapped unsigned difference.
+func (qm *QualityMonitor) updateLoss() {
+	if qm.packetsReceived >= qm.packetsSent {
+		qm.packetsLost = 0
+	} else {
+		qm.packetsLost = qm.packetsSent - qm.packetsReceived
+	}
+	qm.lossRate = 0
+	if qm.packetsSent > 0 {
+		qm.lossRate = float64(qm.packetsLost) / float64(qm.packetsSent) * 100.0
+	}
 }
 
 // calculateMOS calculates Mean Opinion Score based on E-model (ITU-T G.107)
@@ -251,9 +255,14 @@ func (qm *QualityMonitor) GetMetrics() Metrics {
 	qm.mu.RLock()
 	defer qm.mu.RUnlock()
 
+	minRTT := qm.minRTT
+	if len(qm.rttSamples) == 0 {
+		minRTT = 0 // no sample yet: do not leak the MaxInt64 sentinel
+	}
+
 	return Metrics{
 		AvgRTT:         qm.avgRTT,
-		MinRTT:         qm.minRTT,
+		MinRTT:         minRTT,
 		MaxRTT:         qm.maxRTT,
 		AvgJitter:      qm.avgJitter,
 		MaxJitter:      qm.maxJitter,
@@ -381,6 +390,11 @@ func (qm *QualityMonitor) IsAcceptable() bool {
 func (qm *QualityMonitor) GetQualityPercent() float64 {
 	qm.mu.RLock()
 	defer qm.mu.RUnlock()
+
+	// No sample yet: currentMOS is 0, outside the 1-5 scale
+	if qm.currentQuality == QualityUnknown {
+		return 0
+	}
 
 	// Convert MOS (1-5) to percentage (0-100)
 	return (qm.currentMOS - 1.0) / 4.0 * 100.0

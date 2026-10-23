@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"math/rand"
 
 	"github.com/svend4/infon/pkg/brain"
@@ -202,8 +203,9 @@ func unoCloneHands(h [2][]UnoCard) [2][]UnoCard {
 }
 
 // unoDraw pops n cards from the deck into hand p, reshuffling the discard (minus
-// its top) back into the deck when the deck runs out.
-func unoDraw(s *UnoState, p, n int) {
+// its top) back into the deck when the deck runs out. The reshuffle is seeded
+// from the game seed and the recycled cards, so a game stays reproducible.
+func unoDraw(s *UnoState, p, n int, seed int64) {
 	for k := 0; k < n; k++ {
 		if len(s.Deck) == 0 {
 			if len(s.Discard) <= 1 {
@@ -212,13 +214,19 @@ func unoDraw(s *UnoState, p, n int) {
 			top := s.Discard[len(s.Discard)-1]
 			s.Deck = append([]UnoCard(nil), s.Discard[:len(s.Discard)-1]...)
 			s.Discard = []UnoCard{top}
+			h := fnv.New64a()
+			for _, c := range s.Deck {
+				fmt.Fprintf(h, "%s/%s/%d;", c.Color, c.Kind, c.Num)
+			}
+			r := rand.New(rand.NewSource(seed ^ int64(h.Sum64())))
+			r.Shuffle(len(s.Deck), func(i, j int) { s.Deck[i], s.Deck[j] = s.Deck[j], s.Deck[i] })
 		}
 		s.Hands[p] = append(s.Hands[p], s.Deck[len(s.Deck)-1])
 		s.Deck = s.Deck[:len(s.Deck)-1]
 	}
 }
 
-func (Uno) Apply(s UnoState, p int, m Move) (UnoState, error) {
+func (u Uno) Apply(s UnoState, p int, m Move) (UnoState, error) {
 	var v unoMove
 	if json.Unmarshal(m, &v) != nil {
 		return s, errors.New("bad move encoding")
@@ -231,7 +239,7 @@ func (Uno) Apply(s UnoState, p int, m Move) (UnoState, error) {
 	opp := 1 - p
 
 	if v.Draw {
-		unoDraw(&ns, p, 1)
+		unoDraw(&ns, p, 1, u.Seed)
 		ns.Turn = opp
 		return ns, nil
 	}
@@ -265,10 +273,10 @@ func (Uno) Apply(s UnoState, p int, m Move) (UnoState, error) {
 	case "skip", "reverse": // 2 players: opponent is skipped
 		ns.Turn = p
 	case "draw2":
-		unoDraw(&ns, opp, 2)
+		unoDraw(&ns, opp, 2, u.Seed)
 		ns.Turn = p
 	case "wild4":
-		unoDraw(&ns, opp, 4)
+		unoDraw(&ns, opp, 4, u.Seed)
 		ns.Turn = p
 	default: // num, wild
 		ns.Turn = opp

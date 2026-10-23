@@ -2,6 +2,7 @@ package glyphqr
 
 import (
 	"errors"
+	"fmt"
 	"image"
 
 	"github.com/svend4/infon/pkg/color"
@@ -67,7 +68,9 @@ func isqrtCeil(n int) int {
 }
 
 // Encode packs data into a glyph-QR grid with ecc parity bytes (ecc clamped to
-// 2..30; corrects up to ecc/2 wrong cells-per-byte). data is at most 253 bytes.
+// 2..30; corrects up to ecc/2 wrong cells-per-byte). data is at most 253-ecc
+// bytes: the codeword (2 header bytes, data, ecc parity) must fit one 255-byte
+// Reed-Solomon block.
 func Encode(data []byte, ecc int) ([][]string, error) {
 	if ecc < 2 {
 		ecc = 2
@@ -75,8 +78,8 @@ func Encode(data []byte, ecc int) ([][]string, error) {
 	if ecc > 30 {
 		ecc = 30
 	}
-	if len(data) > 253 {
-		return nil, errors.New("glyphqr: data too long (max 253 bytes)")
+	if 2+len(data)+ecc > 255 {
+		return nil, fmt.Errorf("glyphqr: data too long (max %d bytes with ecc=%d)", 253-ecc, ecc)
 	}
 	msg := append([]byte{magic, byte(len(data))}, data...)
 	cw := rsEncode(msg, ecc)
