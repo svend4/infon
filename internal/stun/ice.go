@@ -35,8 +35,9 @@ type ICEAgent struct {
 	remoteCandidates []*ICECandidate
 	candidatePairs   []*CandidatePair
 
-	stunClient *STUNClient
-	turnClient *TURNClient
+	// Clients whose sockets back gathered candidates; closed by Close.
+	stunClients []*STUNClient
+	turnClients []*TURNClient
 
 	state ICEState
 
@@ -302,13 +303,15 @@ func (ia *ICEAgent) Close() error {
 
 	ia.state = ICEStateClosed
 
-	if ia.stunClient != nil {
-		_ = ia.stunClient.Close()
+	for _, c := range ia.stunClients {
+		_ = c.Close()
 	}
+	ia.stunClients = nil
 
-	if ia.turnClient != nil {
-		_ = ia.turnClient.Close()
+	for _, c := range ia.turnClients {
+		_ = c.Close()
 	}
+	ia.turnClients = nil
 
 	return nil
 }
@@ -373,13 +376,18 @@ func (ia *ICEAgent) gatherSrflxCandidates(stunServer string) ([]*ICECandidate, e
 
 	// Create STUN client
 	stunClient := NewSTUNClient(stunServer)
-	ia.stunClient = stunClient
 
 	// Get mapped address
 	mappedAddr, err := stunClient.GetMappedAddress()
 	if err != nil {
+		_ = stunClient.Close()
 		return nil, err
 	}
+
+	// Keep the client: its socket is the candidate's base.
+	ia.mu.Lock()
+	ia.stunClients = append(ia.stunClients, stunClient)
+	ia.mu.Unlock()
 
 	// Get local address
 	localAddr := stunClient.GetLocalAddress()
@@ -403,13 +411,18 @@ func (ia *ICEAgent) gatherRelayCandidates(turnServer TURNServer) ([]*ICECandidat
 
 	// Create TURN client
 	turnClient := NewTURNClient(turnServer.Address, turnServer.Username, turnServer.Password)
-	ia.turnClient = turnClient
 
 	// Allocate relay address
 	relayAddr, err := turnClient.Allocate()
 	if err != nil {
+		_ = turnClient.Close()
 		return nil, err
 	}
+
+	// Keep the client: it holds the allocation.
+	ia.mu.Lock()
+	ia.turnClients = append(ia.turnClients, turnClient)
+	ia.mu.Unlock()
 
 	candidate := &ICECandidate{
 		Type:       CandidateTypeRelay,

@@ -159,11 +159,10 @@ func (sc *STUNClient) GetMappedAddress() (*net.UDPAddr, error) {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	// Receive response
-	buffer := make([]byte, 1500)
+	// Receive the response to this request
 	_ = sc.conn.SetReadDeadline(time.Now().Add(sc.timeout))
 
-	n, _, err := sc.conn.ReadFromUDP(buffer)
+	response, err := readResponse(sc.conn, serverAddr, msg.TransactionID, BindingResponse, BindingErrorResponse)
 	if err != nil {
 		sc.mu.Lock()
 		sc.timeouts++
@@ -176,10 +175,8 @@ func (sc *STUNClient) GetMappedAddress() (*net.UDPAddr, error) {
 	sc.lastRTT = time.Since(start)
 	sc.mu.Unlock()
 
-	// Parse response
-	response, err := sc.decodeMessage(buffer[:n])
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if response.Type == BindingErrorResponse {
+		return nil, fmt.Errorf("binding request failed")
 	}
 
 	// Extract mapped address
@@ -265,6 +262,33 @@ type Statistics struct {
 }
 
 // Private helper methods
+
+// readResponse reads datagrams from conn until one arrives from server that
+// decodes as a STUN message of one of the given types carrying txID, or the
+// read deadline passes. Anything else (datagrams from other sources,
+// undecodable ones, other transactions or message types) is stray, stale or
+// spoofed and is dropped.
+func readResponse(conn *net.UDPConn, server *net.UDPAddr, txID [12]byte, types ...uint16) (*Message, error) {
+	buffer := make([]byte, 1500)
+	for {
+		n, from, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			return nil, err
+		}
+		if !from.IP.Equal(server.IP) || from.Port != server.Port {
+			continue
+		}
+		msg, err := (&STUNClient{}).decodeMessage(buffer[:n])
+		if err != nil || msg.TransactionID != txID {
+			continue
+		}
+		for _, t := range types {
+			if msg.Type == t {
+				return msg, nil
+			}
+		}
+	}
+}
 
 func (sc *STUNClient) createBindingRequest() *Message {
 	msg := &Message{

@@ -3,6 +3,7 @@ package stun
 import (
 	"crypto/hmac"
 	"crypto/md5"
+	"crypto/rand"
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
@@ -23,6 +24,7 @@ const (
 	DataIndication          uint16 = 0x0017
 	CreatePermissionRequest uint16 = 0x0008
 	CreatePermissionResponse uint16 = 0x0108
+	CreatePermissionErrorResponse uint16 = 0x0118
 	ChannelBindRequest      uint16 = 0x0009
 	ChannelBindResponse     uint16 = 0x0109
 )
@@ -51,6 +53,7 @@ type TURNClient struct {
 	conn       *net.UDPConn
 	localAddr  *net.UDPAddr
 	relayAddr  *net.UDPAddr
+	server     *net.UDPAddr // serverAddr as resolved by Allocate
 
 	timeout  time.Duration
 	lifetime time.Duration
@@ -98,8 +101,12 @@ func (tc *TURNClient) Connect() error {
 
 // Allocate requests a relay address from TURN server
 func (tc *TURNClient) Allocate() (*net.UDPAddr, error) {
-	if tc.conn == nil {
+	conn, err := tc.connection()
+	if err != nil {
 		if err := tc.Connect(); err != nil {
+			return nil, err
+		}
+		if conn, err = tc.connection(); err != nil {
 			return nil, err
 		}
 	}
@@ -124,27 +131,21 @@ func (tc *TURNClient) Allocate() (*net.UDPAddr, error) {
 	}
 
 	tc.mu.Lock()
-	_, err = tc.conn.WriteToUDP(data, serverAddr)
+	_, err = conn.WriteToUDP(data, serverAddr)
 	tc.allocations++
+	tc.server = serverAddr
 	tc.mu.Unlock()
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	// Receive response
-	buffer := make([]byte, 1500)
-	_ = tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
+	// Receive the response to this request
+	_ = conn.SetReadDeadline(time.Now().Add(tc.timeout))
 
-	n, _, err := tc.conn.ReadFromUDP(buffer)
+	response, err := readResponse(conn, serverAddr, msg.TransactionID, AllocateResponse, AllocateErrorResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive response: %w", err)
-	}
-
-	// Parse response
-	response, err := tc.decodeMessage(buffer[:n])
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	// Check for error response
@@ -175,6 +176,11 @@ func (tc *TURNClient) Refresh() error {
 	}
 	tc.mu.RUnlock()
 
+	conn, err := tc.connection()
+	if err != nil {
+		return err
+	}
+
 	// Create refresh request
 	msg := tc.createRefreshRequest()
 
@@ -195,7 +201,7 @@ func (tc *TURNClient) Refresh() error {
 	}
 
 	tc.mu.Lock()
-	_, err = tc.conn.WriteToUDP(data, serverAddr)
+	_, err = conn.WriteToUDP(data, serverAddr)
 	tc.refreshes++
 	tc.mu.Unlock()
 
@@ -203,19 +209,12 @@ func (tc *TURNClient) Refresh() error {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
-	// Receive response
-	buffer := make([]byte, 1500)
-	_ = tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
+	// Receive the response to this request
+	_ = conn.SetReadDeadline(time.Now().Add(tc.timeout))
 
-	n, _, err := tc.conn.ReadFromUDP(buffer)
+	response, err := readResponse(conn, serverAddr, msg.TransactionID, RefreshResponse, RefreshErrorResponse)
 	if err != nil {
 		return fmt.Errorf("failed to receive response: %w", err)
-	}
-
-	// Parse response
-	response, err := tc.decodeMessage(buffer[:n])
-	if err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	if response.Type == RefreshErrorResponse {
@@ -231,6 +230,11 @@ func (tc *TURNClient) Refresh() error {
 
 // CreatePermission creates permission for a peer address
 func (tc *TURNClient) CreatePermission(peerAddr *net.UDPAddr) error {
+	conn, err := tc.connection()
+	if err != nil {
+		return err
+	}
+
 	// Create permission request
 	msg := tc.createPermissionRequest(peerAddr)
 
@@ -251,7 +255,7 @@ func (tc *TURNClient) CreatePermission(peerAddr *net.UDPAddr) error {
 	}
 
 	tc.mu.Lock()
-	_, err = tc.conn.WriteToUDP(data, serverAddr)
+	_, err = conn.WriteToUDP(data, serverAddr)
 	tc.permissionsSet++
 	tc.mu.Unlock()
 
@@ -259,19 +263,16 @@ func (tc *TURNClient) CreatePermission(peerAddr *net.UDPAddr) error {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
-	// Receive response
-	buffer := make([]byte, 1500)
-	_ = tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
+	// Receive the response to this request
+	_ = conn.SetReadDeadline(time.Now().Add(tc.timeout))
 
-	n, _, err := tc.conn.ReadFromUDP(buffer)
+	response, err := readResponse(conn, serverAddr, msg.TransactionID, CreatePermissionResponse, CreatePermissionErrorResponse)
 	if err != nil {
 		return fmt.Errorf("failed to receive response: %w", err)
 	}
 
-	// Parse response
-	_, err = tc.decodeMessage(buffer[:n])
-	if err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if response.Type == CreatePermissionErrorResponse {
+		return fmt.Errorf("create permission failed")
 	}
 
 	// Store permission
@@ -310,8 +311,13 @@ func (tc *TURNClient) SendData(peerAddr *net.UDPAddr, data []byte) error {
 		return fmt.Errorf("failed to resolve server: %w", err)
 	}
 
+	conn, err := tc.connection()
+	if err != nil {
+		return err
+	}
+
 	tc.mu.Lock()
-	n, err := tc.conn.WriteToUDP(encoded, serverAddr)
+	n, err := conn.WriteToUDP(encoded, serverAddr)
 	tc.bytesSent += uint64(n)
 	tc.mu.Unlock()
 
@@ -324,18 +330,31 @@ func (tc *TURNClient) SendData(peerAddr *net.UDPAddr, data []byte) error {
 
 // ReceiveData receives data from the relay
 func (tc *TURNClient) ReceiveData() ([]byte, *net.UDPAddr, error) {
+	conn, err := tc.connection()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	buffer := make([]byte, 1500)
 
-	_ = tc.conn.SetReadDeadline(time.Now().Add(tc.timeout))
+	_ = conn.SetReadDeadline(time.Now().Add(tc.timeout))
 
-	n, _, err := tc.conn.ReadFromUDP(buffer)
+	n, from, err := conn.ReadFromUDP(buffer)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	tc.mu.Lock()
 	tc.bytesReceived += uint64(n)
+	server := tc.server
 	tc.mu.Unlock()
+
+	// Only the server relays data. A Data indication from anyone else who can
+	// reach this port would otherwise be delivered as coming from whichever peer
+	// it names.
+	if server == nil || !from.IP.Equal(server.IP) || from.Port != server.Port {
+		return nil, nil, fmt.Errorf("datagram from %v, not the TURN server", from)
+	}
 
 	// Parse message
 	msg, err := tc.decodeMessage(buffer[:n])
@@ -389,6 +408,10 @@ func (tc *TURNClient) Close() error {
 		_, _ = tc.conn.WriteToUDP(data, serverAddr)
 	}
 
+	// The allocation and its permissions go with the socket.
+	tc.relayAddr = nil
+	tc.permissions = make(map[string]time.Time)
+
 	if tc.conn != nil {
 		err := tc.conn.Close()
 		tc.conn = nil
@@ -396,6 +419,18 @@ func (tc *TURNClient) Close() error {
 	}
 
 	return nil
+}
+
+// connection returns the client's socket, or an error before Connect or
+// Allocate has opened it and after Close.
+func (tc *TURNClient) connection() (*net.UDPConn, error) {
+	tc.mu.RLock()
+	defer tc.mu.RUnlock()
+
+	if tc.conn == nil {
+		return nil, fmt.Errorf("TURN client is not connected")
+	}
+	return tc.conn, nil
 }
 
 // GetRelayAddress returns the allocated relay address
@@ -643,12 +678,6 @@ func (tc *TURNClient) decodeMessage(data []byte) (*Message, error) {
 }
 
 func (tc *TURNClient) generateTransactionID(txID *[12]byte) {
-	// Use current time + random bytes
-	now := time.Now().UnixNano()
-	binary.BigEndian.PutUint64((*txID)[:8], uint64(now))
-
-	// Random bytes for last 4
-	for i := 8; i < 12; i++ {
-		(*txID)[i] = byte(now >> (i * 8))
-	}
+	// RFC 5389: 96 bits chosen uniformly at random
+	_, _ = rand.Read(txID[:])
 }

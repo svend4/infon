@@ -9,14 +9,42 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 )
 
 // Record is a published peer endpoint.
 type Record struct {
-	Ygg     string // Yggdrasil IPv6 address + port, e.g. "200:abc:def::1:5000"
+	Ygg     string // Yggdrasil IPv6 address + port, e.g. "[200:abc:def::1]:5000" or "200:abc:def::1:5000"; see HostPort
 	Version string // record format version (default "1")
 	PubKey  string // optional Yggdrasil public key for verification
+}
+
+// HostPort splits Ygg into an IP address and a port. Both the bracketed
+// "[addr]:port" form and the unbracketed "addr:port" form of
+// docs/dns-peer-discovery.md are accepted. An unbracketed IPv6 address is
+// itself full of colons, so there the port is always the text after the last
+// colon and must not be omitted.
+func (r Record) HostPort() (host, port string, err error) {
+	if strings.HasPrefix(r.Ygg, "[") {
+		host, port, err = net.SplitHostPort(r.Ygg)
+	} else if i := strings.LastIndexByte(r.Ygg, ':'); i >= 0 {
+		host, port = r.Ygg[:i], r.Ygg[i+1:]
+	} else {
+		err = errors.New("missing port")
+	}
+	if err == nil && net.ParseIP(host) == nil {
+		err = fmt.Errorf("%q is not an IP address", host)
+	}
+	if err == nil {
+		if p, perr := strconv.ParseUint(port, 10, 16); perr != nil || p == 0 {
+			err = fmt.Errorf("bad port %q", port)
+		}
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("discovery: bad ygg= value %q: %v", r.Ygg, err)
+	}
+	return host, port, nil
 }
 
 // Name is the TXT owner name for a handle's parts.
@@ -46,7 +74,8 @@ func Format(r Record) string {
 }
 
 // Parse reads a TXT body ("ygg=... v=1 pubkey=..."). Unknown keys are ignored for
-// forward compatibility; a record with no ygg= is rejected.
+// forward compatibility; a record with no ygg=, or a ygg= that is not an IP
+// address plus port (see Record.HostPort), is rejected.
 func Parse(txt string) (Record, error) {
 	var r Record
 	for _, tok := range strings.Fields(txt) {
@@ -65,6 +94,9 @@ func Parse(txt string) (Record, error) {
 	}
 	if r.Ygg == "" {
 		return Record{}, errors.New("discovery: TXT record has no ygg= field")
+	}
+	if _, _, err := r.HostPort(); err != nil {
+		return Record{}, err
 	}
 	if r.Version == "" {
 		r.Version = "1"
