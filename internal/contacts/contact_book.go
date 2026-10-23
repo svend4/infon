@@ -1,11 +1,13 @@
 package contacts
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -294,17 +296,54 @@ func (cb *ContactBook) Clear() error {
 }
 
 // Save saves contacts to disk
+//
+// It writes a temporary file next to the contacts file and renames it into
+// place, so a crash or a full disk during the write leaves the previous
+// contacts intact instead of a truncated file that no longer loads.
 func (cb *ContactBook) Save() error {
 	data, err := json.MarshalIndent(cb.contacts, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal contacts: %w", err)
 	}
 
-	if err := os.WriteFile(cb.filePath, data, 0644); err != nil {
+	if err := writeFileAtomic(cb.filePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write contacts: %w", err)
 	}
 
 	return nil
+}
+
+// writeFileAtomic replaces path with data via a synced temporary file in the
+// same directory. Like os.WriteFile, an existing file keeps its permissions
+// and perm applies to a new one.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	if info, err := os.Stat(path); err == nil {
+		perm = info.Mode().Perm()
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+
+	_, err = tmp.Write(data)
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmpName, perm)
+	}
+	if err == nil {
+		err = os.Rename(tmpName, path)
+	}
+	if err != nil {
+		_ = os.Remove(tmpName)
+	}
+	return err
 }
 
 // Load loads contacts from disk
@@ -316,6 +355,16 @@ func (cb *ContactBook) Load() error {
 
 	if err := json.Unmarshal(data, &cb.contacts); err != nil {
 		return fmt.Errorf("failed to unmarshal contacts: %w", err)
+	}
+
+	// A JSON null file or entry leaves a nil map or contact behind
+	if cb.contacts == nil {
+		cb.contacts = make(map[string]*Contact)
+	}
+	for id, contact := range cb.contacts {
+		if contact == nil {
+			delete(cb.contacts, id)
+		}
 	}
 
 	return nil
@@ -331,9 +380,12 @@ func (cb *ContactBook) Export(path string) error {
 	}
 	defer func() { _ = f.Close() }()
 
+	// encoding/csv quotes fields holding commas, quotes or newlines
+	w := csv.NewWriter(f)
+
 	// Write CSV header
-	header := "ID,Name,Display Name,Address,Email,Phone,Favorite,Notes,Tags,Last Call,Total Calls,Created,Updated\n"
-	if _, err := f.WriteString(header); err != nil {
+	header := []string{"ID", "Name", "Display Name", "Address", "Email", "Phone", "Favorite", "Notes", "Tags", "Last Call", "Total Calls", "Created", "Updated"}
+	if err := w.Write(header); err != nil {
 		return err
 	}
 
@@ -341,28 +393,29 @@ func (cb *ContactBook) Export(path string) error {
 	for _, contact := range contacts {
 		tags := strings.Join(contact.Tags, ";")
 
-		line := fmt.Sprintf("%s,%s,%s,%s,%s,%s,%t,%s,%s,%s,%d,%s,%s\n",
+		record := []string{
 			contact.ID,
 			contact.Name,
 			contact.DisplayName,
 			contact.Address,
 			contact.Email,
 			contact.Phone,
-			contact.Favorite,
+			strconv.FormatBool(contact.Favorite),
 			contact.Notes,
 			tags,
 			contact.LastCallTime.Format(time.RFC3339),
-			contact.TotalCalls,
+			strconv.Itoa(contact.TotalCalls),
 			contact.CreatedAt.Format(time.RFC3339),
 			contact.UpdatedAt.Format(time.RFC3339),
-		)
+		}
 
-		if _, err := f.WriteString(line); err != nil {
+		if err := w.Write(record); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	w.Flush()
+	return w.Error()
 }
 
 // Import imports contacts from CSV format

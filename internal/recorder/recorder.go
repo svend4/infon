@@ -3,6 +3,7 @@ package recorder
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -49,14 +50,21 @@ type RecordedAudio struct {
 //
 // It is safe for concurrent use: in a call the video and audio capture
 // goroutines record while the main goroutine stops the recording. mu guards
-// every field, and Stop holds it while writing, so the frame and audio counts
-// written to the header always match the entries written after it.
+// every field, and Stop holds it while finishing the file, so the frame and
+// audio counts written to the header always match the entries written.
+//
+// A call can last for hours, so nothing is kept in memory: each frame is
+// written to the file as it is recorded, and each audio chunk to a temporary
+// file next to it (the format stores all audio after all frames). Stop
+// appends the audio and fills in the header reserved by Start.
 type Recorder struct {
 	mu         sync.Mutex
 	file       *os.File
+	audioFile  *os.File // audio entries until Stop appends them to file
+	err        error    // first write error; Stop reports it
 	startTime  time.Time
-	frames     []RecordedFrame
-	audio      []RecordedAudio
+	frameCount int
+	audioCount int
 	metadata   RecordingMetadata
 	recording  bool
 }
@@ -69,8 +77,6 @@ const (
 // NewRecorder creates a new call recorder
 func NewRecorder(width, height int, audioRate int) *Recorder {
 	return &Recorder{
-		frames: make([]RecordedFrame, 0),
-		audio:  make([]RecordedAudio, 0),
 		metadata: RecordingMetadata{
 			Version:     RecordingVersion,
 			FrameWidth:  uint16(width),
@@ -96,11 +102,34 @@ func (r *Recorder) Start(filename string) error {
 		return fmt.Errorf("failed to create recording file: %w", err)
 	}
 
+	// Audio chunks follow all frames in the file; buffer them on disk
+	audioFile, err := os.CreateTemp(dir, filepath.Base(filename)+".audio-*")
+	if err != nil {
+		_ = file.Close()
+		return fmt.Errorf("failed to create audio buffer file: %w", err)
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.file = file
+	r.audioFile = audioFile
+	r.err = nil
+	r.frameCount = 0
+	r.audioCount = 0
 	r.startTime = time.Now()
 	r.metadata.StartTime = r.startTime
+	r.metadata.Duration = 0
+	r.metadata.FrameCount = 0
+	r.metadata.AudioChunks = 0
+
+	// Reserve the header; Stop rewrites it with the final counts
+	if _, err := file.Write(r.header()); err != nil {
+		_ = file.Close()
+		_ = audioFile.Close()
+		_ = os.Remove(audioFile.Name())
+		return fmt.Errorf("failed to write header: %w", err)
+	}
+
 	r.recording = true
 
 	return nil
@@ -114,12 +143,24 @@ func (r *Recorder) RecordFrame(frame *terminal.Frame) error {
 		return fmt.Errorf("not recording")
 	}
 
+	if r.err != nil {
+		return r.err
+	}
+
 	elapsed := uint64(time.Since(r.startTime).Milliseconds())
 
-	r.frames = append(r.frames, RecordedFrame{
-		Timestamp: elapsed,
-		Frame:     frame,
-	})
+	// Frame entry: timestamp, data length, frame data
+	frameData := serializeFrame(frame)
+	entry := make([]byte, 12, 12+len(frameData))
+	binary.BigEndian.PutUint64(entry[0:8], elapsed)
+	binary.BigEndian.PutUint32(entry[8:12], uint32(len(frameData)))
+	entry = append(entry, frameData...)
+
+	if _, err := r.file.Write(entry); err != nil {
+		r.err = fmt.Errorf("failed to write frame: %w", err)
+		return r.err
+	}
+	r.frameCount++
 
 	return nil
 }
@@ -132,16 +173,25 @@ func (r *Recorder) RecordAudio(samples []int16) error {
 		return fmt.Errorf("not recording")
 	}
 
+	if r.err != nil {
+		return r.err
+	}
+
 	elapsed := uint64(time.Since(r.startTime).Milliseconds())
 
-	// Make a copy of samples
-	samplesCopy := make([]int16, len(samples))
-	copy(samplesCopy, samples)
+	// Audio entry: timestamp, sample count, samples
+	entry := make([]byte, 12+len(samples)*2)
+	binary.BigEndian.PutUint64(entry[0:8], elapsed)
+	binary.BigEndian.PutUint32(entry[8:12], uint32(len(samples)))
+	for i, sample := range samples {
+		binary.BigEndian.PutUint16(entry[12+i*2:14+i*2], uint16(sample))
+	}
 
-	r.audio = append(r.audio, RecordedAudio{
-		Timestamp: elapsed,
-		Samples:   samplesCopy,
-	})
+	if _, err := r.audioFile.Write(entry); err != nil {
+		r.err = fmt.Errorf("failed to write audio chunk: %w", err)
+		return r.err
+	}
+	r.audioCount++
 
 	return nil
 }
@@ -156,21 +206,43 @@ func (r *Recorder) Stop() error {
 
 	r.recording = false
 	r.metadata.Duration = uint32(time.Since(r.startTime).Milliseconds())
-	r.metadata.FrameCount = uint32(len(r.frames))
-	r.metadata.AudioChunks = uint32(len(r.audio))
+	r.metadata.FrameCount = uint32(r.frameCount)
+	r.metadata.AudioChunks = uint32(r.audioCount)
 
-	// Write recording to file
-	if err := r.writeRecording(); err != nil {
-		_ = r.file.Close()
-		return err
+	// Complete the recording file
+	err := r.finishRecording()
+	if cerr := r.file.Close(); err == nil && cerr != nil {
+		err = fmt.Errorf("failed to close recording: %w", cerr)
+	}
+	_ = r.audioFile.Close()
+	_ = os.Remove(r.audioFile.Name())
+
+	return err
+}
+
+// finishRecording appends the buffered audio chunks after the frames already
+// in the file and writes the final header
+func (r *Recorder) finishRecording() error {
+	if r.err != nil {
+		return r.err
 	}
 
-	_ = r.file.Close()
+	if _, err := r.audioFile.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to read audio buffer: %w", err)
+	}
+	if _, err := io.Copy(r.file, r.audioFile); err != nil {
+		return fmt.Errorf("failed to write audio chunks: %w", err)
+	}
+
+	if _, err := r.file.WriteAt(r.header(), 0); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
+	}
+
 	return nil
 }
 
-// writeRecording writes the recording to disk
-func (r *Recorder) writeRecording() error {
+// header encodes the file header from the metadata
+func (r *Recorder) header() []byte {
 	// File format:
 	// [Header]
 	// - Magic: 4 bytes (0x54564350 = "TVCP")
@@ -197,7 +269,6 @@ func (r *Recorder) writeRecording() error {
 	// - Sample count: 4 bytes
 	// - Samples: N * 2 bytes
 
-	// Write header
 	header := make([]byte, 34)
 	binary.BigEndian.PutUint32(header[0:4], MagicHeader)
 	binary.BigEndian.PutUint16(header[4:6], r.metadata.Version)
@@ -211,52 +282,7 @@ func (r *Recorder) writeRecording() error {
 	binary.BigEndian.PutUint32(header[26:30], r.metadata.FrameCount)
 	binary.BigEndian.PutUint32(header[30:34], r.metadata.AudioChunks)
 
-	if _, err := r.file.Write(header); err != nil {
-		return fmt.Errorf("failed to write header: %w", err)
-	}
-
-	// Write video frames
-	for _, frame := range r.frames {
-		// Serialize frame
-		frameData := serializeFrame(frame.Frame)
-
-		// Write frame entry
-		entry := make([]byte, 12)
-		binary.BigEndian.PutUint64(entry[0:8], frame.Timestamp)
-		binary.BigEndian.PutUint32(entry[8:12], uint32(len(frameData)))
-
-		if _, err := r.file.Write(entry); err != nil {
-			return fmt.Errorf("failed to write frame header: %w", err)
-		}
-
-		if _, err := r.file.Write(frameData); err != nil {
-			return fmt.Errorf("failed to write frame data: %w", err)
-		}
-	}
-
-	// Write audio chunks
-	for _, audio := range r.audio {
-		// Write audio entry
-		entry := make([]byte, 12)
-		binary.BigEndian.PutUint64(entry[0:8], audio.Timestamp)
-		binary.BigEndian.PutUint32(entry[8:12], uint32(len(audio.Samples)))
-
-		if _, err := r.file.Write(entry); err != nil {
-			return fmt.Errorf("failed to write audio header: %w", err)
-		}
-
-		// Write samples
-		samples := make([]byte, len(audio.Samples)*2)
-		for i, sample := range audio.Samples {
-			binary.BigEndian.PutUint16(samples[i*2:i*2+2], uint16(sample))
-		}
-
-		if _, err := r.file.Write(samples); err != nil {
-			return fmt.Errorf("failed to write audio samples: %w", err)
-		}
-	}
-
-	return nil
+	return header
 }
 
 // serializeFrame converts a terminal.Frame to bytes
@@ -312,5 +338,5 @@ func (r *Recorder) GetStats() (frameCount, audioCount int, duration time.Duratio
 	} else {
 		duration = time.Duration(r.metadata.Duration) * time.Millisecond
 	}
-	return len(r.frames), len(r.audio), duration
+	return r.frameCount, r.audioCount, duration
 }

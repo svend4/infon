@@ -272,6 +272,15 @@ func (ch *CallHistory) Load() error {
 		return fmt.Errorf("failed to unmarshal history: %w", err)
 	}
 
+	// Drop null elements, which unmarshal to nil entries
+	entries := ch.entries[:0]
+	for _, entry := range ch.entries {
+		if entry != nil {
+			entries = append(entries, entry)
+		}
+	}
+	ch.entries = entries
+
 	return nil
 }
 

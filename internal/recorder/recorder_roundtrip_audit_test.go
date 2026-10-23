@@ -62,19 +62,31 @@ func TestRecorderRoundTripAudit(t *testing.T) {
 		t.Errorf("counts = %d frames / %d audio, want 2 / 2", gm.FrameCount, gm.AudioChunks)
 	}
 
-	if len(got.Frames) != len(rec.frames) {
-		t.Fatalf("got %d frames, want %d", len(got.Frames), len(rec.frames))
+	// The recorder writes entries as they are recorded and keeps no copy, so
+	// compare against what was passed in.
+	wantFrames := []*terminal.Frame{f1, f2}
+	if len(got.Frames) != len(wantFrames) {
+		t.Fatalf("got %d frames, want %d", len(got.Frames), len(wantFrames))
 	}
-	for i := range rec.frames {
-		if got.Frames[i].Timestamp != rec.frames[i].Timestamp {
-			t.Errorf("frame %d timestamp = %d, want %d", i, got.Frames[i].Timestamp, rec.frames[i].Timestamp)
+	for i := range wantFrames {
+		if got.Frames[i].Timestamp > uint64(gm.Duration) || (i > 0 && got.Frames[i].Timestamp < got.Frames[i-1].Timestamp) {
+			t.Errorf("frame %d timestamp = %d, want in order and within %d ms", i, got.Frames[i].Timestamp, gm.Duration)
 		}
-		if !reflect.DeepEqual(got.Frames[i].Frame, rec.frames[i].Frame) {
-			t.Errorf("frame %d = %+v, want %+v", i, got.Frames[i].Frame, rec.frames[i].Frame)
+		if !reflect.DeepEqual(got.Frames[i].Frame, wantFrames[i]) {
+			t.Errorf("frame %d = %+v, want %+v", i, got.Frames[i].Frame, wantFrames[i])
 		}
 	}
 
-	if !reflect.DeepEqual(got.Audio, rec.audio) {
-		t.Errorf("audio = %+v, want %+v", got.Audio, rec.audio)
+	wantAudio := [][]int16{{0, 1, -1, 32767, -32768}, {42}}
+	if len(got.Audio) != len(wantAudio) {
+		t.Fatalf("got %d audio chunks, want %d", len(got.Audio), len(wantAudio))
+	}
+	for i := range wantAudio {
+		if got.Audio[i].Timestamp > uint64(gm.Duration) {
+			t.Errorf("audio %d timestamp = %d, want within %d ms", i, got.Audio[i].Timestamp, gm.Duration)
+		}
+		if !reflect.DeepEqual(got.Audio[i].Samples, wantAudio[i]) {
+			t.Errorf("audio %d = %v, want %v", i, got.Audio[i].Samples, wantAudio[i])
+		}
 	}
 }
