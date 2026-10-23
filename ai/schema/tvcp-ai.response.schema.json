@@ -21,6 +21,10 @@
     "scene": { "type": "object" },
     "sketch": { "type": "object" },
     "image": { "type": "object" },
+    "tangram": { "type": "object" },
+    "world": { "type": "object" },
+    "rpg": { "type": "array" },
+    "ray": { "type": ["array", "object"] },
     "cards": { "type": "array", "items": { "type": "string" } },
     "reasoning": { "type": "string" },
     "error": { "type": "string" }

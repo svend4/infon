@@ -20,7 +20,7 @@ swappable part.** You change brains by changing a URL.
 |---|---|---|
 | `protocol` | string | `"tvcp-ai/1"` or `"tvcp-ai/2"` (optional; server may default) |
 | `kind` | string | `move` \| `draw` \| `sketch` \| `image` \| `react` |
-| `game` | string | for `move`: `tictactoe` \| `wordle` \| `uno` |
+| `game` | string | for `move`: `tictactoe` \| `wordle` \| `uno` \| `tangram` \| `world` \| `rpg` \| `ray` \| `rayscene` |
 | `state` | object | game-specific state |
 | `prompt` | string | free text for `draw`/`sketch`/`image`/`react` |
 | `canvas` | object | `{width,height}` target size in terminal cells |

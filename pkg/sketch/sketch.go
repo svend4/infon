@@ -95,7 +95,9 @@ func ToScene(s Sketch, w, h int) scene.Scene {
 			if hh <= 0 {
 				hh = h / 4
 			}
-			for i := 0; i < hh; i++ {
+			// Rows at or above i == horizon fall off the top of the canvas, so
+			// stop there: hh comes from the brain and may be huge.
+			for i := 0; i < hh && i < horizon; i++ {
 				half := hh - 1 - i // wide base at the horizon, narrow apex on top
 				ops = append(ops, scene.Op{Op: "rect", X: cx - half, Y: horizon - 1 - i, W: 2*half + 1, H: 1, Glyph: "█", Fg: p(c), Bg: p(c)})
 			}

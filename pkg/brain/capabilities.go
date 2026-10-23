@@ -52,10 +52,10 @@ func (c Capabilities) Supports(kind, game string) bool {
 
 // CapabilitiesHandler serves the given capabilities as JSON (GET /v1/capabilities).
 func CapabilitiesHandler(c Capabilities) http.HandlerFunc {
+	if c.Protocol == "" {
+		c.Protocol = Protocol
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		if c.Protocol == "" {
-			c.Protocol = Protocol
-		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(c)
 	}

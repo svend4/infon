@@ -9,9 +9,12 @@ package brain
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/svend4/infon/pkg/pseudo"
 	"github.com/svend4/infon/pkg/scene"
@@ -80,6 +83,14 @@ type Brain interface {
 	Decide(Request) (Response, error)
 }
 
+// Size caps for one tvcp-ai/1 message: requests are a few hundred bytes and
+// responses (scenes, sketches, pseudo-images of at most 400x200 cells) well
+// under a megabyte.
+const (
+	maxRequestBytes  = 1 << 20
+	maxResponseBytes = 16 << 20
+)
+
 // HTTPBrain talks to any endpoint that speaks tvcp-ai/1.
 type HTTPBrain struct {
 	URL  string
@@ -105,8 +116,15 @@ func (h HTTPBrain) Decide(req Request) (Response, error) {
 	}
 	defer resp.Body.Close()
 	var out Response
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return Response{}, err
+	derr := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&out)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if derr == nil && out.Error != "" {
+			return Response{}, fmt.Errorf("brain: status %d: %s", resp.StatusCode, out.Error)
+		}
+		return Response{}, fmt.Errorf("brain: status %d", resp.StatusCode)
+	}
+	if derr != nil {
+		return Response{}, derr
 	}
 	return out, nil
 }
@@ -230,8 +248,11 @@ func refDraw(req Request) Response {
 	white := [3]int{245, 245, 250}
 	tag := [3]int{200, 210, 230}
 	txt := req.Prompt
-	if len(txt) > w-4 {
-		txt = txt[:w-4]
+	if lim := max(w-4, 0); len(txt) > lim {
+		for lim > 0 && !utf8.RuneStart(txt[lim]) {
+			lim-- // cut on a rune boundary
+		}
+		txt = txt[:lim]
 	}
 	sc := scene.Scene{Width: w, Height: h, Ops: []scene.Op{
 		{Op: "vgradient", X: 0, Y: 0, W: w, H: h, Glyph: " ", From: &c1, To: &c2},
@@ -564,6 +585,9 @@ func refWorld(req Request) Response {
 	return Response{Protocol: Protocol, Kind: "move", World: data, Reasoning: "reference world director"}
 }
 
+// maxRpgUnits caps how many units and enemies refRpg considers.
+const maxRpgUnits = 1024
+
 // refRpg is the reference battlefield commander for game "rpg": each of your
 // units steps toward the nearest enemy. Returns a list of {id,dx,dy}.
 func refRpg(req Request) Response {
@@ -599,7 +623,15 @@ func refRpg(req Request) Response {
 		DX int `json:"dx"`
 		DY int `json:"dy"`
 	}
-	var moves []mv
+	// Every unit is paired with every enemy, so bound both lists: a small body
+	// of "{}" entries would otherwise cost billions of steps.
+	if len(b.Units) > maxRpgUnits {
+		b.Units = b.Units[:maxRpgUnits]
+	}
+	if len(b.Enemies) > maxRpgUnits {
+		b.Enemies = b.Enemies[:maxRpgUnits]
+	}
+	moves := make([]mv, 0, len(b.Units))
 	for _, u := range b.Units {
 		best, bd := -1, 1<<30
 		for k, e := range b.Enemies {
@@ -710,6 +742,7 @@ func Reference(req Request) Response {
 // Handler serves the reference brain over HTTP (POST tvcp-ai/1 JSON).
 func Handler() http.HandlerFunc {
 	return func(wr http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(wr, r.Body, maxRequestBytes)
 		var req Request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			wr.WriteHeader(http.StatusBadRequest)

@@ -26,7 +26,12 @@
       "enum": [
         "tictactoe",
         "wordle",
-        "uno"
+        "uno",
+        "tangram",
+        "world",
+        "rpg",
+        "ray",
+        "rayscene"
       ]
     },
     "state": {
