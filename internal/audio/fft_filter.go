@@ -24,6 +24,8 @@ type FFTBandPassFilter struct {
 	outputBuffer []float64
 	window       []float64
 	overlapBuffer []float64
+	pending      []float64 // input samples not yet forming a full hop
+	ready        []int16   // filtered samples not yet returned by Process
 
 	// Noise suppression
 	noiseProfile  []float64 // Estimated noise spectrum
@@ -75,45 +77,49 @@ func NewFFTBandPassFilter(config FilterConfig) (*FFTBandPassFilter, error) {
 		noiseAlpha:      0.95,
 		suppressionGain: config.SuppressionGain,
 	}
+	filter.resetStream()
 
 	return filter, nil
 }
 
-// Process applies FFT bandpass filtering and noise suppression
+// resetStream clears the streaming queues. The output queue is primed with
+// hopSize-1 zeros so that every Process call can return exactly len(input)
+// samples whatever its size; together with the one-hop overlap-add delay this
+// gives the filter a fixed latency of fftSize-1 samples.
+func (f *FFTBandPassFilter) resetStream() {
+	f.pending = f.pending[:0]
+	f.ready = append(f.ready[:0], make([]int16, f.hopSize-1)...)
+}
+
+// Process applies FFT bandpass filtering and noise suppression.
+// It works as a stream: input is buffered until a full hop is available, each
+// hop is filtered with 50% overlap-add, and exactly len(input) samples are
+// returned per call, delayed by fftSize-1 samples.
 func (f *FFTBandPassFilter) Process(input []int16) []int16 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	output := make([]int16, len(input))
-	outputIdx := 0
-
 	// Convert int16 to float64
-	floatInput := make([]float64, len(input))
-	for i, sample := range input {
-		floatInput[i] = float64(sample)
+	for _, sample := range input {
+		f.pending = append(f.pending, float64(sample))
 	}
 
-	// Process in frames with overlap
-	for i := 0; i+f.hopSize <= len(floatInput); i += f.hopSize {
-		// Copy input to buffer (handle end of input)
-		if i+f.fftSize <= len(floatInput) {
-			copy(f.inputBuffer, floatInput[i:i+f.fftSize])
-		} else {
-			// Partial frame at end - zero pad
-			remaining := len(floatInput) - i
-			copy(f.inputBuffer[:remaining], floatInput[i:])
-			for j := remaining; j < f.fftSize; j++ {
-				f.inputBuffer[j] = 0
-			}
-		}
+	// Process every full hop of new input
+	frame := make([]float64, f.fftSize)
+	consumed := 0
+	for len(f.pending)-consumed >= f.hopSize {
+		// Slide the analysis history by one hop and append the new samples
+		copy(f.inputBuffer, f.inputBuffer[f.hopSize:])
+		copy(f.inputBuffer[f.fftSize-f.hopSize:], f.pending[consumed:consumed+f.hopSize])
+		consumed += f.hopSize
 
 		// Apply window
 		for j := 0; j < f.fftSize; j++ {
-			f.inputBuffer[j] *= f.window[j]
+			frame[j] = f.inputBuffer[j] * f.window[j]
 		}
 
 		// Forward FFT
-		spectrum := fft(f.inputBuffer)
+		spectrum := fft(frame)
 
 		// Apply bandpass filter and noise suppression
 		f.applySpectralFiltering(spectrum)
@@ -126,23 +132,17 @@ func (f *FFTBandPassFilter) Process(input []int16) []int16 {
 			f.overlapBuffer[j] += filtered[j]
 		}
 
-		// Copy output
-		copyLen := f.hopSize
-		if outputIdx+copyLen > len(output) {
-			copyLen = len(output) - outputIdx
-		}
-
-		for j := 0; j < copyLen; j++ {
+		// The first hop now has contributions from both overlapping frames
+		for j := 0; j < f.hopSize; j++ {
 			// Clamp to int16 range
 			val := f.overlapBuffer[j]
 			if val > 32767 {
-				output[outputIdx] = 32767
+				f.ready = append(f.ready, 32767)
 			} else if val < -32768 {
-				output[outputIdx] = -32768
+				f.ready = append(f.ready, -32768)
 			} else {
-				output[outputIdx] = int16(val)
+				f.ready = append(f.ready, int16(val))
 			}
-			outputIdx++
 		}
 
 		// Shift overlap buffer
@@ -153,6 +153,12 @@ func (f *FFTBandPassFilter) Process(input []int16) []int16 {
 
 		f.framesProcessed++
 	}
+	f.pending = f.pending[:copy(f.pending, f.pending[consumed:])]
+
+	// Copy output
+	output := make([]int16, len(input))
+	n := copy(output, f.ready)
+	f.ready = f.ready[:copy(f.ready, f.ready[n:])]
 
 	return output
 }
@@ -205,9 +211,10 @@ func (f *FFTBandPassFilter) applySpectralFiltering(spectrum []complex128) {
 		// Reconstruct complex value
 		spectrum[i] = complex(finalMag*math.Cos(phase), finalMag*math.Sin(phase))
 
-		// Apply same filter to negative frequency (mirror)
+		// Apply same filter to negative frequency (mirror). A real signal has
+		// a Hermitian spectrum, so the mirror bin is the complex conjugate.
 		if i > 0 && i < len(spectrum)-i {
-			spectrum[len(spectrum)-i] = complex(finalMag*math.Cos(phase), finalMag*math.Sin(phase))
+			spectrum[len(spectrum)-i] = cmplx.Conj(spectrum[i])
 		}
 	}
 }
@@ -256,6 +263,7 @@ func (f *FFTBandPassFilter) Reset() {
 	for i := range f.noiseProfile {
 		f.noiseProfile[i] = 0
 	}
+	f.resetStream()
 	f.framesProcessed = 0
 }
 

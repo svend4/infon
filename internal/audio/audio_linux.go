@@ -11,12 +11,26 @@ import (
 	"github.com/yobert/alsa"
 )
 
+// alsaCaptureDevice is the part of *alsa.Device that ALSACapture uses
+type alsaCaptureDevice interface {
+	Read(buf []byte) error
+	Close()
+}
+
 // ALSACapture implements AudioCapture using ALSA
 type ALSACapture struct {
-	device *alsa.Device
+	device alsaCaptureDevice
 	format AudioFormat
 	open   bool
 	mutex  sync.Mutex
+
+	// yobert/alsa's Prepare sets the capture start threshold to the whole
+	// buffer, and the kernel only starts a prepared capture stream on a read
+	// of at least that many frames. The first Read therefore asks for
+	// startFrames and keeps the surplus in pending for the next calls.
+	startFrames int
+	started     bool
+	pending     []int16
 }
 
 // ALSAPlayback implements AudioPlayback using ALSA
@@ -197,7 +211,7 @@ func (a *ALSACapture) Open() error {
 		return fmt.Errorf("failed to set period size: %w", err)
 	}
 
-	_, err = captureDevice.NegotiateBufferSize(bufferSize * 2)
+	bufferFrames, err := captureDevice.NegotiateBufferSize(bufferSize * 2)
 	if err != nil {
 		captureDevice.Close()
 		return fmt.Errorf("failed to set buffer size: %w", err)
@@ -209,6 +223,9 @@ func (a *ALSACapture) Open() error {
 	}
 
 	a.device = captureDevice
+	a.startFrames = bufferFrames
+	a.started = false
+	a.pending = nil
 	a.open = true
 
 	return nil
@@ -239,17 +256,33 @@ func (a *ALSACapture) Read(buffer []int16) (int, error) {
 		return 0, ErrDeviceNotOpen
 	}
 
+	// Serve samples left over from the read that started the stream
+	n := copy(buffer, a.pending)
+	a.pending = a.pending[n:]
+	if n == len(buffer) {
+		return n, nil
+	}
+
+	// Until the stream runs, read at least the start threshold
+	count := len(buffer) - n
+	if startSamples := a.startFrames * a.format.Channels; !a.started && count < startSamples {
+		count = startSamples
+	}
+
 	// Read from ALSA device
-	samples := make([]byte, len(buffer)*2) // 2 bytes per int16
+	samples := make([]byte, count*2) // 2 bytes per int16
 	err := a.device.Read(samples)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read from device: %w", err)
 	}
+	a.started = true
 
 	// Convert bytes to int16 (little-endian)
-	for i := 0; i < len(buffer) && i*2+1 < len(samples); i++ {
-		buffer[i] = int16(samples[i*2]) | (int16(samples[i*2+1]) << 8)
+	captured := make([]int16, count)
+	for i := range captured {
+		captured[i] = int16(samples[i*2]) | (int16(samples[i*2+1]) << 8)
 	}
+	a.pending = captured[copy(buffer[n:], captured):]
 
 	return len(buffer), nil
 }
