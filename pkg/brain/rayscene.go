@@ -25,8 +25,8 @@ type SceneSpec struct {
 // radius.
 // JSON fields use omitempty so a spec stays compact on the wire — only the
 // non-zero fields of each object are sent, keeping a region inside one UDP packet
-// (and true to "meaning, not pixels"). Arrays (s/color/emit) can't be omitted by
-// encoding/json, so they always serialise.
+// (and true to "meaning, not pixels"). Arrays (s/color/emit) use omitzero, since
+// omitempty never omits a fixed-size array; an absent one decodes as zero.
 type ObjSpec struct {
 	Kind    string     `json:"kind,omitempty"`
 	Name    string     `json:"name,omitempty"` // for kind "mesh"/"fractal": the named model/form
@@ -36,9 +36,9 @@ type ObjSpec struct {
 	Y       float64    `json:"y,omitempty"`
 	Z       float64    `json:"z,omitempty"`
 	R       float64    `json:"r,omitempty"`
-	S       [3]float64 `json:"s,omitempty"` // box half-extents (x,y,z)
-	Color   [3]float64 `json:"color,omitempty"`
-	Emit    [3]float64 `json:"emit,omitempty"`
+	S       [3]float64 `json:"s,omitzero"` // box half-extents (x,y,z)
+	Color   [3]float64 `json:"color,omitzero"`
+	Emit    [3]float64 `json:"emit,omitzero"`
 	Glass   float64    `json:"glass,omitempty"`
 	Metal   float64    `json:"metal,omitempty"`
 	Reflect float64    `json:"reflect,omitempty"`

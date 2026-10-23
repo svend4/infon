@@ -52,6 +52,24 @@ func clockOf(t float64) string {
 	return fmt.Sprintf("🕓 %02d:%02d", mins/60, mins%60)
 }
 
+// maxAckRegions caps how many missing regions one ack is answered with: a guest
+// acks about once a second, so a big gap fills over a few acks instead of a burst.
+const maxAckRegions = 8
+
+// ackReply is what the hub re-sends for a region ack from `from`: nothing unless
+// that address is a joined peer, else the earliest missing regions, at most
+// maxAckRegions — so a stray or spoofed ack can't make the hub send its world.
+func ackReply(peers map[string]*net.UDPAddr, from *net.UDPAddr, have []int, regions []raydir.Region) []raydir.Region {
+	if from == nil || peers[from.String()] == nil {
+		return nil
+	}
+	miss := raydir.MissingRegions(have, regions)
+	if len(miss) > maxAckRegions {
+		miss = miss[:maxAckRegions]
+	}
+	return miss
+}
+
 func main() {
 	host := flag.Bool("host", false, "be the director hub: author/broadcast the world and relay poses")
 	modeFlag := flag.String("mode", "auto", "terminal render mode")
@@ -135,6 +153,7 @@ func main() {
 	if *host && *worldFile != "" {
 		if loaded, e := raydir.LoadWorldFile(*worldFile); e == nil && len(loaded) > 0 {
 			for _, r := range loaded {
+				r = r.Fit() // a region saved too big for one packet could never be sent
 				world.AddRegion(r)
 				regions = append(regions, r)
 			}
@@ -166,9 +185,20 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = transport.Close() }()
-	sendTo := func(addr *net.UDPAddr, typ uint8, payload []byte) {
-		if addr != nil {
-			_ = transport.SendPacket(&network.Packet{Type: typ, Sequence: transport.NextSequence(), Timestamp: uint64(time.Now().UnixMilli()), Payload: payload}, addr)
+	send := func(addr *net.UDPAddr, typ uint8, payload []byte) error {
+		if addr == nil {
+			return nil
+		}
+		return transport.SendPacket(&network.Packet{Type: typ, Sequence: transport.NextSequence(), Timestamp: uint64(time.Now().UnixMilli()), Payload: payload}, addr)
+	}
+	sendTo := func(addr *net.UDPAddr, typ uint8, payload []byte) { _ = send(addr, typ, payload) }
+	// sendRegion ships one region; one that can't be sent (e.g. too big for a
+	// packet) is reported in the chat log rather than silently never arriving.
+	sendRegion := func(addr *net.UDPAddr, reg raydir.Region) {
+		if err := send(addr, network.PacketTypeScreen, reg.Encode()); err != nil {
+			chatMu.Lock()
+			chat.Add("*", fmt.Sprintf("region %d not sent: %v", reg.Index, err))
+			chatMu.Unlock()
 		}
 	}
 	// sendGroup: a guest sends to the hub; the hub fans out to every peer. Chat and
@@ -287,7 +317,7 @@ func main() {
 				rec.Region(ms(), reg)
 			}
 			for _, a := range addrs {
-				sendTo(a, network.PacketTypeScreen, reg.Encode())
+				sendRegion(a, reg)
 			}
 		}
 		if *worldFile != "" && len(regions) > before { // persist only when it grew
@@ -300,7 +330,7 @@ func main() {
 	// broadcast to everyone — co-created geometry travelling as meaning, not pixels.
 	hostPlace := func(spec brain.SceneSpec, at raytrace.Vec3) {
 		worldMu.Lock()
-		reg := raydir.Region{Index: len(regions), At: at, Spec: spec}
+		reg := raydir.Region{Index: len(regions), At: at, Spec: spec}.Fit() // one packet, applied as sent
 		regions = append(regions, reg)
 		world.AddRegion(reg)
 		if rec != nil {
@@ -317,7 +347,7 @@ func main() {
 		}
 		stateMu.Unlock()
 		for _, a := range addrs {
-			sendTo(a, network.PacketTypeScreen, reg.Encode())
+			sendRegion(a, reg)
 		}
 	}
 	// place: a walker drops an object in front of them. The host places it directly;
@@ -335,7 +365,7 @@ func main() {
 		if *host {
 			hostPlace(spec, at)
 		} else {
-			sendTo(hubAddr, network.PacketTypeScreen, raydir.Region{At: at, Spec: spec}.Encode())
+			sendRegion(hubAddr, raydir.Region{At: at, Spec: spec}.Fit())
 		}
 	}
 	if *host {
@@ -420,13 +450,16 @@ func main() {
 				}
 			case network.PacketTypeControl:
 				if *host && addr != nil {
-					// a guest's region ack: re-send only what it is missing, to it alone.
+					// a guest's region ack: re-send only what it is missing, to it alone
+					// (a joined peer only, a few regions per ack).
 					if have, de := raydir.DecodeAck(p.Payload); de == nil {
 						worldMu.Lock()
-						miss := raydir.MissingRegions(have, regions)
+						stateMu.Lock()
+						miss := ackReply(peers, addr, have, regions)
+						stateMu.Unlock()
 						worldMu.Unlock()
 						for _, r := range miss {
-							sendTo(addr, network.PacketTypeScreen, r.Encode())
+							sendRegion(addr, r)
 						}
 					}
 				} else if !*host {
