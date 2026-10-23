@@ -3,6 +3,7 @@ package network
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/svend4/infon/internal/video"
 	"github.com/svend4/infon/pkg/color"
@@ -35,6 +36,10 @@ const (
 
 	// FrameHeaderSize is the size of frame header
 	FrameHeaderSize = 2 + 2 // width(2) + height(2) = 4 bytes
+
+	// MaxEncodedFrameDim is the largest width or height EncodeFrame and
+	// FragmentFrame can carry: each block stores its x and y in one byte.
+	MaxEncodedFrameDim = 256
 )
 
 var (
@@ -43,6 +48,10 @@ var (
 
 // EncodeFrame encodes a terminal frame into bytes
 func EncodeFrame(frame *terminal.Frame) ([]byte, error) {
+	if frame.Width > MaxEncodedFrameDim || frame.Height > MaxEncodedFrameDim {
+		return nil, fmt.Errorf("frame %dx%d exceeds %d blocks per side", frame.Width, frame.Height, MaxEncodedFrameDim)
+	}
+
 	// Calculate size
 	numBlocks := frame.Width * frame.Height
 	totalSize := FrameHeaderSize + (numBlocks * BlockDataSize)
@@ -88,16 +97,20 @@ func DecodeFrame(data []byte) (*terminal.Frame, error) {
 	width := int(binary.BigEndian.Uint16(data[0:2]))
 	height := int(binary.BigEndian.Uint16(data[2:4]))
 
+	// The header is untrusted: check it against the payload before allocating.
+	if width > MaxEncodedFrameDim || height > MaxEncodedFrameDim {
+		return nil, errors.New("frame dimensions out of range")
+	}
+	expectedSize := FrameHeaderSize + (width * height * BlockDataSize)
+	if len(data) != expectedSize {
+		return nil, errors.New("frame data size mismatch")
+	}
+
 	// Create frame
 	frame := terminal.NewFrame(width, height)
 
 	// Read blocks
 	offset := FrameHeaderSize
-	expectedSize := FrameHeaderSize + (width * height * BlockDataSize)
-
-	if len(data) != expectedSize {
-		return nil, errors.New("frame data size mismatch")
-	}
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {

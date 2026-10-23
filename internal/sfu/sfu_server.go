@@ -22,6 +22,10 @@ type SFUServer struct {
 	participants map[string]*Participant // participantID -> participant
 	rooms        map[string]*Room        // roomID -> room
 
+	// Server-wide caps on what join packets may create
+	maxRooms        int
+	maxParticipants int
+
 	// Control
 	running  bool
 	stopChan chan struct{}
@@ -94,6 +98,7 @@ type Packet struct {
 	SequenceNum   uint16
 	Timestamp     uint32
 	Data          []byte
+	Addr          *net.UDPAddr // Source address of the datagram
 }
 
 type PacketType byte
@@ -104,6 +109,13 @@ const (
 	PacketTypeControl PacketType = 0x03
 )
 
+// Join packets are unauthenticated and choose their own room and participant
+// IDs, so the number of rooms and participants they can create is bounded.
+const (
+	DefaultMaxRooms        = 1000
+	DefaultMaxParticipants = 5000
+)
+
 // NewSFUServer creates a new SFU server
 func NewSFUServer(addr string) (*SFUServer, error) {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
@@ -112,10 +124,12 @@ func NewSFUServer(addr string) (*SFUServer, error) {
 	}
 
 	return &SFUServer{
-		listenAddr:   udpAddr,
-		participants: make(map[string]*Participant),
-		rooms:        make(map[string]*Room),
-		stopChan:     make(chan struct{}),
+		listenAddr:      udpAddr,
+		participants:    make(map[string]*Participant),
+		rooms:           make(map[string]*Room),
+		maxRooms:        DefaultMaxRooms,
+		maxParticipants: DefaultMaxParticipants,
+		stopChan:        make(chan struct{}),
 	}, nil
 }
 
@@ -135,15 +149,18 @@ func (s *SFUServer) Start() error {
 
 	s.conn = conn
 	s.running = true
+	// Stop closes stopChan, so each run needs a fresh one.
+	stop := make(chan struct{})
+	s.stopChan = stop
 	s.mu.Unlock()
 
 	fmt.Printf("SFU server listening on %s\n", s.listenAddr.String())
 
 	// Start packet receiver
-	go s.receiveLoop()
+	go s.receiveLoop(conn, stop)
 
 	// Start cleanup routine
-	go s.cleanupLoop()
+	go s.cleanupLoop(stop)
 
 	return nil
 }
@@ -168,19 +185,22 @@ func (s *SFUServer) Stop() error {
 }
 
 // receiveLoop receives and forwards packets
-func (s *SFUServer) receiveLoop() {
+func (s *SFUServer) receiveLoop(conn *net.UDPConn, stop <-chan struct{}) {
 	buffer := make([]byte, 65536)
 
 	for {
 		select {
-		case <-s.stopChan:
+		case <-stop:
 			return
 		default:
-			n, addr, err := s.conn.ReadFromUDP(buffer)
+			n, addr, err := conn.ReadFromUDP(buffer)
 			if err != nil {
-				if s.running {
-					fmt.Printf("Read error: %v\n", err)
+				select {
+				case <-stop:
+					return
+				default:
 				}
+				fmt.Printf("Read error: %v\n", err)
 				continue
 			}
 
@@ -222,10 +242,12 @@ func (s *SFUServer) parsePacket(data []byte, addr *net.UDPAddr) *Packet {
 	packet := &Packet{
 		Type: PacketType(data[0]),
 		Data: data,
+		Addr: addr,
 	}
 
 	// Find participant by address
-	participant := s.findParticipantByAddr(addr)
+	s.mu.Lock()
+	participant := s.findParticipantByAddrLocked(addr)
 	if participant != nil {
 		packet.ParticipantID = participant.ID
 		packet.RoomID = participant.RoomID
@@ -233,6 +255,7 @@ func (s *SFUServer) parsePacket(data []byte, addr *net.UDPAddr) *Packet {
 		// Update last seen
 		participant.lastSeen = time.Now()
 	}
+	s.mu.Unlock()
 
 	return packet
 }
@@ -341,9 +364,30 @@ func (s *SFUServer) handleJoinRoom(packet *Packet) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	participant, known := s.participants[participantID]
+	if known && participant.Addr != nil && packet.Addr != nil && !sameUDPAddr(participant.Addr, packet.Addr) {
+		// Joins are unauthenticated: re-binding the ID to whoever sent this would
+		// hand them the participant's media. A client whose address really changed
+		// can join again once the old binding goes stale.
+		return
+	}
+	if !known && packet.Addr != nil {
+		// One participant per source address: a client that comes back under a new
+		// ID (a restart) replaces its old participant instead of adding another.
+		if prev := s.findParticipantByAddrLocked(packet.Addr); prev != nil {
+			s.removeParticipantLocked(prev)
+		}
+	}
+	if !known && len(s.participants) >= s.maxParticipants {
+		return
+	}
+
 	// Get or create room
 	room, exists := s.rooms[roomID]
 	if !exists {
+		if len(s.rooms) >= s.maxRooms {
+			return
+		}
 		room = &Room{
 			ID:              roomID,
 			participants:    make(map[string]*Participant),
@@ -354,21 +398,18 @@ func (s *SFUServer) handleJoinRoom(packet *Packet) {
 		s.roomsCreated++
 	}
 
-	// Check room capacity
-	if len(room.participants) >= room.maxParticipants {
+	// Check room capacity (a member re-joining does not take another slot)
+	if _, member := room.participants[participantID]; !member && len(room.participants) >= room.maxParticipants {
 		// Send error back to client
 		return
 	}
 
-	// Find existing participant by ID or create new
-	participant, exists := s.participants[participantID]
-	if !exists {
-		// Parse address from packet data
-		// In a real implementation, the address would come from the UDP packet source
-		// For now, we'll need to track it separately
+	// Use the existing participant or create a new one
+	if !known {
 		participant = &Participant{
 			ID:          participantID,
 			RoomID:      roomID,
+			Addr:        packet.Addr, // Media is sent to the join's source address
 			Username:    username,
 			joined:      time.Now(),
 			lastSeen:    time.Now(),
@@ -377,6 +418,21 @@ func (s *SFUServer) handleJoinRoom(packet *Packet) {
 		}
 
 		s.participants[participantID] = participant
+	} else {
+		if participant.Addr == nil {
+			participant.Addr = packet.Addr
+		}
+		// Joining another room leaves the old one
+		if participant.RoomID != roomID {
+			if old := s.rooms[participant.RoomID]; old != nil {
+				delete(old.participants, participantID)
+				if len(old.participants) == 0 {
+					delete(s.rooms, old.ID)
+				}
+				s.broadcastParticipantLeft(old, participant)
+			}
+			participant.RoomID = roomID
+		}
 	}
 
 	// Add to room
@@ -393,21 +449,21 @@ func (s *SFUServer) handleLeaveRoom(packet *Packet) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	participant := s.participants[packet.ParticipantID]
-	if participant == nil {
-		return
+	if participant := s.participants[packet.ParticipantID]; participant != nil {
+		s.removeParticipantLocked(participant)
 	}
+}
+
+// removeParticipantLocked removes a participant from its room and the server,
+// deleting the room if it empties and notifying the members left. s.mu must be held.
+func (s *SFUServer) removeParticipantLocked(participant *Participant) {
+	delete(s.participants, participant.ID)
 
 	room := s.rooms[participant.RoomID]
 	if room == nil {
 		return
 	}
-
-	// Remove from room
 	delete(room.participants, participant.ID)
-
-	// Remove participant
-	delete(s.participants, participant.ID)
 
 	fmt.Printf("Participant %s left room %s\n", participant.ID, room.ID)
 
@@ -466,6 +522,9 @@ func (s *SFUServer) handleResumeVideo(packet *Packet) {
 
 // sendPacket sends packet to address
 func (s *SFUServer) sendPacket(data []byte, addr *net.UDPAddr) {
+	if addr == nil {
+		return // Participant has no known address yet
+	}
 	_, err := s.conn.WriteToUDP(data, addr)
 	if err != nil {
 		fmt.Printf("Send error: %v\n", err)
@@ -487,14 +546,16 @@ func (s *SFUServer) findParticipantByAddrLocked(addr *net.UDPAddr) *Participant 
 
 	// Find participant matching this address
 	for _, participant := range s.participants {
-		if participant.Addr != nil &&
-			participant.Addr.IP.Equal(addr.IP) &&
-			participant.Addr.Port == addr.Port {
+		if participant.Addr != nil && sameUDPAddr(participant.Addr, addr) {
 			return participant
 		}
 	}
 
 	return nil
+}
+
+func sameUDPAddr(a, b *net.UDPAddr) bool {
+	return a.IP.Equal(b.IP) && a.Port == b.Port
 }
 
 // broadcastParticipantJoined notifies room of new participant
@@ -521,13 +582,13 @@ func (s *SFUServer) broadcastParticipantLeft(room *Room, leftParticipant *Partic
 }
 
 // cleanupLoop removes stale participants
-func (s *SFUServer) cleanupLoop() {
+func (s *SFUServer) cleanupLoop(stop <-chan struct{}) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-s.stopChan:
+		case <-stop:
 			return
 		case <-ticker.C:
 			s.cleanupStaleParticipants()

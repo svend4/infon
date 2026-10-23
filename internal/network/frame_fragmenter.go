@@ -64,6 +64,11 @@ func ParseFragmentHeader(payload []byte, haveLen int) (frameID uint32, fragID, t
 
 // FragmentFrame splits a frame into multiple fragments that fit in UDP packets
 func FragmentFrame(frame *terminal.Frame, frameID uint32) ([][]byte, error) {
+	// Block x/y are one byte each, so larger frames would wrap onto earlier cells.
+	if frame.Width > MaxEncodedFrameDim || frame.Height > MaxEncodedFrameDim {
+		return nil, fmt.Errorf("frame %dx%d exceeds %d blocks per side", frame.Width, frame.Height, MaxEncodedFrameDim)
+	}
+
 	totalBlocks := frame.Width * frame.Height
 	numFragments := (totalBlocks + BlocksPerFragment - 1) / BlocksPerFragment
 

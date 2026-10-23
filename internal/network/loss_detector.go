@@ -145,7 +145,11 @@ func (ld *LossDetector) cleanupReceiveBuffer() {
 		return
 	}
 
-	// Remove entries older than maxWindow
+	// Remove entries older than maxWindow. Early in a stream expectedSeq is
+	// below maxWindow and the subtraction would wrap, deleting every entry.
+	if ld.expectedSeq < ld.maxWindow {
+		return
+	}
 	minSeq := ld.expectedSeq - ld.maxWindow
 	for seq := range ld.received {
 		if seq < minSeq {
