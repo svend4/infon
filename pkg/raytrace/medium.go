@@ -144,36 +144,51 @@ func hgSample(w Vec3, g float64, rg *rng) Vec3 {
 	return t.Scale(sinT * math.Cos(phi)).Add(b.Scale(sinT * math.Sin(phi))).Add(w.Scale(cosT)).Norm()
 }
 
+// mediumTransmittance is the ratio-tracking transmittance of the scene's medium
+// along the shadow ray r up to tMax (1 without a medium), so next-event estimates
+// are attenuated by the volume between the shading point and the light.
+func (s *Scene) mediumTransmittance(r Ray, tMax float64, rg *rng) float64 {
+	if s.Medium == nil {
+		return 1
+	}
+	if t0, t1, in := s.Medium.span(r, tMax); in {
+		return s.Medium.transmittance(r, t0, t1, rg)
+	}
+	return 1
+}
+
 // mediumNEE is next-event estimation at a scatter point p (incoming propagation
-// wIn): sample an emitter, test surface visibility, attenuate by the medium
-// transmittance, and weight by the phase function. The single-scatter albedo is
-// applied by the caller.
+// wIn): sample an emitter by power (spheres and triangles, as sampleEmitters
+// does) and, with an env sampler, the environment; test surface visibility,
+// attenuate by the medium transmittance, and weight by the phase function. The
+// single-scatter albedo is applied by the caller. A medium vertex records no phase
+// pdf (radiance sets prevPdfB = 0), so the phase-sampled continuation does not
+// count these lights again: this is their only estimator at the vertex.
 func (s *Scene) mediumNEE(p, wIn Vec3, rg *rng, time float64) Vec3 {
-	n := len(s.emit)
-	if n == 0 || s.Medium == nil {
+	if s.Medium == nil {
 		return Vec3{}
 	}
-	li := s.emit[int(rg.next()%uint64(n))]
-	q := li.Center.Add(rg.unit().Scale(li.Radius))
-	d := q.Sub(p)
-	dist := d.Len()
-	if dist < geomEps {
-		return Vec3{}
+	var out Vec3
+	if q, nL, Le, pdfA, twoSided, ok := s.sampleLight(rg); ok {
+		d := q.Sub(p)
+		if dist := d.Len(); dist >= geomEps {
+			wL := d.Scale(1 / dist)
+			cosL := nL.Dot(wL.Neg())
+			if twoSided && cosL < 0 { // a triangle emits from both faces
+				cosL = -cosL
+			}
+			if cosL > 0 && !s.anyHit(Ray{Origin: p, Dir: wL, Time: time}, shadowEps, dist-2*shadowEps) {
+				tr := s.mediumTransmittance(Ray{Origin: p, Dir: wL}, dist, rg)
+				pdfL := pdfA * dist * dist / cosL
+				out = out.Add(Le.Scale(hgPhase(wIn.Dot(wL), s.Medium.G) * tr / pdfL))
+			}
+		}
 	}
-	wL := d.Scale(1 / dist)
-	if s.anyHit(Ray{Origin: p, Dir: wL, Time: time}, shadowEps, dist-2*shadowEps) {
-		return Vec3{} // a surface blocks the light
+	if s.Env != nil {
+		if we, _, pdfE := s.Env.Sample(rg); pdfE > 0 && !s.anyHit(Ray{Origin: p, Dir: we, Time: time}, shadowEps, tFar) {
+			tr := s.mediumTransmittance(Ray{Origin: p, Dir: we}, tFar, rg)
+			out = out.Add(s.sky(we).Scale(hgPhase(wIn.Dot(we), s.Medium.G) * tr / pdfE))
+		}
 	}
-	tr := 1.0
-	if t0, t1, in := s.Medium.span(Ray{Origin: p, Dir: wL}, dist); in {
-		tr = s.Medium.transmittance(Ray{Origin: p, Dir: wL}, t0, t1, rg)
-	}
-	cosL := q.Sub(li.Center).Norm().Dot(wL.Neg())
-	if cosL <= 0 {
-		return Vec3{}
-	}
-	areaPdf := 1 / (float64(n) * 4 * math.Pi * li.Radius * li.Radius)
-	pdfL := areaPdf * dist * dist / cosL
-	ph := hgPhase(wIn.Dot(wL), s.Medium.G)
-	return li.Mat.Emit.Scale(ph * tr / pdfL)
+	return out
 }

@@ -55,6 +55,9 @@ type VoxelCamera struct {
 
 // RenderVoxel draws the terrain in voxel-space style.
 func RenderVoxel(t VoxelTerrain, cam VoxelCamera, w, h int) image.Image {
+	if w <= 0 || h <= 0 {
+		return image.NewRGBA(image.Rectangle{})
+	}
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	skyTop := Vec3{X: 0.45, Y: 0.6, Z: 0.85}
 	skyBot := Vec3{X: 0.82, Y: 0.86, Z: 0.95}

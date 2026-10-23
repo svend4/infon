@@ -18,6 +18,9 @@ import (
 // — the guide buffers for DenoiseGuided. Misses get a zero albedo and the ray
 // direction as "normal".
 func GBuffer(s *Scene, cam Camera, pxW, pxH int) (albedo, normal []Vec3) {
+	if pxW <= 0 || pxH <= 0 {
+		return nil, nil
+	}
 	albedo = make([]Vec3, pxW*pxH)
 	normal = make([]Vec3, pxW*pxH)
 	b := cam.basis(pxW, pxH)

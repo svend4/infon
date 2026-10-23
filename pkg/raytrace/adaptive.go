@@ -18,11 +18,11 @@ import (
 // returns the image and the per-pixel sample count (row-major), so callers can
 // see where the budget went.
 func AdaptiveRender(s *Scene, cam Camera, pxW, pxH int, opt PathOptions, tol float64) (image.Image, []int) {
+	if pxW <= 0 || pxH <= 0 {
+		return image.NewRGBA(image.Rectangle{}), nil
+	}
 	img := image.NewRGBA(image.Rect(0, 0, pxW, pxH))
 	counts := make([]int, pxW*pxH)
-	if pxW <= 0 || pxH <= 0 {
-		return img, counts
-	}
 	maxS := opt.Samples
 	if maxS < 1 {
 		maxS = 1

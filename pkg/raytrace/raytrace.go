@@ -421,25 +421,31 @@ type Scene struct {
 // lumOf is the photometric luminance of a colour (used to weight light power).
 func lumOf(v Vec3) float64 { return 0.2126*v.X + 0.7152*v.Y + 0.0722*v.Z }
 
+// emitMu serialises gatherEmitters across goroutines. Rendering only reads the
+// emitter tables and gatherEmitters replaces them only when the lights changed,
+// so several renders of one (unchanged) Scene may run concurrently.
+var emitMu sync.Mutex
+
 // gatherEmitters caches the scene's emissive geometry so the path tracer can sample
 // it directly (next-event estimation), and precomputes power weights so brighter,
 // bigger lights are sampled more often (importance sampling of many lights). It
 // gathers emissive spheres, top-level emissive triangles, and emissive triangles
 // inside meshes/instances (transformed to world space, honouring an instance's
-// material override). Called by PathRender.
+// material override). The cached copies keep only what light sampling reads: the
+// geometry and the emission. Called by PathRender and the other integrators.
 func (s *Scene) gatherEmitters() {
-	s.emit = s.emit[:0]
-	s.emitTris = s.emitTris[:0]
+	var emit []Sphere
+	var tris []Triangle
 	addTri := func(t Triangle) {
 		if _, a := triNormalArea(t); a > 0 { // skip degenerate (zero-area) triangles
-			s.emitTris = append(s.emitTris, t)
+			tris = append(tris, Triangle{A: t.A, B: t.B, C: t.C, Mat: Material{Emit: t.Mat.Emit}})
 		}
 	}
 	for _, o := range s.Objects {
 		switch g := o.(type) {
 		case Sphere:
 			if g.Mat.Emit.LenSq() > 0 {
-				s.emit = append(s.emit, g)
+				emit = append(emit, Sphere{Center: g.Center, Radius: g.Radius, Mat: Material{Emit: g.Mat.Emit}})
 			}
 		case Triangle:
 			if g.Mat.Emit.LenSq() > 0 {
@@ -465,26 +471,58 @@ func (s *Scene) gatherEmitters() {
 			}
 		}
 	}
+
+	emitMu.Lock()
+	defer emitMu.Unlock()
+	if sameLights(s.emit, emit) && sameLightTris(s.emitTris, tris) {
+		return // unchanged: leave the tables alone for any render reading them
+	}
 	// power weights: luminance x surface area, in the order spheres then triangles.
-	s.emitPow = s.emitPow[:0]
-	s.emitCum = s.emitCum[:0]
-	s.emitTotal = 0
+	var pow, cum []float64
+	var total float64
 	addPow := func(p float64) {
 		if p <= 0 {
 			p = 1e-6 // keep every emitter selectable (and its MIS weight finite)
 		}
-		s.emitTotal += p
-		s.emitPow = append(s.emitPow, p)
-		s.emitCum = append(s.emitCum, s.emitTotal)
+		total += p
+		pow = append(pow, p)
+		cum = append(cum, total)
 	}
-	for i := range s.emit {
-		e := s.emit[i]
+	for i := range emit {
+		e := emit[i]
 		addPow(lumOf(e.Mat.Emit) * 4 * math.Pi * e.Radius * e.Radius)
 	}
-	for i := range s.emitTris {
-		_, a := triNormalArea(s.emitTris[i])
-		addPow(lumOf(s.emitTris[i].Mat.Emit) * a)
+	for i := range tris {
+		_, a := triNormalArea(tris[i])
+		addPow(lumOf(tris[i].Mat.Emit) * a)
 	}
+	s.emit, s.emitTris, s.emitPow, s.emitCum, s.emitTotal = emit, tris, pow, cum, total
+}
+
+// sameLights reports whether two cached emissive-sphere lists are identical.
+func sameLights(a, b []Sphere) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Center != b[i].Center || a[i].Radius != b[i].Radius || a[i].Mat.Emit != b[i].Mat.Emit {
+			return false
+		}
+	}
+	return true
+}
+
+// sameLightTris reports whether two cached emissive-triangle lists are identical.
+func sameLightTris(a, b []Triangle) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].A != b[i].A || a[i].B != b[i].B || a[i].C != b[i].C || a[i].Mat.Emit != b[i].Mat.Emit {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Scene) closest(r Ray, tMin, tMax float64) (Hit, bool) {

@@ -88,7 +88,8 @@ func (s *Scene) sampleEmittersRIS(h Hit, alb Vec3, rg *rng, time float64, m int)
 	if s.anyHit(Ray{Origin: so, Dir: res.y.wi, Time: time}, shadowEps, res.y.dist-2*shadowEps) {
 		return Vec3{}
 	}
-	// RIS unbiased contribution weight W = (1/m) * sum(w_i) / pHat(y).
+	// RIS unbiased contribution weight W = (1/m) * sum(w_i) / pHat(y); the
+	// survivor's medium transmittance is part of its integrand, not of pHat.
 	w := (res.wsum / float64(m)) / res.y.pHat
-	return res.y.fArea.Scale(w)
+	return res.y.fArea.Scale(w * s.mediumTransmittance(Ray{Origin: so, Dir: res.y.wi}, res.y.dist, rg))
 }

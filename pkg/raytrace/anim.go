@@ -74,16 +74,29 @@ func EncodeAnim(a SceneAnim, ecc int) []byte {
 	return deltastream.Encode(da, ecc)
 }
 
-// DecodeAnim inverts EncodeAnim, correcting bursts up to the ECC budget.
+// maxAnimSpheres bounds the spheres DecodeAnim materialises (N x frames, about
+// 15 MiB of Sphere values). A frame that repeats its predecessor costs two bytes
+// on the wire, so the packet size alone does not bound the decoded size.
+const maxAnimSpheres = 1 << 16
+
+// DecodeAnim inverts EncodeAnim, correcting bursts up to the ECC budget. An
+// animation of more than maxAnimSpheres spheres in total is rejected from its
+// header, before any frame is decoded.
 func DecodeAnim(wire []byte, ecc int) (SceneAnim, error) {
-	da, err := deltastream.Decode(wire, ecc)
+	da, err := deltastream.DecodeChecked(wire, ecc, func(width, frames int) error {
+		n := (width - 17) / 12
+		if n < 0 || frameWidth(n) != width {
+			return errors.New("raytrace: bad animation frame width")
+		}
+		if n > 0 && frames > maxAnimSpheres/n {
+			return errors.New("raytrace: animation has too many spheres")
+		}
+		return nil
+	})
 	if err != nil {
 		return SceneAnim{}, err
 	}
 	n := (da.Width - 17) / 12
-	if n < 0 || frameWidth(n) != da.Width {
-		return SceneAnim{}, errors.New("raytrace: bad animation frame width")
-	}
 	a := SceneAnim{N: n}
 	for _, fb := range da.Frames {
 		a.Frames = append(a.Frames, unpackFrame(fb, n))

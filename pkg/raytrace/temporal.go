@@ -76,8 +76,12 @@ type TemporalReprojector struct {
 	has       bool
 }
 
-// NewTemporalReprojector makes one for a w x h image; alpha in (0,1] (default 0.3).
+// NewTemporalReprojector makes one for a w x h image (empty if either is <= 0);
+// alpha in (0,1] (default 0.3).
 func NewTemporalReprojector(w, h int, alpha float64) *TemporalReprojector {
+	if w <= 0 || h <= 0 {
+		w, h = 0, 0
+	}
 	if alpha <= 0 || alpha > 1 {
 		alpha = 0.3
 	}

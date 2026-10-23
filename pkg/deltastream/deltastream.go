@@ -40,7 +40,13 @@ func serialize(a Anim) []byte {
 	return out
 }
 
-func deserialize(b []byte) (Anim, error) {
+// maxDecodedBytes bounds the frames a decode materialises (width x frame count).
+// A frame that repeats its predecessor costs two bytes on the wire, so the wire
+// size alone does not bound it: a header may declare 65535 frames of 65535 bytes,
+// about 4 GiB, behind a stream of a few hundred kilobytes.
+const maxDecodedBytes = 64 << 20
+
+func deserialize(b []byte, check func(width, frames int) error) (Anim, error) {
 	if len(b) < 4 {
 		return Anim{}, errors.New("deltastream: short header")
 	}
@@ -48,6 +54,14 @@ func deserialize(b []byte) (Anim, error) {
 	nf := int(b[2])<<8 | int(b[3])
 	p := 4
 	a := Anim{Width: w}
+	if w*nf > maxDecodedBytes {
+		return a, errors.New("deltastream: animation too large")
+	}
+	if check != nil {
+		if err := check(w, nf); err != nil {
+			return a, err
+		}
+	}
 	if nf == 0 {
 		return a, nil
 	}
@@ -88,13 +102,18 @@ func deserialize(b []byte) (Anim, error) {
 // interleaved Reed-Solomon.
 func Encode(a Anim, ecc int) []byte { return glyphqr.RSEncodeBytes(serialize(a), ecc) }
 
-// Decode inverts Encode, correcting up to ecc/2 byte errors per block.
-func Decode(wire []byte, ecc int) (Anim, error) {
+// Decode inverts Encode, correcting up to ecc/2 byte errors per block. A stream
+// declaring more than 64 MiB of frames is rejected before any frame is built.
+func Decode(wire []byte, ecc int) (Anim, error) { return DecodeChecked(wire, ecc, nil) }
+
+// DecodeChecked is Decode with a caller check on the declared frame width and
+// frame count, run before any frame is built; an error from check aborts the decode.
+func DecodeChecked(wire []byte, ecc int, check func(width, frames int) error) (Anim, error) {
 	data, err := glyphqr.RSDecodeBytes(wire, ecc)
 	if err != nil {
 		return Anim{}, err
 	}
-	return deserialize(data)
+	return deserialize(data, check)
 }
 
 // RawSize is the serialised (pre-RS) size in bytes.

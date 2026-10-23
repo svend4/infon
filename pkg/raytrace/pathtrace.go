@@ -252,8 +252,9 @@ pathLoop:
 		if !ok {
 			sky := s.sky(r.Dir)
 			if mode >= 1 && s.Env != nil && !specularPrev { // MIS against env-NEE
-				pdfE := s.Env.Pdf(r.Dir)
-				sky = sky.Scale(prevPdfB * prevPdfB / (prevPdfB*prevPdfB + pdfE*pdfE))
+				if pdfE := s.Env.Pdf(r.Dir); pdfE > 0 { // env-NEE never draws a pdf-0 direction
+					sky = sky.Scale(prevPdfB * prevPdfB / (prevPdfB*prevPdfB + pdfE*pdfE))
+				}
 			}
 			out = out.Add(throughput.Mul(sky))
 			break
@@ -467,39 +468,43 @@ func (s *Scene) directLight(out, throughput Vec3, h Hit, alb Vec3, rg *rng, mode
 	return out
 }
 
-// sampleEmitters is the next-event estimator: pick an emissive sphere, draw a
-// point on it, and return the unoccluded direct diffuse contribution (area-light
-// form, normalised for the number of emitters). With mis it is weighted against
-// the BSDF-sampling pdf (power heuristic).
-func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64) Vec3 {
+// sampleLight picks one emitter (sphere or triangle) with probability proportional
+// to its power (importance sampling of many lights) and draws a uniform point q on
+// it. It returns the point, the light's normal there, its emission, the area pdf
+// of q (selection probability / area) and whether the light emits from both faces
+// (a triangle); ok is false when the scene has no emitters.
+func (s *Scene) sampleLight(rg *rng) (q, nL, Le Vec3, pdfA float64, twoSided, ok bool) {
 	n := len(s.emit) + len(s.emitTris)
 	if n == 0 || s.emitTotal <= 0 {
-		return Vec3{}
+		return q, nL, Le, 0, false, false
 	}
-	// Pick one emitter with probability proportional to its power (importance
-	// sampling of many lights), draw a point on it, and note its normal, area,
-	// emission and selection probability.
 	pick := sort.SearchFloat64s(s.emitCum, rg.f()*s.emitTotal)
 	if pick >= n {
 		pick = n - 1
 	}
 	wsel := s.emitPow[pick] / s.emitTotal
-	var q, nL, Le Vec3
-	var area float64
-	twoSided := false
 	if pick < len(s.emit) {
 		li := s.emit[pick]
 		q = li.Center.Add(rg.unit().Scale(li.Radius))
 		nL = q.Sub(li.Center).Norm()
-		Le, area = li.Mat.Emit, 4*math.Pi*li.Radius*li.Radius
-	} else {
-		tr := s.emitTris[pick-len(s.emit)]
-		var a float64
-		nL, a = triNormalArea(tr)
-		if a == 0 {
-			return Vec3{}
-		}
-		q, Le, area, twoSided = triSamplePoint(tr, rg), tr.Mat.Emit, a, true
+		return q, nL, li.Mat.Emit, wsel / (4 * math.Pi * li.Radius * li.Radius), false, true
+	}
+	tr := s.emitTris[pick-len(s.emit)]
+	nL, a := triNormalArea(tr)
+	if a == 0 {
+		return q, nL, Le, 0, false, false
+	}
+	return triSamplePoint(tr, rg), nL, tr.Mat.Emit, wsel / a, true, true
+}
+
+// sampleEmitters is the next-event estimator: pick an emitter by power, draw a
+// point on it, and return the unoccluded direct diffuse contribution (area-light
+// form), attenuated by any participating medium on the way. With mis it is
+// weighted against the BSDF-sampling pdf (power heuristic).
+func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64) Vec3 {
+	q, nL, Le, pdfA, twoSided, ok := s.sampleLight(rg)
+	if !ok {
+		return Vec3{}
 	}
 	d := q.Sub(h.P)
 	dist := d.Len()
@@ -522,9 +527,9 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64)
 	if s.anyHit(Ray{Origin: so, Dir: wi, Time: time}, shadowEps, dist-2*shadowEps) {
 		return Vec3{}
 	}
-	pdfL := wsel / area * dist * dist / cosL // power-weighted light pick, area form
-	// diffuse: f = alb/pi, estimator = f * cosS * Le / pdfL.
-	contrib := alb.Scale(1 / math.Pi).Mul(Le).Scale(cosS / pdfL)
+	pdfL := pdfA * dist * dist / cosL // power-weighted light pick, area form
+	// diffuse: f = alb/pi, estimator = f * cosS * Le * Tr / pdfL.
+	contrib := alb.Scale(1 / math.Pi).Mul(Le).Scale(cosS * s.mediumTransmittance(Ray{Origin: so, Dir: wi}, dist, rg) / pdfL)
 	if mis {
 		pdfB := cosS / math.Pi
 		contrib = contrib.Scale(pdfL * pdfL / (pdfL*pdfL + pdfB*pdfB))
@@ -534,8 +539,9 @@ func (s *Scene) sampleEmitters(h Hit, alb Vec3, rg *rng, mis bool, time float64)
 
 // sampleEnv is next-event estimation for the environment: importance-sample a
 // bright env direction, test visibility to infinity, and return the MIS-weighted
-// (power heuristic vs the cosine BSDF) direct contribution. Radiance is read from
-// s.sky so it stays consistent with the BSDF-sampling side.
+// (power heuristic vs the cosine BSDF) direct contribution, attenuated by any
+// participating medium on the way. Radiance is read from s.sky so it stays
+// consistent with the BSDF-sampling side.
 func (s *Scene) sampleEnv(h Hit, alb Vec3, rg *rng, time float64) Vec3 {
 	we, _, pdfE := s.Env.Sample(rg)
 	if pdfE <= 0 {
@@ -545,12 +551,14 @@ func (s *Scene) sampleEnv(h Hit, alb Vec3, rg *rng, time float64) Vec3 {
 	if ndl <= 0 {
 		return Vec3{}
 	}
-	if s.anyHit(Ray{Origin: h.P.Add(h.N.Scale(shadowEps)), Dir: we, Time: time}, shadowEps, tFar) {
+	so := h.P.Add(h.N.Scale(shadowEps))
+	if s.anyHit(Ray{Origin: so, Dir: we, Time: time}, shadowEps, tFar) {
 		return Vec3{}
 	}
 	pdfB := ndl / math.Pi
 	w := pdfE * pdfE / (pdfE*pdfE + pdfB*pdfB)
-	return alb.Scale(1 / math.Pi).Mul(s.sky(we)).Scale(ndl / pdfE * w)
+	tr := s.mediumTransmittance(Ray{Origin: so, Dir: we}, tFar, rg)
+	return alb.Scale(1 / math.Pi).Mul(s.sky(we)).Scale(ndl / pdfE * w * tr)
 }
 
 // refract returns the refracted direction of unit d through the unit normal n
@@ -635,10 +643,10 @@ func pathSum(s *Scene, cam Camera, pxW, pxH int, opt PathOptions) []Vec3 {
 // The static camera, the moving camera (pathSumMotion) and any future primary-ray
 // scheme all share this one worker loop.
 func pathSumRays(s *Scene, pxW, pxH int, opt PathOptions, gen func(u, v float64, rg *rng) Ray) []Vec3 {
-	buf := make([]Vec3, pxW*pxH)
 	if pxW <= 0 || pxH <= 0 {
-		return buf
+		return nil
 	}
+	buf := make([]Vec3, pxW*pxH)
 	spp := opt.Samples
 	if spp < 1 {
 		spp = 1
@@ -721,8 +729,13 @@ type Accumulator struct {
 	samples int
 }
 
-// NewAccumulator makes an accumulator for a w x h image.
-func NewAccumulator(w, h int) *Accumulator { return &Accumulator{w: w, h: h, sum: make([]Vec3, w*h)} }
+// NewAccumulator makes an accumulator for a w x h image (empty if either is <= 0).
+func NewAccumulator(w, h int) *Accumulator {
+	if w <= 0 || h <= 0 {
+		w, h = 0, 0
+	}
+	return &Accumulator{w: w, h: h, sum: make([]Vec3, w*h)}
+}
 
 // Reset clears it (call when the camera or scene changes).
 func (a *Accumulator) Reset() {

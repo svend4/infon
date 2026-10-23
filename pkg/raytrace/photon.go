@@ -57,8 +57,10 @@ func BuildCaustics(s *Scene, n int, radius float64, seed uint64) *PhotonMap {
 		e := s.emit[i%ne]
 		nrm := rg.unit()
 		sp := e.Center.Add(nrm.Scale(e.Radius))
-		// power per photon (radiance -> flux over the sphere, split over n).
-		power := e.Mat.Emit.Scale(4 * math.Pi * math.Pi * e.Radius * e.Radius / float64(n))
+		// power per photon: the sphere's flux (radiance -> flux Le*pi*A) split over
+		// the photons this emitter shoots (every ne-th of the n, round-robin).
+		cnt := (n - i%ne + ne - 1) / ne
+		power := e.Mat.Emit.Scale(4 * math.Pi * math.Pi * e.Radius * e.Radius / float64(cnt))
 		r := Ray{Origin: sp.Add(nrm.Scale(shadowEps)), Dir: cosineSample(nrm, rg)}
 		specular := false
 		for d := 0; d < 8; d++ {

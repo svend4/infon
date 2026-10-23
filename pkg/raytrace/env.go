@@ -22,10 +22,14 @@ type EnvSampler struct {
 	total float64
 }
 
-// BuildEnvSampler precomputes the luminance distribution of an env image.
+// BuildEnvSampler precomputes the luminance distribution of an env image. It
+// returns nil for an image with no pixels (nothing to sample).
 func BuildEnvSampler(img image.Image) *EnvSampler {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
+	if w < 1 || h < 1 {
+		return nil
+	}
 	e := &EnvSampler{w: w, h: h, pix: make([]Vec3, w*h), cum: make([]float64, w*h+1)}
 	srgb := func(c uint32) float64 { v := float64(c) / 65535; return v * v }
 	for y := 0; y < h; y++ {
@@ -84,9 +88,15 @@ func (e *EnvSampler) pdfTexel(idx int) float64 {
 	return wgt * float64(e.w*e.h) / (e.total * 2 * math.Pi * math.Pi * st)
 }
 
+// empty reports a sampler with nothing to sample (e.g. the zero EnvSampler).
+func (e *EnvSampler) empty() bool { return e.w < 1 || e.h < 1 || e.total <= 0 }
+
 // Sample draws a direction proportional to env luminance and returns the
-// direction, its radiance, and the solid-angle pdf.
+// direction, its radiance, and the solid-angle pdf (0 for an empty sampler).
 func (e *EnvSampler) Sample(rg *rng) (Vec3, Vec3, float64) {
+	if e.empty() {
+		return Vec3{}, Vec3{}, 0
+	}
 	i := sort.SearchFloat64s(e.cum, rg.f()*e.total)
 	if i < 1 {
 		i = 1
@@ -102,6 +112,9 @@ func (e *EnvSampler) Sample(rg *rng) (Vec3, Vec3, float64) {
 
 // Pdf returns the solid-angle pdf this sampler assigns to direction d (for MIS).
 func (e *EnvSampler) Pdf(d Vec3) float64 {
+	if e.empty() {
+		return 0
+	}
 	u := 0.5 + math.Atan2(d.Z, d.X)/(2*math.Pi)
 	v := 0.5 - math.Asin(math.Max(-1, math.Min(1, d.Y)))/math.Pi
 	x := int(u * float64(e.w))
