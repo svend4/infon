@@ -87,6 +87,9 @@ func NewHardwareAccelerator(config AcceleratorConfig) (*HardwareAccelerator, err
 		if config.Fallback {
 			// Fall back to software
 			accel.acceleratorType = AccelNone
+			if err := accel.initialize(); err != nil {
+				return nil, fmt.Errorf("failed to initialize software fallback: %w", err)
+			}
 			return accel, nil
 		}
 		return nil, fmt.Errorf("failed to initialize accelerator: %w", err)
@@ -327,6 +330,10 @@ func (ha *HardwareAccelerator) DecodeFrame(input []byte) ([]byte, int, int, erro
 		output, width, height, err = ha.decodeVideoCore(input)
 	case AccelNone:
 		// Software decode (simplified)
+		if len(input) < 3 || input[0] != 0x00 || input[1] != 0x00 || input[2] != 0x01 {
+			err = fmt.Errorf("input does not start with a start code")
+			break
+		}
 		output = input[3:] // Remove start code
 		width = 640
 		height = 480

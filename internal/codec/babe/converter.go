@@ -12,95 +12,14 @@ import (
 // ImageToFrame converts an image to a terminal frame using quadrant blocks
 // Each terminal character represents a 2x2 block of pixels
 func ImageToFrame(img image.Image, targetWidth, targetHeight int) *terminal.Frame {
-	frame := terminal.NewFrame(targetWidth, targetHeight)
-
-	bounds := img.Bounds()
-	srcWidth := bounds.Dx()
-	srcHeight := bounds.Dy()
-
-	// Calculate scaling factors
-	scaleX := float64(srcWidth) / float64(targetWidth*2)   // *2 because each char = 2 pixels wide
-	scaleY := float64(srcHeight) / float64(targetHeight*2) // *2 because each char = 2 pixels high
-
-	// Process each terminal character position
-	for ty := 0; ty < targetHeight; ty++ {
-		for tx := 0; tx < targetWidth; tx++ {
-			// Each terminal character represents 2x2 pixels in the source image
-			// Calculate the corresponding source pixel positions
-			sx := int(float64(tx*2) * scaleX)
-			sy := int(float64(ty*2) * scaleY)
-
-			// Sample 2x2 pixels for this block
-			var pixels [4]color.RGB // TL, TR, BL, BR
-			var validPixels [4]bool
-
-			positions := [4][2]int{
-				{sx, sy},         // TL
-				{sx + 1, sy},     // TR
-				{sx, sy + 1},     // BL
-				{sx + 1, sy + 1}, // BR
-			}
-
-			for i, pos := range positions {
-				px, py := pos[0], pos[1]
-				if px < srcWidth && py < srcHeight {
-					r, g, b, _ := img.At(px, py).RGBA()
-					pixels[i] = color.RGB{
-						R: uint8(r >> 8),
-						G: uint8(g >> 8),
-						B: uint8(b >> 8),
-					}
-					validPixels[i] = true
-				}
-			}
-
-			// Determine the best glyph and colors for this block
-			glyph, fg, bg := EncodeBlock(pixels, validPixels)
-			frame.SetBlock(tx, ty, glyph, fg, bg)
-		}
-	}
-
-	return frame
+	return imageToFrameWithEncoder(img, targetWidth, targetHeight, EncodeBlock)
 }
 
 // ImageToFramePerceptual is like ImageToFrame but uses EncodeBlockPerceptual
 // (OKLab clustering) for higher color fidelity. It is a drop-in alternative for
 // callers that prefer quality over the marginally cheaper luminance path.
 func ImageToFramePerceptual(img image.Image, targetWidth, targetHeight int) *terminal.Frame {
-	frame := terminal.NewFrame(targetWidth, targetHeight)
-
-	bounds := img.Bounds()
-	srcWidth := bounds.Dx()
-	srcHeight := bounds.Dy()
-
-	scaleX := float64(srcWidth) / float64(targetWidth*2)
-	scaleY := float64(srcHeight) / float64(targetHeight*2)
-
-	for ty := 0; ty < targetHeight; ty++ {
-		for tx := 0; tx < targetWidth; tx++ {
-			sx := int(float64(tx*2) * scaleX)
-			sy := int(float64(ty*2) * scaleY)
-
-			var pixels [4]color.RGB
-			var validPixels [4]bool
-			positions := [4][2]int{
-				{sx, sy}, {sx + 1, sy}, {sx, sy + 1}, {sx + 1, sy + 1},
-			}
-			for i, pos := range positions {
-				px, py := pos[0], pos[1]
-				if px < srcWidth && py < srcHeight {
-					r, g, b, _ := img.At(px, py).RGBA()
-					pixels[i] = color.RGB{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8)}
-					validPixels[i] = true
-				}
-			}
-
-			glyph, fg, bg := EncodeBlockPerceptual(pixels, validPixels)
-			frame.SetBlock(tx, ty, glyph, fg, bg)
-		}
-	}
-
-	return frame
+	return imageToFrameWithEncoder(img, targetWidth, targetHeight, EncodeBlockPerceptual)
 }
 
 // blockEncoder is the signature shared by EncodeBlock / EncodeBlockPerceptual /
@@ -115,7 +34,11 @@ func imageToFrameWithEncoder(img image.Image, targetWidth, targetHeight int, enc
 	bounds := img.Bounds()
 	srcWidth := bounds.Dx()
 	srcHeight := bounds.Dy()
+	if srcWidth == 0 || srcHeight == 0 {
+		return frame
+	}
 
+	// *2 because each char = 2x2 pixels
 	scaleX := float64(srcWidth) / float64(targetWidth*2)
 	scaleY := float64(srcHeight) / float64(targetHeight*2)
 
@@ -124,18 +47,15 @@ func imageToFrameWithEncoder(img image.Image, targetWidth, targetHeight int, enc
 			sx := int(float64(tx*2) * scaleX)
 			sy := int(float64(ty*2) * scaleY)
 
+			// Sample the 2x2 block (TL, TR, BL, BR) relative to the image bounds,
+			// clamping at the edges so upscaled images get no empty sub-pixels.
 			var pixels [4]color.RGB
-			var validPixels [4]bool
+			validPixels := [4]bool{true, true, true, true}
 			positions := [4][2]int{
 				{sx, sy}, {sx + 1, sy}, {sx, sy + 1}, {sx + 1, sy + 1},
 			}
 			for i, pos := range positions {
-				px, py := pos[0], pos[1]
-				if px < srcWidth && py < srcHeight {
-					r, g, b, _ := img.At(px, py).RGBA()
-					pixels[i] = color.RGB{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8)}
-					validPixels[i] = true
-				}
+				pixels[i] = sampleRGB(img, pos[0], pos[1], bounds)
 			}
 			glyph, fg, bg := enc(pixels, validPixels)
 			frame.SetBlock(tx, ty, glyph, fg, bg)
@@ -315,7 +235,7 @@ func SimpleImageToFrame(img image.Image, targetWidth, targetHeight int) *termina
 			sy := int(float64(ty) * scaleY)
 
 			if sx < srcWidth && sy < srcHeight {
-				r, g, b, _ := img.At(sx, sy).RGBA()
+				r, g, b, _ := img.At(bounds.Min.X+sx, bounds.Min.Y+sy).RGBA()
 				rgb := color.RGB{
 					R: uint8(r >> 8),
 					G: uint8(g >> 8),

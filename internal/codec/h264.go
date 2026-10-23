@@ -30,6 +30,14 @@ func NewH264Codec(config CodecConfig) (Codec, error) {
 		return nil, fmt.Errorf("width and height must be specified")
 	}
 
+	if config.Framerate == 0 {
+		config.Framerate = 30 // Default
+	}
+
+	if config.Bitrate == 0 {
+		config.Bitrate = 2_000_000 // Default 2 Mbps
+	}
+
 	codec := &H264Codec{
 		BaseCodec:        NewBaseCodec(CodecTypeH264, MediaTypeVideo, config),
 		width:            config.Width,
@@ -54,24 +62,32 @@ func NewH264Codec(config CodecConfig) (Codec, error) {
 func (h *H264Codec) Encode(data []byte) ([]byte, error) {
 	start := time.Now()
 
+	// Snapshot the parameters under the lock the setters hold, and claim this
+	// frame's index, so Encode can run concurrently with the setters.
+	h.mu.Lock()
 	expectedSize := h.width * h.height * 3 / 2 // YUV420
 	if len(data) < expectedSize {
+		h.mu.Unlock()
 		h.recordError()
 		return nil, fmt.Errorf("input data too small: got %d, expected at least %d", len(data), expectedSize)
 	}
 
 	// Determine if this should be a keyframe (I-frame)
 	isKeyframe := (h.frameCount % h.keyframeInterval) == 0
+	h.frameCount++
+	step := downsampleStep(len(data), h.bitrate, h.fps)
+	sps, pps := h.sps, h.pps
+	h.mu.Unlock()
 
 	var encoded []byte
 	var err error
 
 	if isKeyframe {
 		// Encode I-frame with SPS/PPS
-		encoded, err = h.encodeIFrame(data)
+		encoded, err = h.encodeIFrame(data, sps, pps, step)
 	} else {
 		// Encode P-frame
-		encoded, err = h.encodePFrame(data)
+		encoded, err = h.encodePFrame(data, step)
 	}
 
 	if err != nil {
@@ -79,7 +95,6 @@ func (h *H264Codec) Encode(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	h.frameCount++
 	h.recordEncode(len(data), len(encoded), time.Since(start))
 
 	return encoded, nil
@@ -102,16 +117,17 @@ func (h *H264Codec) Decode(data []byte) ([]byte, error) {
 	}
 
 	// Decode based on NAL unit types
-	decoded := make([]byte, h.width*h.height*3/2)
+	h.mu.RLock()
+	frameSize := h.width * h.height * 3 / 2
+	h.mu.RUnlock()
+	decoded := make([]byte, frameSize)
 
 	for _, nal := range nalUnits {
 		nalType := nal[0] & 0x1F
 
+		// SPS (7) and PPS (8) are not needed to decode and are not stored:
+		// h.sps/h.pps are this codec's own encoder parameter sets.
 		switch nalType {
-		case 7: // SPS
-			h.sps = nal
-		case 8: // PPS
-			h.pps = nal
 		case 5: // IDR (I-frame)
 			if err := h.decodeIFrame(nal, decoded); err != nil {
 				h.recordError()
@@ -230,20 +246,20 @@ func (h *H264Codec) generatePPS() {
 	}
 }
 
-func (h *H264Codec) encodeIFrame(yuv []byte) ([]byte, error) {
+func (h *H264Codec) encodeIFrame(yuv, sps, pps []byte, step int) ([]byte, error) {
 	buf := &bytes.Buffer{}
 
 	// Write start code
 	buf.Write([]byte{0x00, 0x00, 0x00, 0x01})
 
 	// Write SPS
-	buf.Write(h.sps)
+	buf.Write(escapeEmulation(sps))
 
 	// Write start code
 	buf.Write([]byte{0x00, 0x00, 0x00, 0x01})
 
 	// Write PPS
-	buf.Write(h.pps)
+	buf.Write(escapeEmulation(pps))
 
 	// Write start code for IDR frame
 	buf.Write([]byte{0x00, 0x00, 0x00, 0x01})
@@ -252,13 +268,13 @@ func (h *H264Codec) encodeIFrame(yuv []byte) ([]byte, error) {
 	buf.WriteByte(0x65) // NAL type 5 (IDR)
 
 	// Simplified encoding: compress YUV data
-	compressed := h.compressFrame(yuv, true)
-	buf.Write(compressed)
+	compressed := h.compressFrame(yuv, true, step)
+	buf.Write(escapeEmulation(compressed))
 
 	return buf.Bytes(), nil
 }
 
-func (h *H264Codec) encodePFrame(yuv []byte) ([]byte, error) {
+func (h *H264Codec) encodePFrame(yuv []byte, step int) ([]byte, error) {
 	buf := &bytes.Buffer{}
 
 	// Write start code
@@ -268,28 +284,19 @@ func (h *H264Codec) encodePFrame(yuv []byte) ([]byte, error) {
 	buf.WriteByte(0x41) // NAL type 1 (P-frame)
 
 	// Simplified encoding: compress with motion estimation
-	compressed := h.compressFrame(yuv, false)
-	buf.Write(compressed)
+	compressed := h.compressFrame(yuv, false, step)
+	buf.Write(escapeEmulation(compressed))
 
 	return buf.Bytes(), nil
 }
 
-func (h *H264Codec) compressFrame(yuv []byte, isKeyframe bool) []byte {
+func (h *H264Codec) compressFrame(yuv []byte, isKeyframe bool, step int) []byte {
 	// Simplified compression: use RLE-like encoding
 	// In production, would use DCT, quantization, entropy coding
 
 	compressed := &bytes.Buffer{}
 
-	// Calculate target compression ratio based on bitrate
-	targetSize := h.bitrate / int(h.fps) / 8
-	ratio := len(yuv) / targetSize
-
-	if ratio < 2 {
-		ratio = 2
-	}
-
 	// Simple downsampling for demonstration
-	step := ratio
 	for i := 0; i < len(yuv); i += step {
 		if i < len(yuv) {
 			compressed.WriteByte(yuv[i])
@@ -297,6 +304,70 @@ func (h *H264Codec) compressFrame(yuv []byte, isKeyframe bool) []byte {
 	}
 
 	return compressed.Bytes()
+}
+
+// downsampleStep returns the sampling step the simplified video encoders use to
+// fit a frame of frameSize bytes into the per-frame budget of bitrate at fps.
+// A framerate below 1 fps or a budget below one byte is clamped, so the result
+// is always at least 2.
+func downsampleStep(frameSize, bitrate int, fps float64) int {
+	frameRate := int(fps)
+	if frameRate < 1 {
+		frameRate = 1
+	}
+
+	targetSize := bitrate / frameRate / 8
+	if targetSize < 1 {
+		targetSize = 1
+	}
+
+	step := frameSize / targetSize
+	if step < 2 {
+		step = 2
+	}
+
+	return step
+}
+
+// escapeEmulation applies H.264 emulation prevention: a 0x03 byte is inserted
+// after every 00 00 that is followed by a byte <= 0x03, so NAL contents can
+// never contain a start code (00 00 01) for parseNALUnits to split on.
+func escapeEmulation(nal []byte) []byte {
+	out := make([]byte, 0, len(nal)+len(nal)/2)
+	zeros := 0
+	for _, b := range nal {
+		if zeros == 2 && b <= 0x03 {
+			out = append(out, 0x03)
+			zeros = 0
+		}
+		out = append(out, b)
+		if b == 0x00 {
+			zeros++
+		} else {
+			zeros = 0
+		}
+	}
+	return out
+}
+
+// unescapeEmulation removes the emulation prevention bytes inserted by
+// escapeEmulation (every 0x03 that follows 00 00).
+func unescapeEmulation(payload []byte) []byte {
+	out := make([]byte, 0, len(payload))
+	zeros := 0
+	for _, b := range payload {
+		if zeros == 2 && b == 0x03 {
+			zeros = 0
+			continue
+		}
+		out = append(out, b)
+		if b == 0x00 {
+			zeros++
+		} else {
+			zeros = 0
+		}
+	}
+	return out
 }
 
 func (h *H264Codec) parseNALUnits(data []byte) ([][]byte, error) {
@@ -364,7 +435,7 @@ func (h *H264Codec) decodeIFrame(nal []byte, output []byte) error {
 		return fmt.Errorf("NAL unit too short")
 	}
 
-	data := nal[1:]
+	data := unescapeEmulation(nal[1:])
 
 	// Decompress (reverse of compress)
 	return h.decompressFrame(data, output, true)
@@ -376,7 +447,7 @@ func (h *H264Codec) decodePFrame(nal []byte, output []byte) error {
 		return fmt.Errorf("NAL unit too short")
 	}
 
-	data := nal[1:]
+	data := unescapeEmulation(nal[1:])
 
 	return h.decompressFrame(data, output, false)
 }
@@ -385,8 +456,13 @@ func (h *H264Codec) decompressFrame(compressed []byte, output []byte, isKeyframe
 	// Simplified decompression
 	// In production, would use proper H.264 decoding
 
-	expectedSize := h.width * h.height * 3 / 2
-	ratio := expectedSize / len(compressed)
+	if len(compressed) == 0 {
+		return fmt.Errorf("no frame data to decode")
+	}
+
+	// The encoder kept ceil(frameSize/step) samples, so rounding up recovers
+	// its step; rounding down drifts every sample and leaves a gray tail.
+	ratio := (len(output) + len(compressed) - 1) / len(compressed)
 
 	if ratio < 1 {
 		ratio = 1

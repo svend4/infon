@@ -25,6 +25,14 @@ func NewVP8Codec(config CodecConfig) (Codec, error) {
 		return nil, fmt.Errorf("width and height must be specified")
 	}
 
+	if config.Framerate == 0 {
+		config.Framerate = 30 // Default
+	}
+
+	if config.Bitrate == 0 {
+		config.Bitrate = 2_000_000 // Default 2 Mbps
+	}
+
 	codec := &VP8Codec{
 		BaseCodec:        NewBaseCodec(CodecTypeVP8, MediaTypeVideo, config),
 		width:            config.Width,
@@ -45,13 +53,21 @@ func NewVP8Codec(config CodecConfig) (Codec, error) {
 func (v *VP8Codec) Encode(data []byte) ([]byte, error) {
 	start := time.Now()
 
-	expectedSize := v.width * v.height * 3 / 2
+	// Snapshot the parameters under the lock the setters hold, and claim this
+	// frame's index, so Encode can run concurrently with the setters.
+	v.mu.Lock()
+	width, height := v.width, v.height
+	expectedSize := width * height * 3 / 2
 	if len(data) < expectedSize {
+		v.mu.Unlock()
 		v.recordError()
 		return nil, fmt.Errorf("input data too small")
 	}
 
 	isKeyframe := (v.frameCount % v.keyframeInterval) == 0
+	v.frameCount++
+	step := downsampleStep(len(data), v.bitrate, v.fps)
+	v.mu.Unlock()
 
 	buf := &bytes.Buffer{}
 
@@ -63,16 +79,15 @@ func (v *VP8Codec) Encode(data []byte) ([]byte, error) {
 	}
 
 	// Write frame size
-	buf.WriteByte(byte(v.width & 0xFF))
-	buf.WriteByte(byte(v.width >> 8))
-	buf.WriteByte(byte(v.height & 0xFF))
-	buf.WriteByte(byte(v.height >> 8))
+	buf.WriteByte(byte(width & 0xFF))
+	buf.WriteByte(byte(width >> 8))
+	buf.WriteByte(byte(height & 0xFF))
+	buf.WriteByte(byte(height >> 8))
 
 	// Compress frame data
-	compressed := v.compressFrame(data, isKeyframe)
+	compressed := v.compressFrame(data, isKeyframe, step)
 	buf.Write(compressed)
 
-	v.frameCount++
 	encoded := buf.Bytes()
 
 	v.recordEncode(len(data), len(encoded), time.Since(start))
@@ -94,7 +109,10 @@ func (v *VP8Codec) Decode(data []byte) ([]byte, error) {
 	isKeyframe := (frameType == 0x00)
 
 	// Decode frame
-	decoded := make([]byte, v.width*v.height*3/2)
+	v.mu.RLock()
+	frameSize := v.width * v.height * 3 / 2
+	v.mu.RUnlock()
+	decoded := make([]byte, frameSize)
 	if err := v.decompressFrame(data[5:], decoded, isKeyframe); err != nil {
 		v.recordError()
 		return nil, err
@@ -172,17 +190,10 @@ func (v *VP8Codec) SetKeyframeInterval(interval int) error {
 	return nil
 }
 
-func (v *VP8Codec) compressFrame(yuv []byte, isKeyframe bool) []byte {
+func (v *VP8Codec) compressFrame(yuv []byte, isKeyframe bool, step int) []byte {
 	// Simplified VP8 compression
-	targetSize := v.bitrate / int(v.fps) / 8
-	ratio := len(yuv) / targetSize
-
-	if ratio < 2 {
-		ratio = 2
-	}
-
 	compressed := &bytes.Buffer{}
-	for i := 0; i < len(yuv); i += ratio {
+	for i := 0; i < len(yuv); i += step {
 		if i < len(yuv) {
 			compressed.WriteByte(yuv[i])
 		}
@@ -196,8 +207,9 @@ func (v *VP8Codec) decompressFrame(compressed []byte, output []byte, isKeyframe 
 		return fmt.Errorf("no frame data to decode")
 	}
 
-	expectedSize := v.width * v.height * 3 / 2
-	ratio := expectedSize / len(compressed)
+	// The encoder kept ceil(frameSize/step) samples, so rounding up recovers
+	// its step; rounding down drifts every sample and leaves a gray tail.
+	ratio := (len(output) + len(compressed) - 1) / len(compressed)
 
 	if ratio < 1 {
 		ratio = 1
